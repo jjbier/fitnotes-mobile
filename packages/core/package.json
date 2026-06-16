@@ -1,0 +1,27 @@
+{
+  "name": "@fitnotes/core",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types/index.ts",
+    "./stores/*": "./src/stores/*.ts",
+    "./utils/*": "./src/utils/*.ts",
+    "./schemas": "./src/schemas/index.ts"
+  },
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "immer": "^10.1.1",
+    "zod": "^3.24.1",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@fitnotes/tsconfig": "workspace:*",
+    "typescript": "^5.7.2"
+  }
+}
