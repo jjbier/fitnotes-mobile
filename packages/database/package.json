@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@fitnotes/tsconfig": "workspace:*",
+    "@types/node": "^22.10.6",
     "typescript": "^5.7.2"
   }
 }
