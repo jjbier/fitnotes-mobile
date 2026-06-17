@@ -9,9 +9,19 @@ interface Goal {
   targetReps: number;
 }
 
+export interface ChartPoint {
+  date: string;
+  maxWeight: number;
+  totalVolume: number;
+  maxReps: number;
+}
+
 interface ProgressState {
   personalRecords: Record<string, PersonalRecord[]>;
   goals: Goal[];
+  chartData: Record<string, ChartPoint[]>;
+  isLoading: boolean;
+  error: string | null;
 }
 
 interface ProgressActions {
@@ -20,6 +30,9 @@ interface ProgressActions {
   calculateEstimated1RM: (exerciseId: string) => number | null;
   setGoal: (goal: Goal) => void;
   removeGoal: (exerciseId: string) => void;
+  loadChartData: (exerciseId: string, data: ChartPoint[]) => void;
+  setLoading: (v: boolean) => void;
+  setError: (v: string | null) => void;
 }
 
 type ProgressStore = ProgressState & ProgressActions;
@@ -28,6 +41,9 @@ export const useProgressStore = create<ProgressStore>()(
   immer((set, get) => ({
     personalRecords: {},
     goals: [],
+    chartData: {},
+    isLoading: false,
+    error: null,
 
     loadPersonalRecords: (records) =>
       set((state) => {
@@ -48,8 +64,6 @@ export const useProgressStore = create<ProgressStore>()(
         state.personalRecords[record.exercise_id]!.push(record);
       }),
 
-    // Brzycki formula: weight * (36 / (37 - reps))
-    // Returns the best estimated 1RM across all PRs for the given exercise
     calculateEstimated1RM: (exerciseId) => {
       const records = get().personalRecords[exerciseId];
       if (!records || records.length === 0) return null;
@@ -58,9 +72,7 @@ export const useProgressStore = create<ProgressStore>()(
 
     setGoal: (goal) =>
       set((state) => {
-        const idx = state.goals.findIndex(
-          (g) => g.exerciseId === goal.exerciseId
-        );
+        const idx = state.goals.findIndex((g) => g.exerciseId === goal.exerciseId);
         if (idx !== -1) {
           state.goals[idx] = goal;
         } else {
@@ -71,6 +83,21 @@ export const useProgressStore = create<ProgressStore>()(
     removeGoal: (exerciseId) =>
       set((state) => {
         state.goals = state.goals.filter((g) => g.exerciseId !== exerciseId);
+      }),
+
+    loadChartData: (exerciseId, data) =>
+      set((state) => {
+        state.chartData[exerciseId] = data;
+      }),
+
+    setLoading: (v) =>
+      set((state) => {
+        state.isLoading = v;
+      }),
+
+    setError: (v) =>
+      set((state) => {
+        state.error = v;
       }),
   }))
 );

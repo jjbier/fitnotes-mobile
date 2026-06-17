@@ -1,108 +1,127 @@
-/**
- * Progress tab — PRs and stats
- *
- * TODO:
- *  - Load personal records from Supabase into useProgressStore
- *  - Render PR list grouped by exercise
- *  - Show estimated 1RM using useProgressStore.calculateEstimated1RM
- *  - Volume chart (react-native-chart-kit or Victory Native)
- *  - Streak and total workout stats
- */
-
-import { SafeAreaView, ScrollView, Text, View, TouchableOpacity } from "react-native";
+import { useEffect, useState } from "react";
+import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useProgressStore, useExerciseStore, calculate1RM } from "@fitnotes/core";
+import { useProgressStore, useExerciseStore, calculate1RM, ExerciseType } from "@fitnotes/core";
+import { createProgressRepository, createExerciseRepository } from "@fitnotes/database";
+import { supabase } from "../../lib/supabase";
 
 export default function ProgressScreen() {
   const personalRecords = useProgressStore((s) => s.personalRecords);
-  const exercises = useExerciseStore((s) => s.exercises);
+  const isLoading = useProgressStore((s) => s.isLoading);
+  const loadPersonalRecords = useProgressStore((s) => s.loadPersonalRecords);
+  const setLoading = useProgressStore((s) => s.setLoading);
 
-  const allRecords = Object.values(personalRecords).flat();
+  const exercises = useExerciseStore((s) => s.exercises);
+  const loadExercises = useExerciseStore((s) => s.loadExercises);
+
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const progressRepo = createProgressRepository(supabase);
+  const exRepo = createExerciseRepository(supabase);
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      const [catRes, exRes, prRes] = await Promise.all([
+        exRepo.getCategories(),
+        exRepo.getExercises(),
+        progressRepo.getAllPersonalRecords(),
+      ]);
+      if (catRes.data && exRes.data) {
+        loadExercises(catRes.data, exRes.data.map((ex) => ({
+          id: ex.id, name: ex.name, category_id: ex.category_id ?? "",
+          type: ex.type as ExerciseType, weight_unit: ex.weight_unit as "kg" | "lb",
+          notes: ex.notes ?? undefined, is_favorite: ex.is_favorite, created_at: ex.created_at,
+        })));
+      }
+      if (prRes.data) {
+        loadPersonalRecords(prRes.data.map((r) => ({
+          id: r.id, exercise_id: r.exercise_id, reps: r.reps, weight: r.weight, achieved_at: r.achieved_at,
+        })));
+      }
+      setLoading(false);
+    }
+    load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const exerciseMap = Object.fromEntries(exercises.map((e) => [e.id, e]));
+
+  const exercisesWithPRs = Object.entries(personalRecords)
+    .map(([exId, prs]) => {
+      const ex = exerciseMap[exId];
+      const sorted = [...prs].sort((a, b) => a.reps - b.reps);
+      const best = sorted.reduce((top, r) =>
+        calculate1RM(r.weight, r.reps) > calculate1RM(top.weight, top.reps) ? r : top, sorted[0]!);
+      return { exId, ex, prs: sorted, best };
+    })
+    .filter((item) => item.ex);
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <ScrollView contentContainerClassName="px-4 py-6 gap-6">
-        <Text className="text-2xl font-bold">Progress</Text>
-
-        {/* Stats row */}
-        <View className="flex-row gap-3">
-          {[
-            { label: "Workouts", value: "—", icon: "barbell-outline" as const },
-            { label: "This Week", value: "—", icon: "calendar-outline" as const },
-            { label: "Streak", value: "—", icon: "flame-outline" as const },
-          ].map(({ label, value, icon }) => (
-            <View
-              key={label}
-              className="flex-1 rounded-2xl border border-gray-100 bg-gray-50 p-4 items-center gap-1"
-            >
-              <Ionicons name={icon} size={20} color="#6366f1" />
-              <Text className="text-xl font-bold">{value}</Text>
-              <Text className="text-xs text-muted-foreground">{label}</Text>
-            </View>
-          ))}
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+      {isLoading ? (
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+          <ActivityIndicator color="#6366f1" />
         </View>
+      ) : (
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 80, gap: 12 }}>
+          <Text style={{ fontSize: 22, fontWeight: "700", color: "#0f172a", marginBottom: 4 }}>Progress</Text>
 
-        {/* Volume chart placeholder */}
-        <View className="rounded-2xl border border-gray-100 p-4 gap-2">
-          <Text className="font-semibold text-base">Weekly Volume</Text>
-          <View className="h-40 items-center justify-center bg-gray-50 rounded-xl">
-            {/* TODO: implement with react-native-chart-kit or Victory Native */}
-            <Ionicons name="bar-chart-outline" size={32} color="#64748b" />
-            <Text className="text-xs text-muted-foreground mt-2">Chart coming soon</Text>
-          </View>
-        </View>
-
-        {/* Personal Records */}
-        <View className="gap-3">
-          <Text className="font-semibold text-base">Personal Records</Text>
-
-          {allRecords.length === 0 ? (
-            <View className="rounded-xl border border-dashed border-gray-200 p-6 items-center gap-2">
-              <Ionicons name="trophy-outline" size={28} color="#64748b" />
-              <Text className="text-sm text-muted-foreground">No records yet</Text>
-              <Text className="text-xs text-muted-foreground text-center">
-                Complete sets to automatically track your bests.
+          {exercisesWithPRs.length === 0 ? (
+            <View style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 16, padding: 40, alignItems: "center", gap: 10 }}>
+              <Ionicons name="trophy-outline" size={36} color="#94a3b8" />
+              <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>No records yet</Text>
+              <Text style={{ fontSize: 12, color: "#94a3b8", textAlign: "center" }}>
+                Complete sets to automatically track your personal bests.
               </Text>
             </View>
           ) : (
-            allRecords.map((pr) => {
-              const exercise = exercises.find((e) => e.id === pr.exercise_id);
-              return (
-                <View
-                  key={pr.id}
-                  className="flex-row items-center justify-between rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-sm"
+            exercisesWithPRs.map(({ exId, ex, prs, best }) => (
+              <View key={exId} style={{ borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 16, backgroundColor: "#fff", overflow: "hidden" }}>
+                {/* Exercise header */}
+                <TouchableOpacity
+                  onPress={() => setExpanded((prev) => prev === exId ? null : exId)}
+                  style={{ flexDirection: "row", alignItems: "center", padding: 14, gap: 10 }}
                 >
-                  <View>
-                    <Text className="font-medium text-sm">
-                      {exercise?.name ?? "Unknown"}
-                    </Text>
-                    <Text className="text-xs text-muted-foreground">
-                      {pr.reps} reps
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>{ex?.name}</Text>
+                    <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>
+                      Best: {best.weight} kg × {best.reps} reps · 1RM ≈ {calculate1RM(best.weight, best.reps).toFixed(1)} kg
                     </Text>
                   </View>
-                  <View className="items-end">
-                    <Text className="font-bold text-primary">
-                      {pr.weight} {exercise?.weight_unit ?? "kg"}
-                    </Text>
-                    <Text className="text-xs text-muted-foreground">
-                      1RM ≈ {calculate1RM(pr.weight, pr.reps).toFixed(1)} kg
-                    </Text>
-                  </View>
-                </View>
-              );
-            })
-          )}
-        </View>
+                  <Ionicons
+                    name={expanded === exId ? "chevron-up" : "chevron-down"}
+                    size={16}
+                    color="#94a3b8"
+                  />
+                </TouchableOpacity>
 
-        {/* Navigate to routines */}
-        <TouchableOpacity className="flex-row items-center justify-between rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
-          <View className="flex-row items-center gap-3">
-            <Ionicons name="list-outline" size={20} color="#6366f1" />
-            <Text className="font-medium text-sm">My Routines</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color="#64748b" />
-        </TouchableOpacity>
-      </ScrollView>
+                {/* Expanded PR list */}
+                {expanded === exId && (
+                  <View style={{ borderTopWidth: 1, borderColor: "#f1f5f9", padding: 10, gap: 6 }}>
+                    <View style={{ flexDirection: "row", paddingHorizontal: 4, marginBottom: 2 }}>
+                      <Text style={{ flex: 1, fontSize: 10, color: "#94a3b8", fontWeight: "600" }}>RM</Text>
+                      <Text style={{ width: 80, fontSize: 10, color: "#94a3b8", fontWeight: "600", textAlign: "right" }}>Weight</Text>
+                      <Text style={{ width: 80, fontSize: 10, color: "#94a3b8", fontWeight: "600", textAlign: "right" }}>Est. 1RM</Text>
+                    </View>
+                    {prs.map((pr) => (
+                      <View key={pr.id} style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 4, paddingVertical: 4 }}>
+                        <Text style={{ flex: 1, fontSize: 13, color: "#0f172a" }}>{pr.reps} rep max</Text>
+                        <Text style={{ width: 80, fontSize: 13, fontWeight: "600", color: "#0f172a", textAlign: "right" }}>
+                          {pr.weight} kg
+                        </Text>
+                        <Text style={{ width: 80, fontSize: 12, color: "#6366f1", textAlign: "right" }}>
+                          {calculate1RM(pr.weight, pr.reps).toFixed(1)} kg
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            ))
+          )}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
