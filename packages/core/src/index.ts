@@ -10,6 +10,7 @@ export { useRoutineStore } from "./stores/routineStore.js";
 // Utils
 export * from "./utils/calculations.js";
 export * from "./utils/dateUtils.js";
+export * from "./utils/filterUtils.js";
 
 // Schemas
 export * from "./schemas/index.js";

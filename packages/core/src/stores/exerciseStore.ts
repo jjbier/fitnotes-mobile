@@ -6,9 +6,12 @@ interface ExerciseState {
   categories: Category[];
   exercises: Exercise[];
   favorites: string[];
+  isLoading: boolean;
+  error: string | null;
 }
 
 interface ExerciseActions {
+  loadCategories: (categories: Category[]) => void;
   loadExercises: (categories: Category[], exercises: Exercise[]) => void;
   addExercise: (exercise: Exercise) => void;
   updateExercise: (id: string, patch: Partial<Exercise>) => void;
@@ -17,6 +20,9 @@ interface ExerciseActions {
   addCategory: (category: Category) => void;
   updateCategory: (id: string, patch: Partial<Category>) => void;
   deleteCategory: (id: string) => void;
+  reorderCategories: (orderedIds: string[]) => void;
+  setLoading: (loading: boolean) => void;
+  setError: (error: string | null) => void;
 }
 
 type ExerciseStore = ExerciseState & ExerciseActions;
@@ -26,6 +32,13 @@ export const useExerciseStore = create<ExerciseStore>()(
     categories: [],
     exercises: [],
     favorites: [],
+    isLoading: false,
+    error: null,
+
+    loadCategories: (categories) =>
+      set((state) => {
+        state.categories = categories;
+      }),
 
     loadExercises: (categories, exercises) =>
       set((state) => {
@@ -39,6 +52,7 @@ export const useExerciseStore = create<ExerciseStore>()(
     addExercise: (exercise) =>
       set((state) => {
         state.exercises.push(exercise);
+        if (exercise.is_favorite) state.favorites.push(exercise.id);
       }),
 
     updateExercise: (id, patch) =>
@@ -79,6 +93,27 @@ export const useExerciseStore = create<ExerciseStore>()(
     deleteCategory: (id) =>
       set((state) => {
         state.categories = state.categories.filter((c) => c.id !== id);
+        state.exercises = state.exercises.filter((e) => e.category_id !== id);
+      }),
+
+    reorderCategories: (orderedIds) =>
+      set((state) => {
+        state.categories = orderedIds
+          .map((id, idx) => {
+            const cat = state.categories.find((c) => c.id === id);
+            return cat ? { ...cat, order_index: idx } : null;
+          })
+          .filter((c): c is Category => c !== null);
+      }),
+
+    setLoading: (loading) =>
+      set((state) => {
+        state.isLoading = loading;
+      }),
+
+    setError: (error) =>
+      set((state) => {
+        state.error = error;
       }),
   }))
 );

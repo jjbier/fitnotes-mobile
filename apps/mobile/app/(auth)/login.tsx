@@ -1,33 +1,42 @@
-/**
- * Login screen
- *
- * TODO:
- *  - Wire up email + password form to supabase.auth.signInWithPassword
- *  - Add magic link option via supabase.auth.signInWithOtp
- *  - Show loading state during sign-in
- *  - Navigate to (tabs) on success
- */
-
-import { SafeAreaView, ScrollView, Text, View, TextInput, TouchableOpacity } from "react-native";
+import { useState } from "react";
+import { SafeAreaView, ScrollView, Text, View, TextInput, TouchableOpacity, Alert } from "react-native";
+import { useRouter } from "expo-router";
+import { supabase } from "../../lib/supabase";
 
 export default function LoginScreen() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleSignIn() {
+    if (!email || !password) { Alert.alert("Error", "Please fill in all fields"); return; }
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setLoading(false);
+    if (error) { Alert.alert("Sign in failed", error.message); return; }
+    router.replace("/(tabs)");
+  }
+
   return (
     <SafeAreaView className="flex-1 bg-white">
       <ScrollView
-        contentContainerClassName="flex-1 justify-center px-6 py-12"
+        contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingHorizontal: 24, paddingVertical: 48 }}
         keyboardShouldPersistTaps="handled"
       >
-        <View className="items-center mb-10">
-          <Text className="text-4xl mb-2">🏋️</Text>
-          <Text className="text-2xl font-bold text-foreground">FitNotes</Text>
-          <Text className="text-sm text-muted-foreground mt-1">Sign in to continue</Text>
+        <View style={{ alignItems: "center", marginBottom: 40 }}>
+          <Text style={{ fontSize: 40, marginBottom: 8 }}>🏋️</Text>
+          <Text style={{ fontSize: 26, fontWeight: "700", color: "#0f172a" }}>FitNotes</Text>
+          <Text style={{ fontSize: 14, color: "#64748b", marginTop: 4 }}>Sign in to continue</Text>
         </View>
 
-        <View className="gap-4">
-          <View className="gap-1.5">
-            <Text className="text-sm font-medium text-foreground">Email</Text>
+        <View style={{ gap: 16 }}>
+          <View style={{ gap: 6 }}>
+            <Text style={{ fontSize: 14, fontWeight: "500", color: "#0f172a" }}>Email</Text>
             <TextInput
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm"
+              style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, backgroundColor: "#f8fafc", paddingHorizontal: 16, paddingVertical: 12, fontSize: 14 }}
+              value={email}
+              onChangeText={setEmail}
               placeholder="you@example.com"
               keyboardType="email-address"
               autoCapitalize="none"
@@ -35,37 +44,37 @@ export default function LoginScreen() {
             />
           </View>
 
-          <View className="gap-1.5">
-            <Text className="text-sm font-medium text-foreground">Password</Text>
+          <View style={{ gap: 6 }}>
+            <Text style={{ fontSize: 14, fontWeight: "500", color: "#0f172a" }}>Password</Text>
             <TextInput
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm"
+              style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, backgroundColor: "#f8fafc", paddingHorizontal: 16, paddingVertical: 12, fontSize: 14 }}
+              value={password}
+              onChangeText={setPassword}
               placeholder="••••••••"
               secureTextEntry
               autoComplete="password"
             />
           </View>
 
-          {/* TODO: wire to supabase.auth.signInWithPassword */}
-          <TouchableOpacity className="mt-2 w-full rounded-xl bg-primary py-4 items-center">
-            <Text className="text-white font-semibold text-sm">Sign in</Text>
-          </TouchableOpacity>
-
-          <View className="flex-row items-center gap-3 my-2">
-            <View className="flex-1 h-px bg-gray-200" />
-            <Text className="text-xs text-muted-foreground uppercase">or</Text>
-            <View className="flex-1 h-px bg-gray-200" />
-          </View>
-
-          {/* TODO: wire to supabase.auth.signInWithOtp */}
-          <TouchableOpacity className="w-full rounded-xl border border-gray-200 py-4 items-center">
-            <Text className="text-sm font-medium text-foreground">Send magic link</Text>
+          <TouchableOpacity
+            onPress={handleSignIn}
+            disabled={loading}
+            style={{ marginTop: 8, backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: loading ? 0.6 : 1 }}
+          >
+            <Text style={{ color: "#fff", fontWeight: "600", fontSize: 15 }}>
+              {loading ? "Signing in…" : "Sign in"}
+            </Text>
           </TouchableOpacity>
         </View>
 
-        <Text className="text-center text-sm text-muted-foreground mt-8">
+        <Text style={{ textAlign: "center", fontSize: 14, color: "#64748b", marginTop: 32 }}>
           No account?{" "}
-          {/* TODO: router.push("/(auth)/register") */}
-          <Text className="text-primary font-medium">Create one</Text>
+          <Text
+            style={{ color: "#6366f1", fontWeight: "500" }}
+            onPress={() => router.push("/(auth)/register")}
+          >
+            Create one
+          </Text>
         </Text>
       </ScrollView>
     </SafeAreaView>
