@@ -1,60 +1,135 @@
-/**
- * Routines list screen
- *
- * TODO:
- *  - Load routines from Supabase into useRoutineStore on mount
- *  - Tap routine to navigate to routines/[id]
- *  - Long-press to delete (with confirmation alert)
- *  - FAB to create new routine
- */
-
-import { SafeAreaView, ScrollView, Text, View, TouchableOpacity } from "react-native";
+import { useEffect, useState } from "react";
+import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, TextInput, Modal, Alert, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useRoutineStore } from "@fitnotes/core";
+import { createRoutineRepository } from "@fitnotes/database";
+import { supabase } from "../../lib/supabase";
 
 export default function RoutinesScreen() {
   const router = useRouter();
   const routines = useRoutineStore((s) => s.routines);
+  const isLoading = useRoutineStore((s) => s.isLoading);
+  const loadRoutines = useRoutineStore((s) => s.loadRoutines);
+  const createRoutine = useRoutineStore((s) => s.createRoutine);
+  const deleteRoutine = useRoutineStore((s) => s.deleteRoutine);
+  const setLoading = useRoutineStore((s) => s.setLoading);
+
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newNotes, setNewNotes] = useState("");
+  const [userId, setUserId] = useState("");
+
+  const repo = createRoutineRepository(supabase);
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) setUserId(user.id);
+      const { data } = await repo.getRoutines();
+      if (data) loadRoutines(data.map((r) => ({ id: r.id, name: r.name, notes: r.notes ?? undefined })));
+      setLoading(false);
+    }
+    load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleCreate() {
+    if (!newName.trim()) { Alert.alert("Error", "Name is required"); return; }
+    const { data, error } = await repo.createRoutine({ name: newName.trim(), notes: newNotes.trim() }, userId);
+    if (error || !data) { Alert.alert("Error", error?.message ?? "Failed to create"); return; }
+    createRoutine({ id: data.id, name: data.name, notes: data.notes ?? undefined });
+    setNewName("");
+    setNewNotes("");
+    setShowCreate(false);
+  }
+
+  async function handleDelete(id: string, name: string) {
+    Alert.alert("Delete routine", `Delete "${name}" and all its days?`, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete", style: "destructive", onPress: async () => {
+        await repo.deleteRoutine(id);
+        deleteRoutine(id);
+      }},
+    ]);
+  }
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <ScrollView contentContainerClassName="px-4 py-6 gap-4">
-        <Text className="text-2xl font-bold">Routines</Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+      {isLoading ? (
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+          <ActivityIndicator color="#6366f1" />
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100, gap: 10 }}>
+          <Text style={{ fontSize: 22, fontWeight: "700", color: "#0f172a", marginBottom: 4 }}>Routines</Text>
 
-        {routines.length === 0 ? (
-          <View className="rounded-2xl border border-dashed border-gray-200 p-10 items-center gap-3">
-            <Ionicons name="clipboard-outline" size={36} color="#64748b" />
-            <Text className="text-sm font-medium text-foreground">No routines yet</Text>
-            <Text className="text-xs text-muted-foreground text-center">
-              Create a routine to save your favourite workout templates.
-            </Text>
-          </View>
-        ) : (
-          routines.map((routine) => (
-            <TouchableOpacity
-              key={routine.id}
-              onPress={() => router.push(`/routines/${routine.id}`)}
-              className="flex-row items-center justify-between rounded-2xl border border-gray-100 bg-white px-4 py-4 shadow-sm"
-            >
-              <View className="flex-1">
-                <Text className="font-semibold text-sm">{routine.name}</Text>
-                {routine.notes ? (
-                  <Text className="text-xs text-muted-foreground mt-0.5" numberOfLines={1}>
-                    {routine.notes}
-                  </Text>
-                ) : null}
-              </View>
-              <Ionicons name="chevron-forward" size={16} color="#64748b" />
-            </TouchableOpacity>
-          ))
-        )}
-      </ScrollView>
+          {routines.length === 0 ? (
+            <View style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 16, padding: 32, alignItems: "center", gap: 8 }}>
+              <Ionicons name="clipboard-outline" size={36} color="#94a3b8" />
+              <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>No routines yet</Text>
+              <Text style={{ fontSize: 12, color: "#94a3b8", textAlign: "center" }}>
+                Create a routine to save your favourite workout templates.
+              </Text>
+            </View>
+          ) : (
+            routines.map((r) => (
+              <TouchableOpacity
+                key={r.id}
+                onPress={() => router.push(`/routines/${r.id}`)}
+                onLongPress={() => handleDelete(r.id, r.name)}
+                style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 16, backgroundColor: "#fff", paddingHorizontal: 16, paddingVertical: 14, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>{r.name}</Text>
+                  {r.notes ? <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }} numberOfLines={1}>{r.notes}</Text> : null}
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
+              </TouchableOpacity>
+            ))
+          )}
+        </ScrollView>
+      )}
 
       {/* FAB */}
-      <TouchableOpacity className="absolute bottom-8 right-6 h-14 w-14 rounded-full bg-primary items-center justify-center shadow-lg">
+      <TouchableOpacity
+        onPress={() => setShowCreate(true)}
+        style={{ position: "absolute", bottom: 32, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: "#6366f1", alignItems: "center", justifyContent: "center", shadowColor: "#6366f1", shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 }}
+      >
         <Ionicons name="add" size={28} color="white" />
       </TouchableOpacity>
+
+      {/* Create modal */}
+      <Modal visible={showCreate} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setShowCreate(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+          <View style={{ padding: 20, gap: 16 }}>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>New Routine</Text>
+            <TextInput
+              style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 }}
+              placeholder="Routine name"
+              value={newName}
+              onChangeText={setNewName}
+              autoFocus
+            />
+            <TextInput
+              style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, height: 80, textAlignVertical: "top" }}
+              placeholder="Notes (optional)"
+              value={newNotes}
+              onChangeText={setNewNotes}
+              multiline
+            />
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <TouchableOpacity onPress={() => setShowCreate(false)} style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, paddingVertical: 12, alignItems: "center" }}>
+                <Text style={{ fontSize: 14, fontWeight: "500" }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleCreate} style={{ flex: 1, backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 12, alignItems: "center" }}>
+                <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Create</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
