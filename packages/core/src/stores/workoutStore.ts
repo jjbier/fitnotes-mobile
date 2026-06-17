@@ -8,10 +8,16 @@ interface WorkoutState {
   exercises: WorkoutExercise[];
   sets: Record<string, Set[]>;
   activeExerciseId: string | null;
+  workouts: Workout[];
+  isLoading: boolean;
+  error: string | null;
 }
 
 interface WorkoutActions {
   startWorkout: (date: string) => void;
+  loadWorkout: (workout: Workout, exercises: WorkoutExercise[], sets: Record<string, Set[]>) => void;
+  loadWorkouts: (workouts: Workout[]) => void;
+  addWorkoutToHistory: (workout: Workout) => void;
   addExerciseToWorkout: (exerciseId: string) => void;
   createSet: (workoutExerciseId: string, partial?: Partial<Set>) => void;
   updateSet: (workoutExerciseId: string, setId: string, patch: Partial<Set>) => void;
@@ -19,8 +25,14 @@ interface WorkoutActions {
   markSetComplete: (workoutExerciseId: string, setId: string, complete: boolean) => void;
   reorderExercises: (orderedIds: string[]) => void;
   setActiveExercise: (exerciseId: string | null) => void;
+  setWorkoutComment: (comment: string) => void;
+  groupExercises: (weId1: string, weId2: string) => void;
+  ungroupExercise: (weId: string) => void;
   finishWorkout: () => void;
   resetWorkout: () => void;
+  setCurrentDate: (date: string) => void;
+  setLoading: (v: boolean) => void;
+  setError: (v: string | null) => void;
 }
 
 type WorkoutStore = WorkoutState & WorkoutActions;
@@ -31,6 +43,9 @@ const initialState: WorkoutState = {
   exercises: [],
   sets: {},
   activeExerciseId: null,
+  workouts: [],
+  isLoading: false,
+  error: null,
 };
 
 function generateId(): string {
@@ -51,6 +66,25 @@ export const useWorkoutStore = create<WorkoutStore>()(
         state.currentDate = date;
         state.exercises = [];
         state.sets = {};
+      }),
+
+    loadWorkout: (workout, exercises, sets) =>
+      set((state) => {
+        state.activeWorkout = workout;
+        state.exercises = exercises;
+        state.sets = sets;
+        state.currentDate = workout.date;
+      }),
+
+    loadWorkouts: (workouts) =>
+      set((state) => {
+        state.workouts = workouts;
+      }),
+
+    addWorkoutToHistory: (workout) =>
+      set((state) => {
+        const exists = state.workouts.some((w) => w.id === workout.id);
+        if (!exists) state.workouts.unshift(workout);
       }),
 
     addExerciseToWorkout: (exerciseId) =>
@@ -122,6 +156,25 @@ export const useWorkoutStore = create<WorkoutStore>()(
         state.activeExerciseId = exerciseId;
       }),
 
+    setWorkoutComment: (comment) =>
+      set((state) => {
+        if (state.activeWorkout) state.activeWorkout.comment = comment;
+      }),
+
+    groupExercises: (weId1, weId2) =>
+      set((state) => {
+        const groupId = generateId();
+        for (const ex of state.exercises) {
+          if (ex.id === weId1 || ex.id === weId2) ex.group_id = groupId;
+        }
+      }),
+
+    ungroupExercise: (weId) =>
+      set((state) => {
+        const ex = state.exercises.find((e) => e.id === weId);
+        if (ex) ex.group_id = undefined;
+      }),
+
     finishWorkout: () =>
       set((state) => {
         if (!state.activeWorkout) return;
@@ -137,5 +190,20 @@ export const useWorkoutStore = create<WorkoutStore>()(
       }),
 
     resetWorkout: () => set(() => ({ ...initialState })),
+
+    setCurrentDate: (date) =>
+      set((state) => {
+        state.currentDate = date;
+      }),
+
+    setLoading: (v) =>
+      set((state) => {
+        state.isLoading = v;
+      }),
+
+    setError: (v) =>
+      set((state) => {
+        state.error = v;
+      }),
   }))
 );
