@@ -30,10 +30,10 @@ export function getWeekRange(dateStr: string): { start: string; end: string } {
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
 
-  return {
-    start: monday.toISOString().split("T")[0]!,
-    end: sunday.toISOString().split("T")[0]!,
-  };
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  return { start: fmt(monday), end: fmt(sunday) };
 }
 
 /** Groups workouts by "MMMM YYYY" label. */

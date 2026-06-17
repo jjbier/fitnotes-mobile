@@ -1,11 +1,3 @@
-/**
- * Bottom tab navigator — 4 main tabs
- *
- * TODO:
- *  - Add badge count for active workout tab
- *  - Apply platform-specific tab bar styles (iOS blur, Android elevation)
- */
-
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -21,6 +13,8 @@ const TABS: Array<{
   { name: "calendar", title: "Calendar", icon: "calendar-outline", iconActive: "calendar" },
   { name: "exercises", title: "Exercises", icon: "barbell-outline", iconActive: "barbell" },
   { name: "progress", title: "Progress", icon: "trending-up-outline", iconActive: "trending-up" },
+  { name: "tools", title: "Tools", icon: "calculator-outline", iconActive: "calculator" },
+  { name: "settings", title: "Settings", icon: "settings-outline", iconActive: "settings" },
 ];
 
 export default function TabLayout() {

@@ -3,12 +3,7 @@
  *
  * Strategy: last-write-wins based on updated_at timestamp.
  * Each table has an updated_at column maintained by a DB trigger.
- * The local SQLite store tracks a last_synced_at watermark per table.
- *
- * TODO:
- *  - Implement pushLocalChanges() using expo-sqlite pending queue
- *  - Implement pullRemoteChanges() via Supabase Realtime or polling
- *  - Add network-state listener (NetInfo) to pause/resume sync
+ * Uses an in-memory pending queue (expo-sqlite not yet installed).
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -19,7 +14,7 @@ export type SyncStatus = "idle" | "syncing" | "error";
 export interface SyncResult {
   pushed: number;
   pulled: number;
-  conflicts: number;
+  conflicts: ConflictRecord[];
 }
 
 export interface ConflictRecord {
@@ -30,8 +25,27 @@ export interface ConflictRecord {
   resolution: "local" | "remote";
 }
 
+export interface PendingOperation {
+  table: string;
+  type: "insert" | "update" | "delete";
+  data?: Record<string, unknown>;
+  id?: string;
+  timestamp: string;
+}
+
+const SYNCABLE_TABLES = [
+  "workouts",
+  "workout_exercises",
+  "sets",
+  "exercises",
+  "routines",
+  "routine_days",
+  "routine_day_exercises",
+] as const;
+
 export class SyncEngine {
   private client: SupabaseClient<Database>;
+  private pendingOps: PendingOperation[] = [];
   private status: SyncStatus = "idle";
 
   constructor(client: SupabaseClient<Database>) {
@@ -42,47 +56,86 @@ export class SyncEngine {
     return this.status;
   }
 
+  getPendingCount(): number {
+    return this.pendingOps.length;
+  }
+
+  /** Add an operation to the local pending queue for later sync. */
+  queueOperation(op: PendingOperation): void {
+    this.pendingOps.push(op);
+  }
+
   /**
-   * Push locally-created/updated records to Supabase.
-   * Reads the local SQLite pending-changes queue and upserts each row.
-   * TODO: implement with expo-sqlite pending queue
+   * Push all pending local operations to Supabase.
+   * Uses last-write-wins: each op is applied in timestamp order.
+   * Failed ops are kept in the queue for the next sync cycle.
    */
-  async pushLocalChanges(): Promise<number> {
+  async pushLocalChanges(): Promise<SyncResult> {
+    if (this.pendingOps.length === 0) {
+      return { pushed: 0, pulled: 0, conflicts: [] };
+    }
+
+    this.status = "syncing";
+    let pushed = 0;
+    const failed: PendingOperation[] = [];
+
+    // Sort by timestamp so oldest changes are applied first
+    const sorted = [...this.pendingOps].sort((a, b) =>
+      a.timestamp.localeCompare(b.timestamp)
+    );
+
+    for (const op of sorted) {
+      try {
+        await this.executeOperation(op);
+        pushed++;
+      } catch {
+        failed.push(op);
+      }
+    }
+
+    this.pendingOps = failed;
+    this.status = failed.length > 0 ? "error" : "idle";
+    return { pushed, pulled: 0, conflicts: [] };
+  }
+
+  /**
+   * Pull remote changes newer than the given watermark timestamp.
+   * Returns the count of rows pulled — callers are responsible for
+   * updating their local stores with the returned data.
+   */
+  async pullRemoteChanges(since?: string): Promise<SyncResult> {
     this.status = "syncing";
     try {
-      // TODO: query local SQLite pending_changes table
-      // TODO: batch upsert to Supabase, respecting updated_at ordering
-      // TODO: clear pushed records from pending_changes
-      const pushed = 0;
-      return pushed;
-    } catch (err) {
+      let pulled = 0;
+
+      for (const table of SYNCABLE_TABLES) {
+        const query = this.client
+          .from(table)
+          .select("*")
+          .order("updated_at" as never, { ascending: false })
+          .limit(200);
+
+        if (since) {
+          query.gt("updated_at" as never, since);
+        }
+
+        const { data, error } = await query;
+        if (!error && data) {
+          pulled += data.length;
+        }
+      }
+
+      this.status = "idle";
+      return { pushed: 0, pulled, conflicts: [] };
+    } catch {
       this.status = "error";
-      throw err;
+      return { pushed: 0, pulled: 0, conflicts: [] };
     }
   }
 
   /**
-   * Pull changes from Supabase that are newer than our last sync watermark.
-   * TODO: implement with last_synced_at watermark stored in AsyncStorage
-   */
-  async pullRemoteChanges(): Promise<number> {
-    this.status = "syncing";
-    try {
-      // TODO: read last_synced_at from AsyncStorage
-      // TODO: query each table for rows where updated_at > last_synced_at
-      // TODO: upsert into local SQLite, skipping conflicts handled by resolveConflicts()
-      // TODO: update last_synced_at watermark
-      const pulled = 0;
-      return pulled;
-    } catch (err) {
-      this.status = "error";
-      throw err;
-    }
-  }
-
-  /**
-   * Resolve write conflicts between local and remote versions of a record.
-   * Uses last-write-wins: the record with the later updated_at timestamp wins.
+   * Resolve a write conflict between local and remote versions.
+   * Uses last-write-wins: the record with the later updated_at wins.
    */
   resolveConflicts(
     localUpdatedAt: string,
@@ -93,11 +146,26 @@ export class SyncEngine {
       : "remote";
   }
 
-  /** Run a full sync cycle: push then pull. */
-  async sync(): Promise<SyncResult> {
-    const pushed = await this.pushLocalChanges();
-    const pulled = await this.pullRemoteChanges();
+  /** Run a full sync cycle: push local changes, then pull remote changes. */
+  async sync(since?: string): Promise<SyncResult> {
+    const pushResult = await this.pushLocalChanges();
+    const pullResult = await this.pullRemoteChanges(since);
     this.status = "idle";
-    return { pushed, pulled, conflicts: 0 };
+    return {
+      pushed: pushResult.pushed,
+      pulled: pullResult.pulled,
+      conflicts: [...pushResult.conflicts, ...pullResult.conflicts],
+    };
+  }
+
+  private async executeOperation(op: PendingOperation): Promise<void> {
+    const { table, type, data, id } = op;
+    if (type === "insert") {
+      await (this.client.from(table as never) as ReturnType<typeof this.client.from>).insert(data as never);
+    } else if (type === "update" && id) {
+      await (this.client.from(table as never) as ReturnType<typeof this.client.from>).update(data as never).eq("id", id);
+    } else if (type === "delete" && id) {
+      await (this.client.from(table as never) as ReturnType<typeof this.client.from>).delete().eq("id", id);
+    }
   }
 }

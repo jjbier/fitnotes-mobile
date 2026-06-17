@@ -1,7 +1,7 @@
 # FitNotes App — CLAUDE.md
 
 ## Objetivo
-App de seguimiento de fitness (workout logging, PRs, rutinas, body tracker) con **web** (Next.js) y **mobile** (Expo) compartiendo toda la lógica de negocio via `@fitnotes/core`.
+App de seguimiento de fitness (workout logging, PRs, rutinas, body tracker) con **web** (Next.js 15) y **mobile** (Expo SDK 52) compartiendo lógica de negocio via `@fitnotes/core`.
 
 ---
 
@@ -9,99 +9,131 @@ App de seguimiento de fitness (workout logging, PRs, rutinas, body tracker) con 
 
 ```
 fitnotes-app/
-├── apps/web          → Next.js 15 App Router
+├── apps/web          → Next.js 15 App Router  (puerto 3000)
 ├── apps/mobile       → Expo SDK 52 + Expo Router v4
 └── packages/
-    ├── core          → @fitnotes/core  (ZERO imports de react/next/expo)
-    ├── database      → @fitnotes/database (Supabase client + migrations)
-    ├── ui            → @fitnotes/ui (tokens compartidos)
+    ├── core          → @fitnotes/core  — ZERO imports react/next/expo
+    ├── database      → @fitnotes/database (Supabase client + repositorios)
+    ├── ui            → @fitnotes/ui (tokens, sin implementar)
     └── tsconfig      → configs TS base/nextjs/expo
 ```
 
-**Regla crítica:** `packages/core` nunca debe importar `react`, `next` ni `expo`. Es el contrato de platform-agnosticism.
+**Regla crítica:** `packages/core` nunca importa `react`, `next` ni `expo`.
 
 ---
 
-## Stack
+## Stack & versiones clave
 
-| Capa | Tecnología |
-|---|---|
-| Monorepo | Turborepo 2 + pnpm workspaces |
-| Lenguaje | TypeScript strict (`verbatimModuleSyntax`) |
-| Web | Next.js 15, Tailwind v4, shadcn/ui (Radix), Recharts |
-| Mobile | Expo 52, Expo Router v4, NativeWind v4 |
-| Estado | Zustand 5 + Immer (stores en `@fitnotes/core`) |
-| Backend | Supabase (Auth + Postgres + RLS) |
-| Validación | Zod 3 (schemas en `@fitnotes/core/schemas`) |
-| Mobile DB | expo-sqlite (offline-first, pendiente implementar) |
+| Capa | Tecnología | Nota |
+|---|---|---|
+| Monorepo | Turborepo 2 + pnpm workspaces | |
+| Lenguaje | TypeScript strict, `verbatimModuleSyntax` | imports internos con `.js` |
+| Web | Next.js 15, Tailwind v4 | shadcn/ui NO inicializado |
+| Mobile | Expo 52, Expo Router v4 | StyleSheet only, NO NativeWind en componentes |
+| Estado | Zustand 5 + Immer | stores en `@fitnotes/core` |
+| Backend | Supabase (ref: `fbhjiwtriqrxibqwsyqj`) | Auth + Postgres + RLS |
+| Supabase client | `@supabase/supabase-js@^2.108.2` + `@supabase/ssr@^0.12.0` | FIJAS — cambiarlas rompe genéricos |
+| Validación | Zod 3 | schemas en `@fitnotes/core/schemas` |
 
 ---
 
-## Convenciones clave
+## Decisiones arquitectónicas
 
-- Imports internos usan extensión `.js` (TS bundler mode con `verbatimModuleSyntax`)
-- IDs generados localmente con `${Date.now()}-${Math.random().toString(36).slice(2, 9)}` hasta conectar Supabase
-- Fórmula 1RM: Brzycki → `weight * (36 / (37 - reps))`; guard en reps ≥ 37
-- RLS en todas las tablas: `auth.uid() = user_id`
-- PR se actualiza vía trigger SQL en `public.sets` (insert/update)
+- **Repository pattern**: `createXxxRepository(client: SupabaseClient<Database>)` en `packages/database/src/repositories/`
+- **`ExerciseType` cast**: Supabase devuelve string literal union, core usa enum → `ex.type as ExerciseType` obligatorio al mapear filas
+- **`.env.local`**: en `apps/web/.env.local` (no raíz monorepo) — Next.js solo lee su propio directorio
+- **IDs locales**: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+- **1RM**: Brzycki → `weight * (36 / (37 - reps))`, guard en reps ≥ 37
+- **PR**: actualizado via trigger SQL en `public.sets` (insert/update)
+- **RLS**: todas las tablas tienen `auth.uid() = user_id`
+- **Web auth guard**: `apps/web/middleware.ts` redirige a `/login` si no hay sesión
+- **Mobile auth guard**: `apps/mobile/app/_layout.tsx` — `getSession()` + `onAuthStateChange`
 
 ---
 
 ## Estado actual — qué funciona
 
-### `packages/core` ✅ completo
-- Tipos: `Exercise`, `ExerciseType`, `Workout`, `Set`, `WorkoutExercise`, `PersonalRecord`, `Routine`, `RoutineDay`, `BodyMeasurement`, `BodyMeasurementEntry` + enums
-- Stores: `useWorkoutStore`, `useExerciseStore`, `useProgressStore`, `useRoutineStore`
-- Utils: `calculate1RM`, `estimateRepMax`, `calculateVolume`, `calculatePace`, `calculateSpeed`, `formatWorkoutDate`, `getWeekRange`, `groupWorkoutsByMonth`
-- Schemas Zod para todos los tipos + variantes de form input
+### `packages/core` ✅
+- Tipos: `Exercise`, `ExerciseType`, `Workout`, `Set`, `WorkoutExercise`, `PersonalRecord`, `Routine`, `RoutineDay`, `RoutineDayExercise`, `PredefinedSet`, `BodyMeasurement`, `BodyMeasurementEntry`
+- Stores: `useWorkoutStore`, `useExerciseStore`, `useProgressStore`, `useRoutineStore` (todos con `isLoading` + `error`)
+- Utils: `calculate1RM`, `estimateRepMax`, `calculateVolume`, `calculatePace`, `calculateSpeed`, `roundToNearest`, `calculateSetWeight`, `calculatePlates`, `formatWorkoutDate`, `getWeekRange`, `groupWorkoutsByMonth`
+- Schemas Zod para todos los tipos
 
-### `packages/database` ✅ estructura completa, lógica pendiente
-- `createBrowserClient` / `createServerClient` (tipados con `Database`)
-- Migration SQL completa: 10 tablas, RLS, índices, triggers `updated_at`, trigger auto-PR
-- `SyncEngine` clase con métodos vacíos (tipos definidos, implementación pendiente)
-- `types.ts` placeholder (requiere `supabase gen types`)
+### `packages/database` ✅
+- `createBrowserClient()` / `createServerClient()` tipados con `Database`
+- `types.ts` generado con `supabase gen types typescript` (no placeholder)
+- Repositorios: `exercise`, `routine`, `workout`, `progress`, `bodyTracker`, `calendar`
+- `SyncEngine` — clase con métodos vacíos (pendiente)
 
-### `apps/web` ✅ scaffold completo
-- 13 páginas con layout App Router, rutas correctas, import de stores
-- Componentes stub con props interfaces: `TrainingScreen`, `SetList`, `SetForm`, `NavigationPanel`, `ProgressChart`, `PersonalRecords`, `Sidebar`, `MobileNav`
-- `SetForm` tiene lógica real: renderiza campos según `ExerciseType`
+### `apps/web` ✅ conectado a Supabase
 
-### `apps/mobile` ✅ scaffold completo
-- 11 pantallas con `SafeAreaView + ScrollView`, iconos Ionicons, imports de stores
-- Componentes: `SetRow` (funcional), `RestTimer` (temporizador funcional con +/-30s), `Button`, `Input`
-- Metro config configurado para resolver paquetes del monorepo
-- NativeWind + babel configurados
+| Ruta | Estado |
+|---|---|
+| `/login`, `/register` | Auth completo |
+| `/dashboard` | Workout logging por fecha, picker ejercicios, sets CRUD |
+| `/calendar` | Grid mensual, vista lista, popup día |
+| `/exercise` | Lista por categorías, crear/editar ejercicio |
+| `/exercise/[id]` | Historial sets del ejercicio |
+| `/progress` | Selector ejercicio, tabs Records/Chart/History, Recharts LineChart |
+| `/routines` | Lista, crear/copiar/eliminar |
+| `/routines/[id]` | Días, ejercicios, sets predefinidos |
+| `/body-tracker` | Grid medidas, log inline, historial |
+| `/tools` | 1RM Calculator, Set Calculator, Plate Calculator |
+| `/settings` | Perfil (auth.updateUser), unidad peso, sign-out |
 
-### Infraestructura ✅
-- `pnpm install` OK — 993 paquetes, workspace links verificados
-- Turbo pipelines: build / dev / lint / type-check
+- Middleware server-side protege todas las rutas
+- Sidebar + MobileNav con todas las rutas (active state via `usePathname`)
+
+### `apps/mobile` ✅ conectado a Supabase
+
+| Pantalla | Estado |
+|---|---|
+| `(auth)/login`, `/register` | Auth completo |
+| `(tabs)/index` | Today — workout por fecha, navegar a training |
+| `(tabs)/calendar` | Grid mensual, list view |
+| `(tabs)/exercises` | Lista por categorías |
+| `exercises/[categoryId]` | Ejercicios de categoría |
+| `(tabs)/progress` | PRs por ejercicio, expandible |
+| `(tabs)/tools` | 1RM, Set%, Plate calculators |
+| `(tabs)/settings` | Perfil, unidad, sign-out con Alert |
+| `workout/[exerciseId]` | Sets CRUD completo, todos los ExerciseTypes |
+| `routines/index` | Lista, crear, eliminar |
+| `routines/[id]` | Días + ejercicios, edit mode |
+
+- 6 tabs: Today / Calendar / Exercises / Progress / Tools / Settings
+- StyleSheet en todos los componentes (no `className`)
 
 ---
 
 ## Pendiente / bugs conocidos
 
-### Crítico (nada funciona sin esto)
-- [ ] **Supabase no está conectado** — todas las páginas usan datos placeholder
-- [ ] **Auth no implementada** — no hay middleware de sesión en web, ni guard en mobile `_layout.tsx`
-- [ ] `packages/database/src/supabase/types.ts` es placeholder → ejecutar `supabase gen types typescript`
+### Crítico
+- [ ] `SyncEngine` vacío — offline-first mobile no implementado (`expo-sqlite` sin schema)
+- [ ] `routineStore.logRoutineWorkout()` vacío — no hace dispatch a `workoutStore`
 
 ### Web
-- [ ] `Sidebar.tsx` y `MobileNav.tsx` necesitan `"use client"` + `usePathname()` para active state
-- [ ] Ningún page tiene fetching real de datos (Supabase queries)
-- [ ] `ProgressChart.tsx` — implementar con Recharts `<LineChart>` (stub marcado)
-- [ ] Auth layout `(auth)` no tiene middleware server-side que verifique sesión
+- [ ] Delete account en settings es solo UI — falta llamada real a Supabase
+- [ ] `/workout/[date]` existe pero no está vinculada desde dashboard
 
 ### Mobile
-- [ ] `metro.config.js` usa `withNativeWind` — verificar compatibilidad cuando se instale `nativewind/metro`
-- [ ] `RestTimer` no tiene haptics ni sonido (requiere `expo-haptics`)
-- [ ] `SetForm` no existe en mobile — la lógica de input está inline en `workout/[exerciseId].tsx`
-- [ ] `expo-sqlite` no tiene schema inicializado ni `pending_changes` table para sync
-
-### `packages/core`
-- [ ] Stores no persisten a Supabase ni a SQLite — son solo en memoria
-- [ ] `routineStore.logRoutineWorkout()` vacío — falta dispatch a `workoutStore`
+- [ ] Body tracker mobile básico — sin CRUD completo de medidas
+- [ ] `RestTimer` sin haptics/sonido (`expo-haptics` no instalado)
+- [ ] Unidad kg/lb guardada en estado pero no propagada a inputs de sets
 
 ### Infraestructura
 - [ ] No hay tests (ni unit ni e2e)
 - [ ] No hay ESLint config en ningún paquete
-- [ ] `shadcn/ui` no está inicializado (no existe `components.json`)
+- [ ] `shadcn/ui` no inicializado (`components.json` no existe) — web usa Tailwind directo
+- [ ] `packages/ui` vacío
+
+---
+
+## Comandos
+
+```bash
+pnpm --filter @fitnotes/web dev              # dev web
+pnpm --filter @fitnotes/mobile start         # dev mobile (Expo)
+pnpm --filter @fitnotes/core exec tsc --noEmit
+pnpm --filter @fitnotes/web exec tsc --noEmit
+cd apps/mobile && npx tsc --noEmit
+```

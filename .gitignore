@@ -30,3 +30,7 @@ Thumbs.db
 # Expo
 android/
 ios/
+
+# Playwright
+/apps/web/playwright-report/
+/apps/web/test-results/

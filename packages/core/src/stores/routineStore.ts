@@ -8,6 +8,8 @@ interface RoutineState {
   routineDayExercises: Record<string, RoutineDayExercise[]>;
   predefinedSets: Record<string, PredefinedSet[]>;
   activeRoutineId: string | null;
+  /** Set by logRoutineWorkout — the UI layer observes this and handles Supabase calls. */
+  pendingRoutineLog: { routineId: string; dayId: string; date: string } | null;
   isLoading: boolean;
   error: string | null;
 }
@@ -32,18 +34,30 @@ interface RoutineActions {
   savePredefinedSets: (rdExerciseId: string, sets: PredefinedSet[]) => void;
   setLoading: (v: boolean) => void;
   setError: (v: string | null) => void;
+  /**
+   * Signal that the UI should create a workout from this routine day.
+   * Sets pendingRoutineLog — the UI layer observes it and calls workoutRepository.
+   * Call clearPendingRoutineLog() after handling.
+   */
   logRoutineWorkout: (routineId: string, dayId: string, date: string) => void;
+  clearPendingRoutineLog: () => void;
+  /** Returns the exercises + predefined sets for a routine day, for the UI to use when creating the workout. */
+  getRoutineWorkoutPayload: (
+    routineId: string,
+    dayId: string
+  ) => { exercises: RoutineDayExercise[]; setsByExercise: Record<string, PredefinedSet[]> };
 }
 
 type RoutineStore = RoutineState & RoutineActions;
 
 export const useRoutineStore = create<RoutineStore>()(
-  immer((set) => ({
+  immer((set, get) => ({
     routines: [],
     routineDays: {},
     routineDayExercises: {},
     predefinedSets: {},
     activeRoutineId: null,
+    pendingRoutineLog: null,
     isLoading: false,
     error: null,
 
@@ -196,8 +210,24 @@ export const useRoutineStore = create<RoutineStore>()(
         state.error = v;
       }),
 
-    logRoutineWorkout: (_routineId, _dayId, _date) => {
-      // Wired in Phase 3 when workoutStore is complete
+    logRoutineWorkout: (routineId, dayId, date) =>
+      set((state) => {
+        state.pendingRoutineLog = { routineId, dayId, date };
+      }),
+
+    clearPendingRoutineLog: () =>
+      set((state) => {
+        state.pendingRoutineLog = null;
+      }),
+
+    getRoutineWorkoutPayload: (routineId, dayId) => {
+      const state = get();
+      const exercises = state.routineDayExercises[dayId] ?? [];
+      const setsByExercise: Record<string, PredefinedSet[]> = {};
+      for (const ex of exercises) {
+        setsByExercise[ex.id] = state.predefinedSets[ex.id] ?? [];
+      }
+      return { exercises, setsByExercise };
     },
   }))
 );
