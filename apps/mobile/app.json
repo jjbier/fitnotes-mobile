@@ -17,6 +17,7 @@
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#6366f1"
       },
       "package": "com.fitnotes.app"
@@ -28,14 +29,7 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font",
-      [
-        "expo-sqlite",
-        {
-          "enableFTS": true,
-          "useSQLCipher": false
-        }
-      ]
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
