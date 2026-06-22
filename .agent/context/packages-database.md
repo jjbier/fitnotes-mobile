@@ -1,40 +1,41 @@
 # packages/database — @fitnotes/database
 
+_Last updated: 2026-06-22_
+
 ## Cliente Supabase (`src/supabase/client.ts`)
 
 ```ts
-createBrowserClient()              // cliente componente/browser
+createBrowserClient()              // cliente componente/browser — lee NEXT_PUBLIC_*
 createServerClient(cookieStore)    // Server Components / Route Handlers
 ```
 
-Lee `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY` del env.
-Ambas funciones devuelven `SupabaseClient<Database>`.
+`types.ts` generado con `supabase gen types typescript --project-id fbhjiwtriqrxibqwsyqj`
 
-**Pendiente:** `Database` en `types.ts` es un stub. Ejecutar:
-```bash
-supabase gen types typescript --project-id <id> > packages/database/src/supabase/types.ts
-```
+## Repositorios (`src/repositories/`)
 
-## Migration (`src/supabase/migrations/001_initial_schema.sql`)
+| Repositorio | Métodos clave |
+|---|---|
+| `workoutRepository` | `getWorkoutByDate`, `createWorkout`, `updateWorkout`, `deleteWorkout`, `getWorkoutExercises`, `addExercise`, `removeExercise`, `getSets`, `createSet`, `updateSet`, `deleteSet`, `getWorkouts` |
+| `exerciseRepository` | `getCategories`, `getExercises`, `createExercise`, `updateExercise`, `deleteExercise`, `createCategory`, `toggleFavorite` |
+| `routineRepository` | `getRoutines`, `createRoutine`, `deleteRoutine`, `getRoutineDays`, `createDay`, `addExercise`, `getPredefinedSets`, `createPredefinedSet` |
+| `progressRepository` | `getPersonalRecords`, `getExerciseHistory` |
+| `bodyTrackerRepository` | `getMeasurements`, `createMeasurement`, `getEntries`, `createEntry`, `deleteEntry`, `getAllEntries` |
+| `calendarRepository` | `getWorkoutsByMonth` |
 
-- 10 tablas con `user_id uuid references auth.users ON DELETE CASCADE`
-- RLS activado en todas con policy `auth.uid() = user_id`
-- Índices en: `workouts.date`, `sets.workout_exercise_id`, `personal_records(exercise_id, reps)`, `workout_exercises.workout_id`
-- Trigger `handle_updated_at()` en categories, exercises, workouts, workout_exercises, sets, routines
-- Trigger `update_personal_record()` en `sets` (INSERT/UPDATE) → inserta en `personal_records` si el peso es nuevo máximo para ese ejercicio+reps
-- Enums SQL: `exercise_type`, `goal_type`
+## Migraciones (`src/supabase/migrations/`)
+
+- `001_initial_schema.sql` — tablas, RLS, triggers (updated_at + personal_records)
+- `002_delete_user_fn.sql` — función RPC `delete_user()` SECURITY DEFINER
 
 ## SyncEngine (`src/sync/syncEngine.ts`)
 
-Clase para sync offline-first en mobile. **Solo esqueleto — sin implementación real.**
-
 ```ts
 class SyncEngine {
-  pushLocalChanges(): Promise<number>   // TODO: expo-sqlite pending queue
-  pullRemoteChanges(): Promise<number>  // TODO: watermark last_synced_at
-  resolveConflicts(localTs, remoteTs)   // last-write-wins — IMPLEMENTADO
-  sync(): Promise<SyncResult>           // push + pull
+  sync(lastSyncAt?: string): Promise<{ pushed: number, pulled: number }>
+  getPendingCount(): number
 }
 ```
 
-Estrategia de conflictos: el `updated_at` más reciente gana.
+- Mobile usa singleton: `lib/sync.ts` → `export const syncEngine = new SyncEngine(supabase)`
+- Pull actualiza workout de hoy via `refetchSignal` en SyncContext
+- Pull **no** actualiza stores de ejercicios/rutinas

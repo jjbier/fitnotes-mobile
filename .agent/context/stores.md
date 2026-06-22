@@ -1,96 +1,76 @@
 # Stores — @fitnotes/core
 
-All stores use Zustand 5 + Immer. Imported via `@fitnotes/core`.
-Stores hold in-memory state only — no persistence to Supabase/SQLite yet.
+_Last updated: 2026-06-22_
+
+Zustand 5 + Immer. Importados via `@fitnotes/core`. Estado en memoria — Supabase es la fuente de verdad.
 
 ## useWorkoutStore
+
 ```ts
 // State
-currentWorkout: Workout | null
-exercises: WorkoutExercise[]
+activeWorkout: Workout | null
+exercises: WorkoutExercise[]       // workout_exercises del workout activo
 sets: Record<string, Set[]>        // keyed by workoutExerciseId
-workouts: Workout[]
+workouts: Workout[]                // historial reciente
 isLoading: boolean
-error: string | null
 
-// Actions
-setCurrentWorkout(workout)
-addExercise(exercise)
-removeExercise(workoutExerciseId)
-addSet(workoutExerciseId, set)
-updateSet(workoutExerciseId, setId, updates)
+// Actions clave
+startWorkout(date)                           // crea workout local (ID temporal)
+loadWorkout(workout, exercises, sets)        // reemplaza estado desde DB
+loadWorkouts(workouts)                       // carga historial
+addExerciseToWorkout(exerciseId, weId?)      // weId = UUID real de DB (crítico)
+removeExerciseFromWorkout(workoutExerciseId) // optimistic delete
+removeWorkoutFromHistory(workoutId)
+createSet(workoutExerciseId, partial?)
+updateSet(workoutExerciseId, setId, patch)
 deleteSet(workoutExerciseId, setId)
-loadWorkout(workout, exercises, sets)
-loadWorkouts(workouts)
-addWorkoutToHistory(workout)
-setWorkoutComment(comment)
-groupExercises(weId1, weId2)
-ungroupExercise(weId)
-setCurrentDate(date)
-setLoading(bool)
-setError(msg)
+markSetComplete(workoutExerciseId, setId, complete)
+finishWorkout()                              // sets end_time + duration_minutes
 ```
 
 ## useExerciseStore
+
 ```ts
 // State
 categories: Category[]
 exercises: Exercise[]
 isLoading: boolean
-error: string | null
 
 // Actions
-setCategories(categories)
-addCategory(category)
-updateCategory(id, updates)
-deleteCategory(id)
-setExercises(exercises)
+loadExercises(categories, exercises)
 addExercise(exercise)
 updateExercise(id, updates)
 deleteExercise(id)
-setLoading(bool)
-setError(msg)
+toggleFavorite(id)
+addCategory(category)
 ```
 
 ## useProgressStore
+
 ```ts
 // State
-personalRecords: PersonalRecord[]
-chartData: Record<string, ChartPoint[]>   // keyed by exerciseId
+personalRecords: Record<exerciseId, PersonalRecord[]>
 isLoading: boolean
-error: string | null
 
 // Actions
-setPersonalRecords(records)
-updatePersonalRecord(record)
-loadChartData(exerciseId, points)
-setLoading(bool)
-setError(msg)
+loadPersonalRecords(exerciseId, records)
+calculateEstimated1RM(exerciseId)  // Brzycki, máx entre todos los PRs
 ```
 
 ## useRoutineStore
+
 ```ts
 // State
 routines: Routine[]
-days: Record<string, RoutineDay[]>           // keyed by routineId
-exercises: Record<string, RoutineDayExercise[]>  // keyed by dayId
-predefinedSets: Record<string, PredefinedSet[]>  // keyed by rdExerciseId
-isLoading: boolean
-error: string | null
+routineDays: Record<routineId, RoutineDay[]>
+routineDayExercises: Record<dayId, RoutineDayExercise[]>
+predefinedSets: Record<rdExerciseId, PredefinedSet[]>
 
 // Actions
-setRoutines(routines)
-addRoutine(routine)
-updateRoutine(id, updates)
-deleteRoutine(id)
-loadRoutineDays(routineId, days)
-loadRoutineDayExercises(dayId, exercises)
-loadPredefinedSets(rdExerciseId, sets)
-copyRoutine(routine)
-reorderDays(routineId, days)
-reorderExercisesInDay(dayId, exercises)
-savePredefinedSets(rdExerciseId, sets)
-logRoutineWorkout(routineId, dayId)    // EMPTY — not implemented
-setLoading(bool)
-setError(msg)
+loadRoutines, createRoutine, updateRoutine, deleteRoutine
+loadRoutineDays, addRoutineDay, deleteRoutineDay
+loadDayExercises, addExerciseToDay, removeExerciseFromDay
+loadPredefinedSets, setPredefinedSets
 ```
+
+**Nota:** `logRoutineWorkout()` está implementado en `routines/[id].tsx` directamente, no en el store.

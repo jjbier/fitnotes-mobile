@@ -1,71 +1,65 @@
 # Repositories — @fitnotes/database
 
-All exported from `packages/database/src/index.ts`.
-All use `SupabaseClient<Database>` as client type.
+_Last updated: 2026-06-22_
+
+Todos exportados desde `packages/database/src/index.ts`. Todos usan `SupabaseClient<Database>`.
+
+## workoutRepository
+
+```ts
+getWorkoutByDate(date)         // YYYY-MM-DD → Workout | null
+getWorkouts(limit?)            // historial reciente
+createWorkout(data, userId)
+updateWorkout(id, data)        // end_time, comment, etc.
+deleteWorkout(id)
+getWorkoutExercises(workoutId)
+addExercise(data, userId)      // → devuelve workout_exercise con ID real de DB
+removeExercise(id)             // por workout_exercise.id
+reorderExercises(updates)
+getSets(workoutExerciseId)
+createSet(data, userId)        // → devuelve set con ID real de DB
+updateSet(id, data)
+deleteSet(id)
+```
 
 ## exerciseRepository
+
 ```ts
 getCategories()
-getCategory(id)
 createCategory(data, userId)
-updateCategory(id, data)
-deleteCategory(id)
 getExercises(categoryId?)
-getExercise(id)
 createExercise(data, userId)
 updateExercise(id, data)
 deleteExercise(id)
 toggleFavorite(id, isFavorite)
-searchExercises(query)
 ```
 
 ## routineRepository
+
 ```ts
 getRoutines()
 createRoutine(data, userId)
-updateRoutine(id, data)
 deleteRoutine(id)
-copyRoutine(sourceId, newName, userId)   // deep copy days + exercises + predefined sets
+copyRoutine(sourceId, newName, userId)   // deep copy días + ejercicios + predefined sets
 getDays(routineId)
 createDay(data, userId)
-updateDay(id, data)
-deleteDay(id)
 getDayExercises(dayId)
 addExercise(data, userId)
 removeExercise(id)
-reorderExercises(updates: {id, order_index}[])
 getPredefinedSets(rdExerciseId)
 savePredefinedSets(rdExerciseId, sets, userId)
 ```
 
-## workoutRepository
-```ts
-getWorkoutByDate(date)         // returns single or null
-getWorkouts(limit?)
-createWorkout(data, userId)
-updateWorkout(id, data)
-deleteWorkout(id)
-getWorkoutExercises(workoutId)
-addExercise(data, userId)
-removeExercise(id)
-reorderExercises(updates)
-getSets(workoutExerciseId)
-createSet(data, userId)
-updateSet(id, data)
-deleteSet(id)
-shareWorkout(workoutId)        // returns plain text string for sharing
-```
-
 ## progressRepository
+
 ```ts
 getPersonalRecords(exerciseId)
 getAllPersonalRecords()
-getChartData(exerciseId): Promise<ChartPoint[]>
-// ChartPoint: { date, maxWeight, totalVolume, maxReps }
-// getChartData: fetches workout_exercises + sets, aggregates by date in JS
+getChartData(exerciseId)  // → ChartPoint[] { date, maxWeight, totalVolume, maxReps }
 ```
 
 ## bodyTrackerRepository
+
 ```ts
 getMeasurements()
 createMeasurement(data, userId)
@@ -75,12 +69,12 @@ getEntries(measurementId, limit?)
 getAllEntries(userId)
 addEntry(data, userId)
 deleteEntry(id)
-resetMeasurement(measurementId)   // deletes all entries for a measurement
 ```
 
 ## calendarRepository
+
 ```ts
-getWorkoutsForMonth(year, month)   // date range YYYY-MM-01 → last day
-getWorkoutSummary(date)            // with workout_exercises + exercises join
-getWorkoutHistory(limit?)          // sorted desc by date
+getWorkoutsForMonth(year, month)   // rango YYYY-MM-01 → último día
+getWorkoutSummary(date)            // con workout_exercises + exercises join
+getWorkoutHistory(limit?)          // desc por fecha
 ```

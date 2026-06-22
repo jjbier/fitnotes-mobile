@@ -1,7 +1,7 @@
 # FitNotes App — CLAUDE.md
 
 ## Objetivo
-App de seguimiento de fitness (workout logging, PRs, rutinas, body tracker) con **web** (Next.js 15) y **mobile** (Expo SDK 52) compartiendo lógica de negocio via `@fitnotes/core`.
+App de seguimiento de fitness (workout logging, PRs, rutinas, body tracker) con **web** (Next.js 15) y **mobile** (Expo SDK 52) compartiendo lógica via `@fitnotes/core`. Todo en **español**.
 
 ---
 
@@ -14,7 +14,7 @@ fitnotes-app/
 └── packages/
     ├── core          → @fitnotes/core  — ZERO imports react/next/expo
     ├── database      → @fitnotes/database (Supabase client + repositorios)
-    ├── ui            → @fitnotes/ui (tokens, sin implementar)
+    ├── ui            → vacío
     └── tsconfig      → configs TS base/nextjs/expo
 ```
 
@@ -26,7 +26,7 @@ fitnotes-app/
 
 | Capa | Tecnología | Nota |
 |---|---|---|
-| Monorepo | Turborepo 2 + pnpm workspaces | |
+| Monorepo | Turborepo 2 + pnpm workspaces | `.npmrc` con `public-hoist-pattern` para Babel |
 | Lenguaje | TypeScript strict, `verbatimModuleSyntax` | imports internos con `.js` |
 | Web | Next.js 15, Tailwind v4 | shadcn/ui NO inicializado |
 | Mobile | Expo 52, Expo Router v4 | StyleSheet only, NO NativeWind en componentes |
@@ -39,101 +39,74 @@ fitnotes-app/
 
 ## Decisiones arquitectónicas
 
-- **Repository pattern**: `createXxxRepository(client: SupabaseClient<Database>)` en `packages/database/src/repositories/`
-- **`ExerciseType` cast**: Supabase devuelve string literal union, core usa enum → `ex.type as ExerciseType` obligatorio al mapear filas
-- **`.env.local`**: en `apps/web/.env.local` (no raíz monorepo) — Next.js solo lee su propio directorio
+- **Repository pattern**: `createXxxRepository(client)` en `packages/database/src/repositories/`
+- **`ExerciseType` cast**: `ex.type as ExerciseType` obligatorio al mapear filas Supabase → core
+- **`.env.local`**: en `apps/web/.env.local` (no raíz). Mobile: `EXPO_PUBLIC_*` en `apps/mobile/.env`
 - **IDs locales**: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 - **1RM**: Brzycki → `weight * (36 / (37 - reps))`, guard en reps ≥ 37
-- **PR**: actualizado via trigger SQL en `public.sets` (insert/update)
-- **RLS**: todas las tablas tienen `auth.uid() = user_id`
-- **Web auth guard**: `apps/web/middleware.ts` redirige a `/login` si no hay sesión
-- **Mobile auth guard**: `apps/mobile/app/_layout.tsx` — `getSession()` + `onAuthStateChange`
+- **PR**: auto-actualizado via trigger SQL en `public.sets`
+- **RLS**: todas las tablas `auth.uid() = user_id` (FOR ALL)
+- **Mobile auth**: `getSession()` en todas las pantallas (rápido, sin red). Solo `_layout.tsx` usa `onAuthStateChange`
+- **Mobile session**: `FileStorage` (expo-file-system) como Supabase auth storage — NO AsyncStorage (incompatible con RN 0.76)
+- **workout_exercise ID**: siempre pasar `data.id` (UUID real de DB) a `addExerciseToWorkout()` — el ID local rompía delete/update vía RLS
+- **NativeWind v4**: `withNativeWind` en metro.config.js + `jsxImportSource: "nativewind"` en babel. NO `nativewind/babel` plugin
+- **Metro TS resolver**: mapea `.js` → `.ts` para workspace packages con `verbatimModuleSyntax`
+- **pnpm hoisting**: `.npmrc` `public-hoist-pattern[]=@babel/runtime*` — necesario para `assembleRelease`
 
 ---
 
 ## Estado actual — qué funciona
 
 ### `packages/core` ✅
-- Tipos: `Exercise`, `ExerciseType`, `Workout`, `Set`, `WorkoutExercise`, `PersonalRecord`, `Routine`, `RoutineDay`, `RoutineDayExercise`, `PredefinedSet`, `BodyMeasurement`, `BodyMeasurementEntry`
-- Stores: `useWorkoutStore`, `useExerciseStore`, `useProgressStore`, `useRoutineStore` (todos con `isLoading` + `error`)
+- Tipos: `Exercise`, `ExerciseType` (5 valores), `Workout`, `Set`, `WorkoutExercise`, `PersonalRecord`, `Routine`, `RoutineDay`, `RoutineDayExercise`, `PredefinedSet`, `BodyMeasurement`, `BodyMeasurementEntry`
+- Stores: `useWorkoutStore` (con `removeExerciseFromWorkout`, `removeWorkoutFromHistory`), `useExerciseStore`, `useProgressStore`, `useRoutineStore`
 - Utils: `calculate1RM`, `estimateRepMax`, `calculateVolume`, `calculatePace`, `calculateSpeed`, `roundToNearest`, `calculateSetWeight`, `calculatePlates`, `formatWorkoutDate`, `getWeekRange`, `groupWorkoutsByMonth`
-- Schemas Zod para todos los tipos
+- **144 tests Vitest** — incluye CRUD tests para los 5 ExerciseTypes (WEIGHT_REPS, DISTANCE_TIME, REPS_ONLY, WEIGHT_ONLY, TIME_ONLY)
 
 ### `packages/database` ✅
 - `createBrowserClient()` / `createServerClient()` tipados con `Database`
-- `types.ts` generado con `supabase gen types typescript` (no placeholder)
+- `types.ts` generado con `supabase gen types typescript`
 - Repositorios: `exercise`, `routine`, `workout`, `progress`, `bodyTracker`, `calendar`
-- `SyncEngine` — clase con métodos vacíos (pendiente)
+- `SyncEngine` — push/pull/sync
 
-### `apps/web` ✅ conectado a Supabase
+### `apps/web` ✅ — todas las rutas conectadas a Supabase
+`/dashboard`, `/exercise`, `/exercise/[id]`, `/progress`, `/calendar`, `/routines`, `/routines/[id]`, `/body-tracker`, `/tools`, `/settings` (incl. export CSV + delete account)
 
-| Ruta | Estado |
-|---|---|
-| `/login`, `/register` | Auth completo |
-| `/dashboard` | Workout logging por fecha, picker ejercicios, sets CRUD |
-| `/calendar` | Grid mensual, vista lista, popup día |
-| `/exercise` | Lista por categorías, crear/editar ejercicio |
-| `/exercise/[id]` | Historial sets del ejercicio |
-| `/progress` | Selector ejercicio, tabs Records/Chart/History, Recharts LineChart |
-| `/routines` | Lista, crear/copiar/eliminar |
-| `/routines/[id]` | Días, ejercicios, sets predefinidos |
-| `/body-tracker` | Grid medidas, log inline, historial |
-| `/tools` | 1RM Calculator, Set Calculator, Plate Calculator |
-| `/settings` | Perfil (auth.updateUser), unidad peso, sign-out |
+### `apps/mobile` ✅ — APK release funcionando en dispositivo Android
+- **Hoy**: workout por fecha, delete ejercicio del workout ✅, navegar a training
+- **Training** (`workout/[exerciseId]`): sets CRUD completo ✅ (add/edit/delete), delete ejercicio ✅, RestTimer con haptics, todos los ExerciseTypes
+- **Ejercicios**: browse + FAB crear ejercicio + categoría inline
+- **Progreso**: PRs expandibles, 1RM estimado
+- **Herramientas**: 1RM, Set%, Plate calculators
+- **Configuración**: perfil, kg/lb (user_metadata), sign-out, delete account
+- **Rutinas**: lista/crear/eliminar, días + ejercicios, log routine day → crea workout real
+- **Body Tracker**: CRUD medidas + entradas, accesible desde Settings
+- **Calendario**: grid mensual, list view
+- **Sesión persistente**: FileStorage adapter, auto-refresh indefinido
+- **Sync**: AppState listener, `refetchSignal` actualiza workout de hoy al volver del background
 
-- Middleware server-side protege todas las rutas
-- Sidebar + MobileNav con todas las rutas (active state via `usePathname`)
-
-### `apps/mobile` ✅ conectado a Supabase
-
-| Pantalla | Estado |
-|---|---|
-| `(auth)/login`, `/register` | Auth completo |
-| `(tabs)/index` | Today — workout por fecha, navegar a training |
-| `(tabs)/calendar` | Grid mensual, list view |
-| `(tabs)/exercises` | Lista por categorías |
-| `exercises/[categoryId]` | Ejercicios de categoría |
-| `(tabs)/progress` | PRs por ejercicio, expandible |
-| `(tabs)/tools` | 1RM, Set%, Plate calculators |
-| `(tabs)/settings` | Perfil, unidad, sign-out con Alert |
-| `workout/[exerciseId]` | Sets CRUD completo, todos los ExerciseTypes |
-| `routines/index` | Lista, crear, eliminar |
-| `routines/[id]` | Días + ejercicios, edit mode |
-
-- 6 tabs: Today / Calendar / Exercises / Progress / Tools / Settings
-- StyleSheet en todos los componentes (no `className`)
+### Android APK ✅
+- `apps/mobile/android/app/build/outputs/apk/release/app-release.apk`
+- `cd apps/mobile/android && ./gradlew assembleRelease --no-daemon`
+- `adb install <path>`
 
 ---
 
-## Pendiente / bugs conocidos
+## Pendiente / descartado
 
-### Crítico
-- [ ] `SyncEngine` vacío — offline-first mobile no implementado (`expo-sqlite` sin schema)
-- [ ] `routineStore.logRoutineWorkout()` vacío — no hace dispatch a `workoutStore`
-
-### Web
-- [ ] Delete account en settings es solo UI — falta llamada real a Supabase
-- [ ] `/workout/[date]` existe pero no está vinculada desde dashboard
-
-### Mobile
-- [ ] Body tracker mobile básico — sin CRUD completo de medidas
-- [ ] `RestTimer` sin haptics/sonido (`expo-haptics` no instalado)
-- [ ] Unidad kg/lb guardada en estado pero no propagada a inputs de sets
-
-### Infraestructura
-- [ ] No hay tests (ni unit ni e2e)
-- [ ] No hay ESLint config en ningún paquete
-- [ ] `shadcn/ui` no inicializado (`components.json` no existe) — web usa Tailwind directo
-- [ ] `packages/ui` vacío
+- `shadcn/ui` no inicializado — incompatibilidad `eslint-config-next` + ESLint v9
+- `packages/ui` vacío
+- SyncEngine pull no actualiza stores de ejercicios/rutinas (solo today workout via `refetchSignal`)
 
 ---
 
 ## Comandos
 
 ```bash
-pnpm --filter @fitnotes/web dev              # dev web
-pnpm --filter @fitnotes/mobile start         # dev mobile (Expo)
-pnpm --filter @fitnotes/core exec tsc --noEmit
-pnpm --filter @fitnotes/web exec tsc --noEmit
+pnpm --filter @fitnotes/web dev
+pnpm --filter @fitnotes/mobile start
+pnpm --filter @fitnotes/core test
 cd apps/mobile && npx tsc --noEmit
+cd apps/mobile/android && ./gradlew assembleRelease --no-daemon
+adb install apps/mobile/android/app/build/outputs/apk/release/app-release.apk
 ```

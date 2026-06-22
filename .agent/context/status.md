@@ -1,64 +1,44 @@
 # Status — FitNotes App
 
-_Last updated: 2026-06-17_
+_Last updated: 2026-06-22_
 
-## What works (end-to-end with real Supabase data)
+## Web ✅
+- Auth: login, register, sign-out, middleware session guard
+- Dashboard: workout por fecha, sets CRUD completo (todos los ExerciseTypes)
+- Exercises: browse por categoría, crear ejercicio + categoría inline con color picker
+- Progress: PRs, Recharts LineChart, 1RM estimates
+- Calendar: grid mensual, list view, popup día
+- Routines: lista, crear/copiar/eliminar, editor días + ejercicios + predefined sets
+- Body Tracker: medidas, log inline, historial
+- Tools: 1RM Calculator, Set Calculator, Plate Calculator
+- Settings: perfil, weight unit, export CSV, sign-out, delete account (RPC `delete_user`)
 
-### Web
-- [x] Auth: login, register, sign-out, middleware session guard
-- [x] Dashboard: create/load workout by date, add exercises, log sets (all ExerciseTypes), complete toggle, delete
-- [x] Exercises: browse by category, create/edit/delete exercise + category
-- [x] Progress: PR list per exercise, Recharts LineChart (maxWeight/volume/reps), 1RM estimates
-- [x] Calendar: month grid with workout dots, list view, day popup
-- [x] Routines: list, create/copy/delete, detail with days + exercises + predefined sets
-- [x] Body Tracker: enabled measurements grid, log entry, history
-- [x] Tools: 1RM Calculator (table 1–15RM), Set Calculator (% table + rounding), Plate Calculator (greedy solver + bar viz)
-- [x] Settings: load/save display name (Supabase auth.updateUser), weight unit toggle (localStorage), sign-out
+## Mobile ✅
+- Auth guard + login/register
+- Hoy: workout por fecha, **delete ejercicio del workout** ✅, navigate a training
+- Training: **sets CRUD completo** ✅, **delete ejercicio** ✅, todos los ExerciseTypes, RestTimer haptics, kg/lb desde user_metadata
+- Ejercicios: browse + FAB crear ejercicio + categoría inline
+- Progreso: PRs expandibles, 1RM estimado
+- Tools: 1RM, Set%, Plate calculators
+- Settings: perfil, kg/lb (user_metadata), sign-out, delete account
+- Rutinas: lista/crear/eliminar, días + ejercicios, log routine day → workout real
+- Body Tracker: CRUD medidas + entradas (desde Settings)
+- Calendario: grid mensual, list view
+- Sync: AppState listener, refetchSignal actualiza workout de hoy
+- **Sesión persistente**: FileStorage (expo-file-system) — NO AsyncStorage
 
-### Mobile
-- [x] Auth guard (_layout.tsx) + login/register screens
-- [x] Today tab: date navigation, load/create workout, navigate to exercise training
-- [x] Training screen: sets CRUD, all ExerciseTypes (weight/reps/distance/time fields)
-- [x] Calendar: month grid, list view
-- [x] Exercises: browse by category
-- [x] Progress: all PRs, expandable per exercise with estimated 1RM
-- [x] Tools: 1RM, Set%, Plate calculators
-- [x] Settings: profile, weight unit, sign-out with confirmation
-- [x] Routines: list, create, delete, detail with days + exercises
-- [x] RestTimer: functional with +/-30s buttons (no haptics yet)
+## Android APK ✅
+- `apps/mobile/android/app/build/outputs/apk/release/app-release.apk`
+- CRUD verificado en dispositivo físico (delete + edit persisten en DB)
 
-### Packages
-- [x] `@fitnotes/core`: all types, 4 stores, utils, Zod schemas
-- [x] `@fitnotes/database`: 6 repositories, browser/server client, generated types
-- [x] All three packages pass `tsc --noEmit` clean
+## packages/core ✅
+- 144 tests Vitest — CRUD para los 5 ExerciseTypes
+- `removeExerciseFromWorkout`, `removeWorkoutFromHistory` en workoutStore
 
-## What's pending
+## packages/database ✅
+- 6 repositorios completos, SyncEngine push/pull/sync, types generados
 
-### High priority
-- [ ] `routineStore.logRoutineWorkout()` — empty, needs to create workout + exercises from routine day
-- [ ] Delete account in settings — UI only, no Supabase call
-- [ ] `/workout/[date]` page — exists but not linked from dashboard (dashboard uses query param ?date=)
-
-### Mobile-specific
-- [ ] Body tracker mobile — basic list only, no create/edit measurement, no entry CRUD
-- [ ] `RestTimer` — no haptics, no sound
-- [ ] Weight unit (kg/lb) — saved in state but not used in set input display
-
-### Offline sync (not started)
-- [ ] `SyncEngine` — all methods are empty stubs
-- [ ] `expo-sqlite` — no schema initialized, no `pending_changes` table
-- [ ] `NetInfo` listener for pause/resume sync
-
-### Infrastructure
-- [ ] No tests (no unit, no e2e)
-- [ ] No ESLint config in any package
-- [ ] `shadcn/ui` not initialized (no `components.json`) — web uses raw Tailwind
-- [ ] `packages/ui` is empty
-
-## Known gotchas
-
-- `ExerciseType` cast required: `row.type as ExerciseType` in every Supabase→core mapping
-- Supabase package versions are pinned — do NOT upgrade without checking SupabaseClient generic compatibility
-- `apps/web/.env.local` must exist (not root `.env.local`) for Next.js to pick up Supabase vars
-- Mobile uses `StyleSheet` everywhere — adding `className` will silently do nothing
-- `workout/[date]` route in web uses the date as URL param; dashboard still routes via `?date=` query — inconsistency
+## Pendiente / descartado
+- `shadcn/ui` no inicializado (incompatibilidad eslint-config-next + ESLint v9)
+- `packages/ui` vacío
+- SyncEngine pull no actualiza stores de ejercicios/rutinas (solo workout de hoy)

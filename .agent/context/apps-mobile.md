@@ -1,62 +1,76 @@
 # apps/mobile — Expo SDK 52
 
+_Last updated: 2026-06-22_
+
 ## Config
-- `app.json` → scheme `fitnotes`, typedRoutes enabled, expo-sqlite con FTS
-- `babel.config.js` → `babel-preset-expo` con `jsxImportSource: "nativewind"` + `nativewind/babel` + `reanimated/plugin`
-- `tailwind.config.js` → content `app/**` + `components/**`, preset `nativewind/preset`
-- `metro.config.js` → `watchFolders: [monorepoRoot]`, `nodeModulesPaths` para resolver workspace packages, `withNativeWind`
-- **Importante:** usa Tailwind v3 (NativeWind v4 no soporta Tailwind v4)
+- `app.json` → scheme `fitnotes`, typedRoutes enabled. **expo-sqlite plugin ELIMINADO** (causaba crash)
+- `babel.config.js` → `babel-preset-expo` con `jsxImportSource: "nativewind"` + `reanimated/plugin`. **SIN `nativewind/babel`**
+- `metro.config.js` → `watchFolders: [monorepoRoot]`, `nodeModulesPaths`, `withNativeWind`, **custom resolveRequest .js→.ts**
+- `.npmrc` raíz → `public-hoist-pattern` para Babel — requerido para `assembleRelease`
+- `lib/supabase.ts` → `createClient` con **FileStorage** (expo-file-system) como auth storage — NO AsyncStorage
+
+## Supabase en mobile
+```typescript
+// SIEMPRE usar getSession() en pantallas (no getUser())
+const { data: { session } } = await supabase.auth.getSession();
+if (session?.user) setUserId(session.user.id);
+
+// getUser() solo en _layout.tsx para verificación inicial
+```
+
+## workout_exercise ID — regla crítica
+```typescript
+// En workout/[exerciseId].tsx — addToWorkout effect:
+// 1. Esperar a que userId esté disponible (guard)
+if (exercise && userId) {
+  if (activeWorkout && activeWorkout.id && !workoutExercise) {
+    const { data, error } = await repo.addExercise({...}, userId);
+    if (!error && data) {
+      addExerciseToWorkout(exerciseId, data.id); // ← pasar UUID real de DB
+    }
+  }
+}
+// Sin esto: el store tiene ID local, la DB tiene UUID distinto → delete/update fallan vía RLS
+```
 
 ## Estructura Expo Router
 
 ```
 app/
-├── _layout.tsx             Stack root — fonts, splash, auth guard TODO
-├── (auth)/
-│   ├── login.tsx           email + magic link
-│   └── register.tsx        registro
+├── _layout.tsx              Stack root — auth guard + AppState sync + SyncContext.Provider
+├── (auth)/login.tsx         email + password
+├── (auth)/register.tsx
 ├── (tabs)/
-│   ├── _layout.tsx         4 tabs con Ionicons
-│   ├── index.tsx           Home — useWorkoutStore, startWorkout
-│   ├── calendar.tsx        mes + workout list
-│   ├── exercises.tsx       búsqueda + chips + useExerciseStore
-│   └── progress.tsx        PRs + useProgressStore + calculate1RM
-├── workout/
-│   └── [exerciseId].tsx    modal fullScreen — SetRow list + add set
-└── routines/
-    ├── index.tsx           lista + FAB
-    └── [id].tsx            editor días + Start Workout
+│   ├── _layout.tsx          6 tabs: index/calendar/exercises/progress/tools/settings
+│   ├── index.tsx            Hoy — workout por fecha, delete ejercicio, reacciona a refetchSignal
+│   ├── calendar.tsx
+│   ├── exercises.tsx        FAB modal (crear ejercicio + categoría inline)
+│   ├── progress.tsx         PRs expandibles + 1RM estimado
+│   ├── tools.tsx            1RM / Set% / Plate calculators
+│   └── settings.tsx         perfil, kg/lb, body-tracker link, sign-out, delete account
+├── workout/[exerciseId].tsx  sets CRUD — todos los ExerciseTypes — RestTimer — delete ejercicio
+├── body-tracker/index.tsx   tabs Registrar/Historial — CRUD medidas + entradas
+├── routines/index.tsx       lista + crear + eliminar
+├── routines/[id].tsx        días + ejercicios, edit mode, log routine day → workout real
+└── exercises/[categoryId].tsx
 ```
 
-## Componentes
+## Sync
+- `lib/sync.ts` — singleton `syncEngine = new SyncEngine(supabase)`
+- `contexts/SyncContext.tsx` — `{ status, pendingCount, lastSyncAt, refetchSignal }`
+- `_layout.tsx` — AppState listener: sync on foreground, incrementa `refetchSignal` si `pulled > 0`
+- `(tabs)/index.tsx` — escucha `refetchSignal`, recarga workout del día al cambiar
 
-### `components/workout/`
-| Componente | Estado |
-|---|---|
-| `TrainingScreen.tsx` | Stub — SetRow list + Add Set + Finish Workout buttons |
-| `SetRow.tsx` | **Funcional** — muestra campos según valores presentes, complete toggle, delete |
-| `RestTimer.tsx` | **Funcional** — countdown con interval, +/-30s, pause/resume |
+## Android build
 
-### `components/ui/`
-| Componente | Estado |
-|---|---|
-| `Button.tsx` | Funcional — variantes (default/secondary/destructive/outline/ghost/link), sizes, loading |
-| `Input.tsx` | Funcional — label, error state, disabled, usa `InputBaseProps` de `@fitnotes/ui` |
+```bash
+cd apps/mobile/android && ./gradlew assembleRelease --no-daemon
+# Output: app/build/outputs/apk/release/app-release.apk
+adb install app/build/outputs/apk/release/app-release.apk
+```
 
-## Tabs del navigator
-
-| Tab | Screen | Icono |
-|---|---|---|
-| Today | `(tabs)/index` | home / home-outline |
-| Calendar | `(tabs)/calendar` | calendar / calendar-outline |
-| Exercises | `(tabs)/exercises` | barbell / barbell-outline |
-| Progress | `(tabs)/progress` | trending-up / trending-up-outline |
-
-## Pendiente crítico
-
-1. Auth guard en `_layout.tsx` — verificar sesión Supabase al montar
-2. `expo-sqlite` schema no inicializado — no existe tabla `pending_changes`
-3. `SetForm` no existe en mobile — inputs inline en `workout/[exerciseId].tsx`
-4. No hay `expo-haptics` instalado para `RestTimer` y `Button`
-5. `metro.config.js` requiere `nativewind` instalado para `withNativeWind` import
-6. Variables de entorno mobile: `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` (no `NEXT_PUBLIC_`)
+Fixes permanentes en Android:
+- `gradle.properties`: `android.kotlinVersion=1.9.24`
+- `app/build.gradle`: `implementation("androidx.core:core-splashscreen:1.0.1")`
+- `react-native.config.js`: override `expo` packageImportPath
+- `@react-native-async-storage/async-storage` NO instalado (usa FileStorage)
