@@ -18,7 +18,9 @@ interface WorkoutActions {
   loadWorkout: (workout: Workout, exercises: WorkoutExercise[], sets: Record<string, Set[]>) => void;
   loadWorkouts: (workouts: Workout[]) => void;
   addWorkoutToHistory: (workout: Workout) => void;
-  addExerciseToWorkout: (exerciseId: string) => void;
+  addExerciseToWorkout: (exerciseId: string, weId?: string) => void;
+  removeExerciseFromWorkout: (workoutExerciseId: string) => void;
+  removeWorkoutFromHistory: (workoutId: string) => void;
   createSet: (workoutExerciseId: string, partial?: Partial<Set>) => void;
   updateSet: (workoutExerciseId: string, setId: string, patch: Partial<Set>) => void;
   deleteSet: (workoutExerciseId: string, setId: string) => void;
@@ -87,11 +89,11 @@ export const useWorkoutStore = create<WorkoutStore>()(
         if (!exists) state.workouts.unshift(workout);
       }),
 
-    addExerciseToWorkout: (exerciseId) =>
+    addExerciseToWorkout: (exerciseId, weId) =>
       set((state) => {
         if (!state.activeWorkout) return;
         const entry: WorkoutExercise = {
-          id: generateId(),
+          id: weId ?? generateId(),
           workout_id: state.activeWorkout.id,
           exercise_id: exerciseId,
           order_index: state.exercises.length,
@@ -99,6 +101,22 @@ export const useWorkoutStore = create<WorkoutStore>()(
         state.exercises.push(entry);
         state.sets[entry.id] = [];
         state.activeExerciseId = exerciseId;
+      }),
+
+    removeExerciseFromWorkout: (workoutExerciseId) =>
+      set((state) => {
+        state.exercises = state.exercises.filter((e) => e.id !== workoutExerciseId);
+        delete state.sets[workoutExerciseId];
+      }),
+
+    removeWorkoutFromHistory: (workoutId) =>
+      set((state) => {
+        state.workouts = state.workouts.filter((w) => w.id !== workoutId);
+        if (state.activeWorkout?.id === workoutId) {
+          state.activeWorkout = null;
+          state.exercises = [];
+          state.sets = {};
+        }
       }),
 
     createSet: (workoutExerciseId, partial = {}) =>
