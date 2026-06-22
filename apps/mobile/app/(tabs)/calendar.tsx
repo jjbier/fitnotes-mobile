@@ -51,29 +51,29 @@ export default function CalendarScreen() {
 
   const daysInMonth = new Date(year, month, 0).getDate();
   const firstDow = new Date(year, month - 1, 1).getDay();
-  const monthName = new Date(year, month - 1, 1).toLocaleDateString("en", { month: "long", year: "numeric" });
+  const monthName = new Date(year, month - 1, 1).toLocaleDateString("es", { month: "long", year: "numeric" });
 
-  const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+  const DAYS = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"];
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
       {/* Header */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 8 }}>
-        <Text style={{ flex: 1, fontSize: 20, fontWeight: "700", color: "#0f172a" }}>Calendar</Text>
+        <Text style={{ flex: 1, fontSize: 20, fontWeight: "700", color: "#0f172a" }}>Calendario</Text>
         <TouchableOpacity onPress={() => setListView((v) => !v)} style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: listView ? "#6366f1" : "transparent" }}>
-          <Text style={{ fontSize: 12, fontWeight: "500", color: listView ? "#fff" : "#0f172a" }}>{listView ? "Month" : "List"}</Text>
+          <Text style={{ fontSize: 12, fontWeight: "500", color: listView ? "#fff" : "#0f172a" }}>{listView ? "Mes" : "Lista"}</Text>
         </TouchableOpacity>
       </View>
 
       {listView ? (
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, gap: 8 }}>
           {history.length === 0 ? (
-            <Text style={{ color: "#94a3b8", fontSize: 13, textAlign: "center", paddingTop: 32 }}>No workouts yet.</Text>
+            <Text style={{ color: "#94a3b8", fontSize: 13, textAlign: "center", paddingTop: 32 }}>Sin entrenamientos aún.</Text>
           ) : (
             history.map((w) => (
               <TouchableOpacity
                 key={w.id}
-                onPress={() => router.push(`/(tabs)?date=${w.date}` as `/${string}`)}
+                onPress={() => router.push({ pathname: "/(tabs)", params: { date: w.date } })}
                 style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12 }}
               >
                 <Text style={{ fontSize: 13, color: "#0f172a" }}>{formatWorkoutDate(w.date)}</Text>
@@ -149,13 +149,13 @@ export default function CalendarScreen() {
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                 <Text style={{ fontSize: 13, fontWeight: "600", color: "#0f172a" }}>{formatWorkoutDate(selectedDate)}</Text>
                 {workoutDates.has(selectedDate) && (
-                  <TouchableOpacity onPress={() => router.push(`/workout/${selectedDate}` as `/${string}`)}>
+                  <TouchableOpacity onPress={() => router.push({ pathname: "/(tabs)", params: { date: selectedDate } })}>
                     <Text style={{ fontSize: 12, color: "#6366f1" }}>Open →</Text>
                   </TouchableOpacity>
                 )}
               </View>
               <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
-                {workoutDates.has(selectedDate) ? "Workout logged" : "No workout on this day"}
+                {workoutDates.has(selectedDate) ? "Entrenamiento registrado" : "Sin entrenamiento este día"}
               </Text>
             </View>
           )}

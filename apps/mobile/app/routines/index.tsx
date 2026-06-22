@@ -25,8 +25,8 @@ export default function RoutinesScreen() {
   useEffect(() => {
     async function load() {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) setUserId(user.id);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) setUserId(session.user.id);
       const { data } = await repo.getRoutines();
       if (data) loadRoutines(data.map((r) => ({ id: r.id, name: r.name, notes: r.notes ?? undefined })));
       setLoading(false);
@@ -36,9 +36,9 @@ export default function RoutinesScreen() {
   }, []);
 
   async function handleCreate() {
-    if (!newName.trim()) { Alert.alert("Error", "Name is required"); return; }
+    if (!newName.trim()) { Alert.alert("Error", "El nombre es obligatorio"); return; }
     const { data, error } = await repo.createRoutine({ name: newName.trim(), notes: newNotes.trim() }, userId);
-    if (error || !data) { Alert.alert("Error", error?.message ?? "Failed to create"); return; }
+    if (error || !data) { Alert.alert("Error", error?.message ?? "Error al crear"); return; }
     createRoutine({ id: data.id, name: data.name, notes: data.notes ?? undefined });
     setNewName("");
     setNewNotes("");
@@ -46,9 +46,9 @@ export default function RoutinesScreen() {
   }
 
   async function handleDelete(id: string, name: string) {
-    Alert.alert("Delete routine", `Delete "${name}" and all its days?`, [
-      { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: async () => {
+    Alert.alert("Eliminar rutina", `¿Eliminar "${name}" y todos sus días?`, [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Eliminar", style: "destructive", onPress: async () => {
         await repo.deleteRoutine(id);
         deleteRoutine(id);
       }},
@@ -63,14 +63,14 @@ export default function RoutinesScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100, gap: 10 }}>
-          <Text style={{ fontSize: 22, fontWeight: "700", color: "#0f172a", marginBottom: 4 }}>Routines</Text>
+          <Text style={{ fontSize: 22, fontWeight: "700", color: "#0f172a", marginBottom: 4 }}>Rutinas</Text>
 
           {routines.length === 0 ? (
             <View style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 16, padding: 32, alignItems: "center", gap: 8 }}>
               <Ionicons name="clipboard-outline" size={36} color="#94a3b8" />
-              <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>No routines yet</Text>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>Sin rutinas aún</Text>
               <Text style={{ fontSize: 12, color: "#94a3b8", textAlign: "center" }}>
-                Create a routine to save your favourite workout templates.
+                Crea una rutina para guardar tus plantillas de entrenamiento favoritas.
               </Text>
             </View>
           ) : (
@@ -104,27 +104,27 @@ export default function RoutinesScreen() {
       <Modal visible={showCreate} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setShowCreate(false)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
           <View style={{ padding: 20, gap: 16 }}>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>New Routine</Text>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>Nueva rutina</Text>
             <TextInput
               style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 }}
-              placeholder="Routine name"
+              placeholder="Nombre de la rutina"
               value={newName}
               onChangeText={setNewName}
               autoFocus
             />
             <TextInput
               style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, height: 80, textAlignVertical: "top" }}
-              placeholder="Notes (optional)"
+              placeholder="Notas (opcional)"
               value={newNotes}
               onChangeText={setNewNotes}
               multiline
             />
             <View style={{ flexDirection: "row", gap: 8 }}>
               <TouchableOpacity onPress={() => setShowCreate(false)} style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, paddingVertical: 12, alignItems: "center" }}>
-                <Text style={{ fontSize: 14, fontWeight: "500" }}>Cancel</Text>
+                <Text style={{ fontSize: 14, fontWeight: "500" }}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={handleCreate} style={{ flex: 1, backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 12, alignItems: "center" }}>
-                <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Create</Text>
+                <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Crear</Text>
               </TouchableOpacity>
             </View>
           </View>

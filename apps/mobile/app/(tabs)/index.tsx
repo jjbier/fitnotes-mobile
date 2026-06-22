@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useWorkoutStore, useExerciseStore, formatWorkoutDate, todayISO, ExerciseType } from "@fitnotes/core";
 import { createWorkoutRepository, createExerciseRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
+import { useSyncStatus } from "../../contexts/SyncContext";
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -18,7 +19,8 @@ export default function HomeScreen() {
   const loadWorkout = useWorkoutStore((s) => s.loadWorkout);
   const loadWorkouts = useWorkoutStore((s) => s.loadWorkouts);
   const startWorkout = useWorkoutStore((s) => s.startWorkout);
-  const addExerciseToWorkout = useWorkoutStore((s) => s.addExerciseToWorkout);
+  const removeExerciseFromWorkout = useWorkoutStore((s) => s.removeExerciseFromWorkout);
+  const removeWorkoutFromHistory = useWorkoutStore((s) => s.removeWorkoutFromHistory);
   const finishWorkout = useWorkoutStore((s) => s.finishWorkout);
   const setLoading = useWorkoutStore((s) => s.setLoading);
 
@@ -27,6 +29,7 @@ export default function HomeScreen() {
 
   const [userId, setUserId] = useState("");
   const [currentDate, setCurrentDate] = useState(today);
+  const { status: syncStatus, pendingCount, refetchSignal } = useSyncStatus();
 
   const repo = createWorkoutRepository(supabase);
   const exRepo = createExerciseRepository(supabase);
@@ -59,8 +62,8 @@ export default function HomeScreen() {
   useEffect(() => {
     async function init() {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) setUserId(user.id);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) setUserId(session.user.id);
 
       const [catRes, exRes, recentRes] = await Promise.all([
         exRepo.getCategories(),
@@ -87,20 +90,46 @@ export default function HomeScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (refetchSignal === 0) return;
+    loadWorkoutForDate(currentDate);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refetchSignal]);
+
   async function handleStartWorkout() {
     const { data, error } = await repo.createWorkout({ date: currentDate, start_time: new Date().toISOString() }, userId);
-    if (error || !data) { Alert.alert("Error", error?.message ?? "Failed"); return; }
+    if (error || !data) { Alert.alert("Error", error?.message ?? "Ha ocurrido un error"); return; }
     startWorkout(currentDate);
     loadWorkout({ id: data.id, date: data.date, start_time: data.start_time ?? undefined }, [], {});
   }
 
   async function handleFinish() {
     if (!activeWorkout) return;
-    Alert.alert("Finish Workout?", "Are you sure?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Finish", onPress: async () => {
+    Alert.alert("¿Finalizar entrenamiento?", "¿Estás seguro?", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Finalizar", onPress: async () => {
         await repo.updateWorkout(activeWorkout.id, { end_time: new Date().toISOString() });
         finishWorkout();
+      }},
+    ]);
+  }
+
+  async function handleRemoveExercise(workoutExerciseId: string, exerciseName: string) {
+    Alert.alert(`¿Eliminar "${exerciseName}"?`, "Se eliminarán también todas sus series.", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Eliminar", style: "destructive", onPress: async () => {
+        removeExerciseFromWorkout(workoutExerciseId);
+        await repo.removeExercise(workoutExerciseId);
+      }},
+    ]);
+  }
+
+  async function handleDeleteWorkout(workoutId: string, date: string) {
+    Alert.alert(`¿Eliminar entrenamiento del ${formatWorkoutDate(date)}?`, "Se eliminará permanentemente.", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Eliminar", style: "destructive", onPress: async () => {
+        removeWorkoutFromHistory(workoutId);
+        await repo.deleteWorkout(workoutId);
       }},
     ]);
   }
@@ -124,7 +153,7 @@ export default function HomeScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 20, fontWeight: "700", color: "#0f172a" }}>
-            {currentDate === today ? "Today" : formatWorkoutDate(currentDate)}
+            {currentDate === today ? "Hoy" : formatWorkoutDate(currentDate)}
           </Text>
           {currentDate === today && (
             <Text style={{ fontSize: 13, color: "#94a3b8" }}>{formatWorkoutDate(today)}</Text>
@@ -133,6 +162,15 @@ export default function HomeScreen() {
         <TouchableOpacity onPress={() => handleNavigateDate(1)} disabled={currentDate >= today} style={{ padding: 6, opacity: currentDate >= today ? 0.4 : 1 }}>
           <Ionicons name="chevron-forward" size={20} color="#64748b" />
         </TouchableOpacity>
+        {syncStatus === "syncing" ? (
+          <ActivityIndicator size="small" color="#6366f1" style={{ marginLeft: 4 }} />
+        ) : syncStatus === "error" ? (
+          <Ionicons name="cloud-offline-outline" size={18} color="#ef4444" />
+        ) : pendingCount > 0 ? (
+          <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: "#f97316", alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ fontSize: 10, fontWeight: "700", color: "#fff" }}>{pendingCount}</Text>
+          </View>
+        ) : null}
       </View>
 
       {isLoading ? (
@@ -145,12 +183,12 @@ export default function HomeScreen() {
             /* No workout */
             <View style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 20, padding: 40, alignItems: "center", gap: 12, marginTop: 8 }}>
               <Ionicons name="barbell-outline" size={40} color="#94a3b8" />
-              <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>No workout yet</Text>
+              <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>Sin entrenamiento aún</Text>
               <Text style={{ fontSize: 13, color: "#94a3b8", textAlign: "center" }}>
-                Start a workout to log your sets and track progress.
+                Inicia un entrenamiento para registrar tus series y hacer seguimiento del progreso.
               </Text>
               <TouchableOpacity onPress={handleStartWorkout} style={{ backgroundColor: "#6366f1", borderRadius: 14, paddingHorizontal: 32, paddingVertical: 12 }}>
-                <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Start Workout</Text>
+                <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Iniciar entrenamiento</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -160,20 +198,29 @@ export default function HomeScreen() {
                 const ex = exerciseMap[we.exercise_id];
                 const weSets = (sets[we.id] ?? []);
                 const completedCount = weSets.filter((s) => s.is_complete).length;
+                const exName = ex?.name ?? we.exercise_id;
                 return (
-                  <TouchableOpacity
-                    key={we.id}
-                    onPress={() => router.push(`/workout/${we.exercise_id}`)}
-                    style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 16, backgroundColor: "#fff", paddingHorizontal: 16, paddingVertical: 14, gap: 12 }}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>{ex?.name ?? we.exercise_id}</Text>
-                      <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>
-                        {weSets.length} sets · {completedCount} complete
-                      </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
-                  </TouchableOpacity>
+                  <View key={we.id} style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 16, backgroundColor: "#fff", paddingRight: 8 }}>
+                    <TouchableOpacity
+                      onPress={() => router.push(`/workout/${we.exercise_id}`)}
+                      style={{ flex: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, gap: 12 }}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>{exName}</Text>
+                        <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>
+                          {weSets.length} series · {completedCount} completadas
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleRemoveExercise(we.id, exName)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      style={{ padding: 8 }}
+                    >
+                      <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
                 );
               })}
 
@@ -181,11 +228,11 @@ export default function HomeScreen() {
                 onPress={() => router.push("/exercises")}
                 style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 16, paddingVertical: 14, alignItems: "center" }}
               >
-                <Text style={{ fontSize: 13, color: "#94a3b8" }}>+ Add Exercise</Text>
+                <Text style={{ fontSize: 13, color: "#94a3b8" }}>+ Añadir ejercicio</Text>
               </TouchableOpacity>
 
               <TouchableOpacity onPress={handleFinish} style={{ borderWidth: 1, borderColor: "#ef4444", borderRadius: 14, paddingVertical: 12, alignItems: "center", marginTop: 4 }}>
-                <Text style={{ fontSize: 14, fontWeight: "600", color: "#ef4444" }}>Finish Workout</Text>
+                <Text style={{ fontSize: 14, fontWeight: "600", color: "#ef4444" }}>Finalizar entrenamiento</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -193,16 +240,24 @@ export default function HomeScreen() {
           {/* Recent workouts */}
           {workouts.length > 0 && (
             <View style={{ gap: 8 }}>
-              <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>Recent Activity</Text>
+              <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>Actividad reciente</Text>
               {workouts.slice(0, 5).map((w) => (
-                <TouchableOpacity
-                  key={w.id}
-                  onPress={() => { setCurrentDate(w.date); loadWorkoutForDate(w.date); }}
-                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12 }}
-                >
-                  <Text style={{ fontSize: 13, color: "#0f172a" }}>{formatWorkoutDate(w.date)}</Text>
-                  <Ionicons name="chevron-forward" size={14} color="#94a3b8" />
-                </TouchableOpacity>
+                <View key={w.id} style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 14, paddingRight: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => { setCurrentDate(w.date); void loadWorkoutForDate(w.date); }}
+                    style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12 }}
+                  >
+                    <Text style={{ fontSize: 13, color: "#0f172a" }}>{formatWorkoutDate(w.date)}</Text>
+                    <Ionicons name="chevron-forward" size={14} color="#94a3b8" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleDeleteWorkout(w.id, w.date)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={{ padding: 8 }}
+                  >
+                    <Ionicons name="trash-outline" size={14} color="#ef4444" />
+                  </TouchableOpacity>
+                </View>
               ))}
             </View>
           )}

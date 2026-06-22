@@ -23,12 +23,18 @@ export default function SettingsScreen() {
   const [signOutLoading, setSignOutLoading] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-      setEmail(user.email ?? "");
-      setDisplayName((user.user_metadata?.display_name as string | undefined) ?? "");
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session?.user) return;
+      setEmail(session.user.email ?? "");
+      setDisplayName((session.user.user_metadata?.display_name as string | undefined) ?? "");
+      setWeightUnit((session.user.user_metadata?.weight_unit as "kg" | "lb" | undefined) ?? "kg");
     });
   }, []);
+
+  async function handleWeightUnitChange(unit: "kg" | "lb") {
+    setWeightUnit(unit);
+    await supabase.auth.updateUser({ data: { weight_unit: unit } });
+  }
 
   async function handleSave() {
     setSaveStatus("saving");
@@ -40,10 +46,10 @@ export default function SettingsScreen() {
   }
 
   async function handleSignOut() {
-    Alert.alert("Sign out", "Are you sure you want to sign out?", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert("Cerrar sesión", "¿Estás seguro de que quieres cerrar sesión?", [
+      { text: "Cancelar", style: "cancel" },
       {
-        text: "Sign out",
+        text: "Cerrar sesión",
         style: "destructive",
         onPress: async () => {
           setSignOutLoading(true);
@@ -57,17 +63,17 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Settings</Text>
+        <Text style={styles.title}>Configuración</Text>
 
         {/* Profile */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Profile</Text>
+          <Text style={styles.sectionTitle}>Perfil</Text>
           {email ? <Text style={styles.emailText}>{email}</Text> : null}
-          <Text style={styles.label}>Display name</Text>
+          <Text style={styles.label}>Nombre visible</Text>
           <TextInput
             value={displayName}
             onChangeText={setDisplayName}
-            placeholder="Your name"
+            placeholder="Tu nombre"
             placeholderTextColor="#94a3b8"
             style={styles.input}
           />
@@ -77,28 +83,28 @@ export default function SettingsScreen() {
             style={[styles.btn, styles.btnPrimary]}
           >
             <Text style={styles.btnPrimaryText}>
-              {saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved!" : saveStatus === "error" ? "Error — try again" : "Save changes"}
+              {saveStatus === "saving" ? "Guardando…" : saveStatus === "saved" ? "¡Guardado!" : saveStatus === "error" ? "Error — intentar de nuevo" : "Guardar cambios"}
             </Text>
           </TouchableOpacity>
         </View>
 
         {/* Preferences */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Preferences</Text>
+          <Text style={styles.sectionTitle}>Preferencias</Text>
           <View style={styles.prefRow}>
             <View>
-              <Text style={styles.prefLabel}>Default weight unit</Text>
-              <Text style={styles.prefSub}>Used across the app</Text>
+              <Text style={styles.prefLabel}>Unidad de peso por defecto</Text>
+              <Text style={styles.prefSub}>Usada en toda la app</Text>
             </View>
             <View style={styles.unitToggle}>
               <TouchableOpacity
-                onPress={() => setWeightUnit("kg")}
+                onPress={() => handleWeightUnitChange("kg")}
                 style={[styles.unitBtn, weightUnit === "kg" && styles.unitBtnActive]}
               >
                 <Text style={[styles.unitBtnText, weightUnit === "kg" && styles.unitBtnTextActive]}>kg</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => setWeightUnit("lb")}
+                onPress={() => handleWeightUnitChange("lb")}
                 style={[styles.unitBtn, weightUnit === "lb" && styles.unitBtnActive]}
               >
                 <Text style={[styles.unitBtnText, weightUnit === "lb" && styles.unitBtnTextActive]}>lb</Text>
@@ -107,9 +113,23 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {/* Health */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Salud</Text>
+          <TouchableOpacity
+            onPress={() => router.push("/body-tracker")}
+            style={[styles.btn, styles.btnOutline]}
+          >
+            <Ionicons name="body-outline" size={16} color="#64748b" />
+            <Text style={styles.btnOutlineText}>Medidas corporales</Text>
+            <View style={{ flex: 1 }} />
+            <Ionicons name="chevron-forward" size={14} color="#94a3b8" />
+          </TouchableOpacity>
+        </View>
+
         {/* Account */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
+          <Text style={styles.sectionTitle}>Cuenta</Text>
           <TouchableOpacity
             onPress={handleSignOut}
             disabled={signOutLoading}
@@ -120,7 +140,7 @@ export default function SettingsScreen() {
             ) : (
               <>
                 <Ionicons name="log-out-outline" size={16} color="#64748b" />
-                <Text style={styles.btnOutlineText}>Sign out</Text>
+                <Text style={styles.btnOutlineText}>Cerrar sesión</Text>
               </>
             )}
           </TouchableOpacity>
@@ -128,18 +148,30 @@ export default function SettingsScreen() {
 
         {/* Danger Zone */}
         <View style={[styles.section, styles.dangerSection]}>
-          <Text style={[styles.sectionTitle, { color: "#ef4444" }]}>Danger Zone</Text>
+          <Text style={[styles.sectionTitle, { color: "#ef4444" }]}>Zona de peligro</Text>
           <TouchableOpacity
             onPress={() =>
               Alert.alert(
-                "Delete account",
-                "This will permanently delete all your data. This cannot be undone.",
-                [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive" }]
+                "Eliminar cuenta",
+                "Esto eliminará permanentemente todos tus datos. Esta acción no se puede deshacer.",
+                [
+                  { text: "Cancelar", style: "cancel" },
+                  {
+                    text: "Eliminar",
+                    style: "destructive",
+                    onPress: async () => {
+                      const { error } = await supabase.rpc("delete_user");
+                      if (error) { Alert.alert("Error", error.message); return; }
+                      await supabase.auth.signOut();
+                      router.replace("/(auth)/login");
+                    },
+                  },
+                ]
               )
             }
             style={[styles.btn, styles.btnDanger]}
           >
-            <Text style={styles.btnDangerText}>Delete account</Text>
+            <Text style={styles.btnDangerText}>Eliminar cuenta</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

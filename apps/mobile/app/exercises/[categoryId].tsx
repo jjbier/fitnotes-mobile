@@ -47,8 +47,8 @@ export default function ExerciseCategoryScreen() {
   useEffect(() => {
     async function load() {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) setUserId(user.id);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) setUserId(session.user.id);
       const [catRes, exRes] = await Promise.all([
         repo.getCategories(),
         repo.getExercises(),
@@ -85,7 +85,7 @@ export default function ExerciseCategoryScreen() {
   ];
 
   async function handleAdd() {
-    if (!newName.trim()) { Alert.alert("Error", "Name is required"); return; }
+    if (!newName.trim()) { Alert.alert("Error", "El nombre es obligatorio"); return; }
     const { data, error } = await repo.createExercise(
       { name: newName.trim(), category_id: categoryId, type: newType, weight_unit: "kg" },
       userId
@@ -105,10 +105,10 @@ export default function ExerciseCategoryScreen() {
   }
 
   async function handleDelete(id: string, name: string) {
-    Alert.alert("Delete exercise", `Delete "${name}" and all its history?`, [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert("Eliminar ejercicio", `¿Eliminar "${name}" y todo su historial?`, [
+      { text: "Cancelar", style: "cancel" },
       {
-        text: "Delete",
+        text: "Eliminar",
         style: "destructive",
         onPress: async () => {
           await repo.deleteExercise(id);
@@ -131,7 +131,7 @@ export default function ExerciseCategoryScreen() {
           <Ionicons name="search" size={16} color="#64748b" />
           <TextInput
             style={{ flex: 1, paddingVertical: 10, fontSize: 14 }}
-            placeholder="Search…"
+            placeholder="Buscar…"
             value={search}
             onChangeText={setSearch}
             clearButtonMode="while-editing"
@@ -152,7 +152,7 @@ export default function ExerciseCategoryScreen() {
         <View style={{ marginHorizontal: 16, marginBottom: 8, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, padding: 16, gap: 12 }}>
           <TextInput
             style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 }}
-            placeholder="Exercise name"
+            placeholder="Nombre del ejercicio"
             value={newName}
             onChangeText={setNewName}
             autoFocus
@@ -182,13 +182,13 @@ export default function ExerciseCategoryScreen() {
               onPress={() => setShowAdd(false)}
               style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingVertical: 10, alignItems: "center" }}
             >
-              <Text style={{ fontSize: 14, fontWeight: "500" }}>Cancel</Text>
+              <Text style={{ fontSize: 14, fontWeight: "500" }}>Cancelar</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleAdd}
               style={{ flex: 1, backgroundColor: "#6366f1", borderRadius: 10, paddingVertical: 10, alignItems: "center" }}
             >
-              <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Add</Text>
+              <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Añadir</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -204,7 +204,7 @@ export default function ExerciseCategoryScreen() {
           {sorted.length === 0 ? (
             <View style={{ paddingVertical: 40, alignItems: "center" }}>
               <Text style={{ color: "#94a3b8", fontSize: 14 }}>
-                {search ? `No exercises matching "${search}"` : "No exercises yet. Tap + to add one."}
+                {search ? `Sin ejercicios que coincidan con "${search}"` : "Sin ejercicios aún. Toca + para añadir uno."}
               </Text>
             </View>
           ) : (

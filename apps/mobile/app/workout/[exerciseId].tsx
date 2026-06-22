@@ -1,11 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { useWorkoutStore, useExerciseStore, ExerciseType } from "@fitnotes/core";
 import { createWorkoutRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import type { Set as FitSet } from "@fitnotes/core";
+
+function formatTime(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
 
 export default function TrainingScreen() {
   const { exerciseId } = useLocalSearchParams<{ exerciseId: string }>();
@@ -22,9 +29,17 @@ export default function TrainingScreen() {
   const deleteSet = useWorkoutStore((s) => s.deleteSet);
   const markSetComplete = useWorkoutStore((s) => s.markSetComplete);
   const addExerciseToWorkout = useWorkoutStore((s) => s.addExerciseToWorkout);
+  const removeExerciseFromWorkout = useWorkoutStore((s) => s.removeExerciseFromWorkout);
 
   const [userId, setUserId] = useState("");
   const [saving, setSaving] = useState(false);
+  const [weightUnit, setWeightUnit] = useState<"kg" | "lb">("kg");
+
+  // Rest timer
+  const [timerDuration, setTimerDuration] = useState(90);
+  const [timerRemaining, setTimerRemaining] = useState(90);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const repo = createWorkoutRepository(supabase);
 
@@ -32,12 +47,16 @@ export default function TrainingScreen() {
   const exerciseSets = (workoutExercise ? sets[workoutExercise.id] ?? [] : []).slice().sort((a, b) => a.order_index - b.order_index);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => { if (user) setUserId(user.id); });
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUserId(session.user.id);
+        setWeightUnit((session.user.user_metadata?.weight_unit as "kg" | "lb" | undefined) ?? "kg");
+      }
+    });
   }, []);
 
   useEffect(() => {
-    if (exercise) {
-      // If exercise isn't in the workout yet, add it
+    if (exercise && userId) {
       if (activeWorkout && activeWorkout.id && !workoutExercise) {
         async function addToWorkout() {
           if (!activeWorkout?.id) return;
@@ -47,7 +66,7 @@ export default function TrainingScreen() {
             order_index: workoutExercises.length,
           }, userId);
           if (!error && data) {
-            addExerciseToWorkout(exerciseId ?? "");
+            addExerciseToWorkout(exerciseId ?? "", data.id);
           }
         }
         addToWorkout();
@@ -55,6 +74,58 @@ export default function TrainingScreen() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exerciseId, activeWorkout?.id, userId]);
+
+  // Timer tick
+  useEffect(() => {
+    if (timerRunning) {
+      intervalRef.current = setInterval(() => {
+        setTimerRemaining((prev) => {
+          if (prev <= 1) {
+            clearInterval(intervalRef.current!);
+            setTimerRunning(false);
+            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    }
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [timerRunning]);
+
+  function handleTimerToggle() {
+    if (timerRemaining === 0) {
+      setTimerRemaining(timerDuration);
+      setTimerRunning(true);
+    } else {
+      setTimerRunning((v) => !v);
+    }
+  }
+
+  function handleTimerReset() {
+    setTimerRunning(false);
+    setTimerRemaining(timerDuration);
+  }
+
+  function handleChangeDuration(delta: number) {
+    const next = Math.max(15, timerDuration + delta);
+    setTimerDuration(next);
+    if (!timerRunning) setTimerRemaining(next);
+  }
+
+  async function handleRemoveExercise() {
+    if (!workoutExercise) return;
+    Alert.alert(`¿Eliminar "${exercise?.name ?? "ejercicio"}"?`, "Se eliminarán todas sus series.", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Eliminar", style: "destructive", onPress: async () => {
+        removeExerciseFromWorkout(workoutExercise.id);
+        await repo.removeExercise(workoutExercise.id);
+        router.back();
+      }},
+    ]);
+  }
 
   async function handleAddSet() {
     if (!workoutExercise) return;
@@ -90,9 +161,9 @@ export default function TrainingScreen() {
 
   async function handleDeleteSet(setId: string) {
     if (!workoutExercise) return;
-    Alert.alert("Delete set?", undefined, [
-      { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: async () => {
+    Alert.alert("¿Eliminar serie?", undefined, [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Eliminar", style: "destructive", onPress: async () => {
         await repo.deleteSet(setId);
         deleteSet(workoutExercise.id, setId);
       }},
@@ -105,6 +176,9 @@ export default function TrainingScreen() {
   const showDistance = exerciseType === ExerciseType.DISTANCE_TIME;
   const showTime = exerciseType === ExerciseType.DISTANCE_TIME || exerciseType === ExerciseType.TIME_ONLY;
 
+  const timerFinished = timerRemaining === 0;
+  const timerActive = timerRunning;
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
       {/* Header */}
@@ -113,10 +187,41 @@ export default function TrainingScreen() {
           <Ionicons name="close" size={24} color="#0f172a" />
         </TouchableOpacity>
         <View style={{ alignItems: "center" }}>
-          <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>{exercise?.name ?? "Exercise"}</Text>
+          <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>{exercise?.name ?? "Ejercicio"}</Text>
           <Text style={{ fontSize: 11, color: "#94a3b8" }}>{exerciseType.replace(/_/g, " ").toLowerCase()}</Text>
         </View>
-        <View style={{ width: 24 }} />
+        <TouchableOpacity onPress={handleRemoveExercise} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="trash-outline" size={20} color="#ef4444" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Rest Timer */}
+      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#f8fafc", gap: 8, backgroundColor: timerActive ? "#f0f0ff" : timerFinished ? "#f0fff4" : "#fafafa" }}>
+        <Ionicons name="timer-outline" size={16} color={timerActive ? "#6366f1" : timerFinished ? "#22c55e" : "#94a3b8"} />
+        {/* Duration controls */}
+        <TouchableOpacity onPress={() => handleChangeDuration(-15)} disabled={timerRunning} style={{ padding: 4, opacity: timerRunning ? 0.4 : 1 }}>
+          <Ionicons name="remove-circle-outline" size={20} color="#64748b" />
+        </TouchableOpacity>
+        <Text style={{ fontSize: 18, fontWeight: "700", color: timerActive ? "#6366f1" : timerFinished ? "#22c55e" : "#0f172a", minWidth: 52, textAlign: "center" }}>
+          {formatTime(timerRemaining)}
+        </Text>
+        <TouchableOpacity onPress={() => handleChangeDuration(15)} disabled={timerRunning} style={{ padding: 4, opacity: timerRunning ? 0.4 : 1 }}>
+          <Ionicons name="add-circle-outline" size={20} color="#64748b" />
+        </TouchableOpacity>
+        {/* Start / Pause */}
+        <TouchableOpacity
+          onPress={handleTimerToggle}
+          style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: timerActive ? "#6366f1" : "#6366f1", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }}
+        >
+          <Ionicons name={timerActive ? "pause" : timerFinished ? "refresh" : "play"} size={14} color="#fff" />
+          <Text style={{ fontSize: 12, fontWeight: "600", color: "#fff" }}>
+            {timerActive ? "Pausar" : timerFinished ? "Reiniciar" : "Iniciar"}
+          </Text>
+        </TouchableOpacity>
+        {/* Reset */}
+        <TouchableOpacity onPress={handleTimerReset} style={{ padding: 4 }}>
+          <Ionicons name="refresh-outline" size={18} color="#94a3b8" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 60, gap: 8 }}>
@@ -124,7 +229,7 @@ export default function TrainingScreen() {
         {exerciseSets.length > 0 && (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 4, marginBottom: 4 }}>
             <Text style={{ width: 24, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>#</Text>
-            {showWeight && <Text style={{ width: 64, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>kg</Text>}
+            {showWeight && <Text style={{ width: 64, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>{weightUnit}</Text>}
             {showReps && <Text style={{ width: 56, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>reps</Text>}
             {showDistance && <Text style={{ width: 64, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>km</Text>}
             {showTime && <Text style={{ width: 56, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>sec</Text>}
@@ -136,7 +241,7 @@ export default function TrainingScreen() {
         {exerciseSets.length === 0 ? (
           <View style={{ paddingVertical: 40, alignItems: "center", gap: 8 }}>
             <Ionicons name="barbell-outline" size={32} color="#94a3b8" />
-            <Text style={{ fontSize: 13, color: "#94a3b8" }}>No sets yet. Tap below to add your first set.</Text>
+            <Text style={{ fontSize: 13, color: "#94a3b8" }}>Sin series aún. Toca abajo para añadir tu primera serie.</Text>
           </View>
         ) : (
           exerciseSets.map((s, idx) => (
@@ -222,7 +327,7 @@ export default function TrainingScreen() {
           style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 14, paddingVertical: 14, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 6 }}
         >
           {saving ? <ActivityIndicator size="small" color="#6366f1" /> : <Ionicons name="add-circle-outline" size={18} color="#6366f1" />}
-          <Text style={{ fontSize: 14, fontWeight: "500", color: "#6366f1" }}>{saving ? "Adding…" : "Add Set"}</Text>
+          <Text style={{ fontSize: 14, fontWeight: "500", color: "#6366f1" }}>{saving ? "Añadiendo…" : "Añadir serie"}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

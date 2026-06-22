@@ -12,13 +12,13 @@ export default function RegisterScreen() {
   const [sent, setSent] = useState(false);
 
   async function handleSignUp() {
-    if (!email || !password || !confirm) { Alert.alert("Error", "Please fill in all fields"); return; }
-    if (password !== confirm) { Alert.alert("Error", "Passwords do not match"); return; }
-    if (password.length < 8) { Alert.alert("Error", "Password must be at least 8 characters"); return; }
+    if (!email || !password || !confirm) { Alert.alert("Error", "Por favor, completa todos los campos"); return; }
+    if (password !== confirm) { Alert.alert("Error", "Las contraseñas no coinciden"); return; }
+    if (password.length < 8) { Alert.alert("Error", "La contraseña debe tener al menos 8 caracteres"); return; }
     setLoading(true);
     const { error } = await supabase.auth.signUp({ email, password });
     setLoading(false);
-    if (error) { Alert.alert("Registration failed", error.message); return; }
+    if (error) { Alert.alert("Error al registrarse", error.message); return; }
     setSent(true);
   }
 
@@ -26,15 +26,15 @@ export default function RegisterScreen() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: "#fff", justifyContent: "center", alignItems: "center", padding: 24 }}>
         <Text style={{ fontSize: 48 }}>📬</Text>
-        <Text style={{ fontSize: 22, fontWeight: "700", marginTop: 16, color: "#0f172a" }}>Check your email</Text>
+        <Text style={{ fontSize: 22, fontWeight: "700", marginTop: 16, color: "#0f172a" }}>Revisa tu correo</Text>
         <Text style={{ textAlign: "center", color: "#64748b", marginTop: 8 }}>
-          We sent a confirmation link to {email}. Click it to activate your account.
+          Hemos enviado un enlace de confirmación a {email}. Haz clic en él para activar tu cuenta.
         </Text>
         <TouchableOpacity
           onPress={() => router.replace("/(auth)/login")}
           style={{ marginTop: 24, backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 12, paddingHorizontal: 32 }}
         >
-          <Text style={{ color: "#fff", fontWeight: "600" }}>Go to sign in</Text>
+          <Text style={{ color: "#fff", fontWeight: "600" }}>Ir a iniciar sesión</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -48,15 +48,15 @@ export default function RegisterScreen() {
       >
         <View style={{ alignItems: "center", marginBottom: 40 }}>
           <Text style={{ fontSize: 40, marginBottom: 8 }}>🏋️</Text>
-          <Text style={{ fontSize: 26, fontWeight: "700", color: "#0f172a" }}>Create account</Text>
-          <Text style={{ fontSize: 14, color: "#64748b", marginTop: 4 }}>Start your fitness journey</Text>
+          <Text style={{ fontSize: 26, fontWeight: "700", color: "#0f172a" }}>Crear cuenta</Text>
+          <Text style={{ fontSize: 14, color: "#64748b", marginTop: 4 }}>Empieza tu camino fitness</Text>
         </View>
 
         <View style={{ gap: 16 }}>
           {[
-            { label: "Email", value: email, onChange: setEmail, placeholder: "you@example.com", keyboard: "email-address" as const, secure: false, complete: "email" as const },
-            { label: "Password", value: password, onChange: setPassword, placeholder: "Min 8 characters", keyboard: "default" as const, secure: true, complete: "new-password" as const },
-            { label: "Confirm password", value: confirm, onChange: setConfirm, placeholder: "Repeat password", keyboard: "default" as const, secure: true, complete: "new-password" as const },
+            { label: "Correo electrónico", value: email, onChange: setEmail, placeholder: "tu@ejemplo.com", keyboard: "email-address" as const, secure: false, complete: "email" as const },
+            { label: "Contraseña", value: password, onChange: setPassword, placeholder: "Mín. 8 caracteres", keyboard: "default" as const, secure: true, complete: "new-password" as const },
+            { label: "Confirmar contraseña", value: confirm, onChange: setConfirm, placeholder: "Repite la contraseña", keyboard: "default" as const, secure: true, complete: "new-password" as const },
           ].map(({ label, value, onChange, placeholder, keyboard, secure, complete }) => (
             <View key={label} style={{ gap: 6 }}>
               <Text style={{ fontSize: 14, fontWeight: "500", color: "#0f172a" }}>{label}</Text>
@@ -79,18 +79,18 @@ export default function RegisterScreen() {
             style={{ marginTop: 8, backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: loading ? 0.6 : 1 }}
           >
             <Text style={{ color: "#fff", fontWeight: "600", fontSize: 15 }}>
-              {loading ? "Creating account…" : "Create account"}
+              {loading ? "Creando cuenta…" : "Crear cuenta"}
             </Text>
           </TouchableOpacity>
         </View>
 
         <Text style={{ textAlign: "center", fontSize: 14, color: "#64748b", marginTop: 32 }}>
-          Already have an account?{" "}
+          ¿Ya tienes cuenta?{" "}
           <Text
             style={{ color: "#6366f1", fontWeight: "500" }}
             onPress={() => router.push("/(auth)/login")}
           >
-            Sign in
+            Iniciar sesión
           </Text>
         </Text>
       </ScrollView>

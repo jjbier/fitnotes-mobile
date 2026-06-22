@@ -23,7 +23,7 @@ export default function ToolsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Training Tools</Text>
+        <Text style={styles.title}>Herramientas de entrenamiento</Text>
       </View>
 
       {/* Tab bar */}
@@ -58,27 +58,27 @@ function OneRMCalculator() {
 
   return (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>1RM Calculator</Text>
-      <Text style={styles.cardSubtitle}>Brzycki formula — most accurate for 1–10 reps</Text>
+      <Text style={styles.cardTitle}>Calculadora 1RM</Text>
+      <Text style={styles.cardSubtitle}>Fórmula de Brzycki — más precisa para 1–10 repeticiones</Text>
 
       <View style={styles.row}>
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Weight (kg)</Text>
+          <Text style={styles.label}>Peso (kg)</Text>
           <TextInput
             value={weight}
             onChangeText={setWeight}
-            placeholder="e.g. 100"
+            placeholder="ej. 100"
             keyboardType="decimal-pad"
             style={styles.input}
             placeholderTextColor="#94a3b8"
           />
         </View>
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Reps</Text>
+          <Text style={styles.label}>Repeticiones</Text>
           <TextInput
             value={reps}
             onChangeText={setReps}
-            placeholder="e.g. 5"
+            placeholder="ej. 5"
             keyboardType="number-pad"
             style={[styles.input, { width: 90 }]}
             placeholderTextColor="#94a3b8"
@@ -89,11 +89,11 @@ function OneRMCalculator() {
       {oneRM !== null && (
         <>
           <View style={styles.resultBox}>
-            <Text style={styles.resultLabel}>Estimated 1RM</Text>
+            <Text style={styles.resultLabel}>1RM estimado</Text>
             <Text style={styles.resultValue}>{oneRM.toFixed(1)} kg</Text>
           </View>
 
-          <Text style={[styles.label, { marginTop: 16 }]}>Rep Max Table</Text>
+          <Text style={[styles.label, { marginTop: 16 }]}>Tabla de máximos por repetición</Text>
           <View style={styles.rmTable}>
             {Array.from({ length: 15 }, (_, i) => i + 1).map((n) => {
               const est = n === 1 ? oneRM : estimateRepMax(oneRM, n);
@@ -123,22 +123,22 @@ function SetCalculator() {
 
   return (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>Set Calculator</Text>
-      <Text style={styles.cardSubtitle}>Training weights as % of working weight</Text>
+      <Text style={styles.cardTitle}>Calculadora de series</Text>
+      <Text style={styles.cardSubtitle}>Pesos de entrenamiento como % del peso de trabajo</Text>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.label}>Base weight (kg)</Text>
+        <Text style={styles.label}>Peso base (kg)</Text>
         <TextInput
           value={baseWeight}
           onChangeText={setBaseWeight}
-          placeholder="e.g. 100"
+          placeholder="ej. 100"
           keyboardType="decimal-pad"
           style={styles.input}
           placeholderTextColor="#94a3b8"
         />
       </View>
 
-      <Text style={[styles.label, { marginTop: 12 }]}>Round to (kg)</Text>
+      <Text style={[styles.label, { marginTop: 12 }]}>Redondear a (kg)</Text>
       <View style={styles.chipRow}>
         {INCREMENTS.map((v, i) => (
           <TouchableOpacity
@@ -182,22 +182,22 @@ function PlateCalculatorPanel() {
 
   return (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>Plate Calculator</Text>
-      <Text style={styles.cardSubtitle}>Plates per side for target weight</Text>
+      <Text style={styles.cardTitle}>Calculadora de discos</Text>
+      <Text style={styles.cardSubtitle}>Discos por lado para el peso objetivo</Text>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.label}>Target weight (kg)</Text>
+        <Text style={styles.label}>Peso objetivo (kg)</Text>
         <TextInput
           value={targetWeight}
           onChangeText={setTargetWeight}
-          placeholder="e.g. 140"
+          placeholder="ej. 140"
           keyboardType="decimal-pad"
           style={styles.input}
           placeholderTextColor="#94a3b8"
         />
       </View>
 
-      <Text style={[styles.label, { marginTop: 12 }]}>Bar weight</Text>
+      <Text style={[styles.label, { marginTop: 12 }]}>Peso de la barra</Text>
       <View style={styles.chipRow}>
         {barOptions.map((v, i) => (
           <TouchableOpacity
@@ -214,17 +214,17 @@ function PlateCalculatorPanel() {
         <View style={{ marginTop: 16 }}>
           {perSide.length === 0 ? (
             <Text style={{ color: "#94a3b8", fontSize: 13 }}>
-              {target <= bar ? "Target is at or below bar weight." : "Cannot reach target with standard plates."}
+              {target <= bar ? "El objetivo está por debajo o igual al peso de la barra." : "No se puede alcanzar el objetivo con los discos estándar."}
             </Text>
           ) : (
             <>
               <View style={styles.resultBox}>
                 <View>
-                  <Text style={styles.resultLabel}>Plates per side</Text>
+                  <Text style={styles.resultLabel}>Discos por lado</Text>
                   <Text style={[styles.cardSubtitle, { marginTop: 2 }]}>{perSide.join(" + ")} kg</Text>
                 </View>
                 <View style={{ alignItems: "flex-end" }}>
-                  <Text style={styles.resultLabel}>Total</Text>
+                  <Text style={styles.resultLabel}>Total kg</Text>
                   <Text style={styles.resultValue}>{achieved.toFixed(1)} kg</Text>
                 </View>
               </View>
@@ -248,7 +248,7 @@ function PlateCalculatorPanel() {
 
               {Math.abs(achieved - target) > 0.01 && (
                 <Text style={{ color: "#d97706", fontSize: 12, marginTop: 8 }}>
-                  Closest: {achieved.toFixed(1)} kg (off by {Math.abs(achieved - target).toFixed(2)} kg)
+                  Más cercano: {achieved.toFixed(1)} kg (diferencia de {Math.abs(achieved - target).toFixed(2)} kg)
                 </Text>
               )}
             </>

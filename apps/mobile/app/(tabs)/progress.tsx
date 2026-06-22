@@ -65,14 +65,14 @@ export default function ProgressScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 80, gap: 12 }}>
-          <Text style={{ fontSize: 22, fontWeight: "700", color: "#0f172a", marginBottom: 4 }}>Progress</Text>
+          <Text style={{ fontSize: 22, fontWeight: "700", color: "#0f172a", marginBottom: 4 }}>Progreso</Text>
 
           {exercisesWithPRs.length === 0 ? (
             <View style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 16, padding: 40, alignItems: "center", gap: 10 }}>
               <Ionicons name="trophy-outline" size={36} color="#94a3b8" />
-              <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>No records yet</Text>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>Sin récords aún</Text>
               <Text style={{ fontSize: 12, color: "#94a3b8", textAlign: "center" }}>
-                Complete sets to automatically track your personal bests.
+                Completa series para registrar automáticamente tus marcas personales.
               </Text>
             </View>
           ) : (
@@ -86,7 +86,7 @@ export default function ProgressScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>{ex?.name}</Text>
                     <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>
-                      Best: {best.weight} kg × {best.reps} reps · 1RM ≈ {calculate1RM(best.weight, best.reps).toFixed(1)} kg
+                      Mejor: {best.weight} kg × {best.reps} reps · 1RM ≈ {calculate1RM(best.weight, best.reps).toFixed(1)} kg
                     </Text>
                   </View>
                   <Ionicons
@@ -101,12 +101,12 @@ export default function ProgressScreen() {
                   <View style={{ borderTopWidth: 1, borderColor: "#f1f5f9", padding: 10, gap: 6 }}>
                     <View style={{ flexDirection: "row", paddingHorizontal: 4, marginBottom: 2 }}>
                       <Text style={{ flex: 1, fontSize: 10, color: "#94a3b8", fontWeight: "600" }}>RM</Text>
-                      <Text style={{ width: 80, fontSize: 10, color: "#94a3b8", fontWeight: "600", textAlign: "right" }}>Weight</Text>
-                      <Text style={{ width: 80, fontSize: 10, color: "#94a3b8", fontWeight: "600", textAlign: "right" }}>Est. 1RM</Text>
+                      <Text style={{ width: 80, fontSize: 10, color: "#94a3b8", fontWeight: "600", textAlign: "right" }}>Peso</Text>
+                      <Text style={{ width: 80, fontSize: 10, color: "#94a3b8", fontWeight: "600", textAlign: "right" }}>1RM Est.</Text>
                     </View>
                     {prs.map((pr) => (
                       <View key={pr.id} style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 4, paddingVertical: 4 }}>
-                        <Text style={{ flex: 1, fontSize: 13, color: "#0f172a" }}>{pr.reps} rep max</Text>
+                        <Text style={{ flex: 1, fontSize: 13, color: "#0f172a" }}>{pr.reps} rep máx</Text>
                         <Text style={{ width: 80, fontSize: 13, fontWeight: "600", color: "#0f172a", textAlign: "right" }}>
                           {pr.weight} kg
                         </Text>

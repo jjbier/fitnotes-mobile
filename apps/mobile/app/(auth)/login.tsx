@@ -10,11 +10,11 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
   async function handleSignIn() {
-    if (!email || !password) { Alert.alert("Error", "Please fill in all fields"); return; }
+    if (!email || !password) { Alert.alert("Error", "Por favor, completa todos los campos"); return; }
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
-    if (error) { Alert.alert("Sign in failed", error.message); return; }
+    if (error) { Alert.alert("Error al iniciar sesión", error.message); return; }
     router.replace("/(tabs)");
   }
 
@@ -27,12 +27,12 @@ export default function LoginScreen() {
         <View style={{ alignItems: "center", marginBottom: 40 }}>
           <Text style={{ fontSize: 40, marginBottom: 8 }}>🏋️</Text>
           <Text style={{ fontSize: 26, fontWeight: "700", color: "#0f172a" }}>FitNotes</Text>
-          <Text style={{ fontSize: 14, color: "#64748b", marginTop: 4 }}>Sign in to continue</Text>
+          <Text style={{ fontSize: 14, color: "#64748b", marginTop: 4 }}>Inicia sesión para continuar</Text>
         </View>
 
         <View style={{ gap: 16 }}>
           <View style={{ gap: 6 }}>
-            <Text style={{ fontSize: 14, fontWeight: "500", color: "#0f172a" }}>Email</Text>
+            <Text style={{ fontSize: 14, fontWeight: "500", color: "#0f172a" }}>Correo electrónico</Text>
             <TextInput
               style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, backgroundColor: "#f8fafc", paddingHorizontal: 16, paddingVertical: 12, fontSize: 14 }}
               value={email}
@@ -45,7 +45,7 @@ export default function LoginScreen() {
           </View>
 
           <View style={{ gap: 6 }}>
-            <Text style={{ fontSize: 14, fontWeight: "500", color: "#0f172a" }}>Password</Text>
+            <Text style={{ fontSize: 14, fontWeight: "500", color: "#0f172a" }}>Contraseña</Text>
             <TextInput
               style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, backgroundColor: "#f8fafc", paddingHorizontal: 16, paddingVertical: 12, fontSize: 14 }}
               value={password}
@@ -62,18 +62,18 @@ export default function LoginScreen() {
             style={{ marginTop: 8, backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: loading ? 0.6 : 1 }}
           >
             <Text style={{ color: "#fff", fontWeight: "600", fontSize: 15 }}>
-              {loading ? "Signing in…" : "Sign in"}
+              {loading ? "Iniciando sesión…" : "Iniciar sesión"}
             </Text>
           </TouchableOpacity>
         </View>
 
         <Text style={{ textAlign: "center", fontSize: 14, color: "#64748b", marginTop: 32 }}>
-          No account?{" "}
+          ¿Sin cuenta?{" "}
           <Text
             style={{ color: "#6366f1", fontWeight: "500" }}
             onPress={() => router.push("/(auth)/register")}
           >
-            Create one
+            Créate una
           </Text>
         </Text>
       </ScrollView>

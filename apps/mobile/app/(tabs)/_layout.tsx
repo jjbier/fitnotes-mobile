@@ -3,18 +3,18 @@ import { Ionicons } from "@expo/vector-icons";
 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
 
-const TABS: Array<{
+const TABS: {
   name: string;
   title: string;
   icon: IoniconName;
   iconActive: IoniconName;
-}> = [
-  { name: "index", title: "Today", icon: "home-outline", iconActive: "home" },
-  { name: "calendar", title: "Calendar", icon: "calendar-outline", iconActive: "calendar" },
-  { name: "exercises", title: "Exercises", icon: "barbell-outline", iconActive: "barbell" },
-  { name: "progress", title: "Progress", icon: "trending-up-outline", iconActive: "trending-up" },
-  { name: "tools", title: "Tools", icon: "calculator-outline", iconActive: "calculator" },
-  { name: "settings", title: "Settings", icon: "settings-outline", iconActive: "settings" },
+}[] = [
+  { name: "index", title: "Hoy", icon: "home-outline", iconActive: "home" },
+  { name: "calendar", title: "Calendario", icon: "calendar-outline", iconActive: "calendar" },
+  { name: "exercises", title: "Ejercicios", icon: "barbell-outline", iconActive: "barbell" },
+  { name: "progress", title: "Progreso", icon: "trending-up-outline", iconActive: "trending-up" },
+  { name: "tools", title: "Herramientas", icon: "calculator-outline", iconActive: "calculator" },
+  { name: "settings", title: "Configuración", icon: "settings-outline", iconActive: "settings" },
 ];
 
 export default function TabLayout() {
