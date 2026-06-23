@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
-import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, KeyboardAvoidingView, Platform } from "react-native";
+import { SafeAreaView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { NestableScrollContainer, NestableDraggableFlatList, ScaleDecorator } from "react-native-draggable-flatlist";
+import type { RenderItemParams } from "react-native-draggable-flatlist";
 import { useRoutineStore, useExerciseStore, useWorkoutStore, ExerciseType, todayISO, getExerciseFields } from "@fitnotes/core";
-import type { PredefinedSet } from "@fitnotes/core";
+import type { PredefinedSet, RoutineDay, RoutineDayExercise } from "@fitnotes/core";
 import { createRoutineRepository, createExerciseRepository, createWorkoutRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
+
+type LocalPS = { localId: string; weight: string; reps: string; distance: string; time_seconds: string };
 
 export default function RoutineDetailScreen() {
   const { id: routineId } = useLocalSearchParams<{ id: string }>();
@@ -23,17 +27,19 @@ export default function RoutineDetailScreen() {
   const deleteRoutineDay = useRoutineStore((s) => s.deleteRoutineDay);
   const addExerciseToDay = useRoutineStore((s) => s.addExerciseToDay);
   const removeExerciseFromDay = useRoutineStore((s) => s.removeExerciseFromDay);
+  const reorderDaysStore = useRoutineStore((s) => s.reorderDays);
+  const reorderExercisesStore = useRoutineStore((s) => s.reorderExercisesInDay);
   const setLoading = useRoutineStore((s) => s.setLoading);
+
+  const predefinedSets = useRoutineStore((s) => s.predefinedSets);
+  const loadPredefinedSets = useRoutineStore((s) => s.loadPredefinedSets);
+  const savePredefinedSetsStore = useRoutineStore((s) => s.savePredefinedSets);
 
   const exercises = useExerciseStore((s) => s.exercises);
   const loadExercises = useExerciseStore((s) => s.loadExercises);
 
   const loadWorkout = useWorkoutStore((s) => s.loadWorkout);
   const loadWorkouts = useWorkoutStore((s) => s.loadWorkouts);
-
-  const predefinedSets = useRoutineStore((s) => s.predefinedSets);
-  const loadPredefinedSets = useRoutineStore((s) => s.loadPredefinedSets);
-  const savePredefinedSetsStore = useRoutineStore((s) => s.savePredefinedSets);
 
   const [editMode, setEditMode] = useState(false);
   const [userId, setUserId] = useState("");
@@ -44,7 +50,6 @@ export default function RoutineDetailScreen() {
   const [loggingDayId, setLoggingDayId] = useState<string | null>(null);
 
   // Predefined sets modal
-  type LocalPS = { localId: string; weight: string; reps: string; distance: string; time_seconds: string };
   const [psRdeId, setPsRdeId] = useState<string | null>(null);
   const [psExerciseId, setPsExerciseId] = useState<string>("");
   const [psLocalSets, setPsLocalSets] = useState<LocalPS[]>([]);
@@ -142,7 +147,32 @@ export default function RoutineDetailScreen() {
     removeExerciseFromDay(dayId, rdeId);
   }
 
-  function psToLocal(sets: PredefinedSet[]): { localId: string; weight: string; reps: string; distance: string; time_seconds: string }[] {
+  async function handleDayDragEnd({ data }: { data: RoutineDay[] }) {
+    if (!routineId) return;
+    const prevOrder = days.map((d) => ({ id: d.id, order_index: d.order_index }));
+    const updates = data.map((d, i) => ({ id: d.id, order_index: i }));
+    reorderDaysStore(routineId, updates);
+    const results = await routineRepo.reorderDays(updates);
+    if (results.some((r) => r.error)) {
+      reorderDaysStore(routineId, prevOrder);
+      Alert.alert("Error", "No se pudo guardar el orden. Inténtalo de nuevo.");
+    }
+  }
+
+  async function handleExDragEnd(dayId: string, data: RoutineDayExercise[]) {
+    const prevOrder = (routineDayExercises[dayId] ?? []).map((e) => ({ id: e.id, order_index: e.order_index }));
+    const updates = data.map((e, i) => ({ id: e.id, order_index: i }));
+    reorderExercisesStore(dayId, updates);
+    const results = await routineRepo.reorderExercises(updates);
+    if (results.some((r) => r.error)) {
+      reorderExercisesStore(dayId, prevOrder);
+      Alert.alert("Error", "No se pudo guardar el orden. Inténtalo de nuevo.");
+    }
+  }
+
+  // ─── Predefined sets ────────────────────────────────────────────────────────
+
+  function psToLocal(sets: PredefinedSet[]): LocalPS[] {
     return sets.map((s, i) => ({
       localId: `${i}-${s.order_index}`,
       weight: s.weight != null ? String(s.weight) : "",
@@ -204,6 +234,8 @@ export default function RoutineDetailScreen() {
     setPsRdeId(null);
   }
 
+  // ─── Log day ────────────────────────────────────────────────────────────────
+
   async function handleLogDay(dayId: string) {
     const dayExs = (routineDayExercises[dayId] ?? []).slice().sort((a, b) => a.order_index - b.order_index);
     if (dayExs.length === 0) {
@@ -236,38 +268,29 @@ export default function RoutineDetailScreen() {
       if (weError || !we) continue;
 
       workoutExercisesCreated.push({
-        id: we.id,
-        workout_id: we.workout_id,
-        exercise_id: we.exercise_id,
-        order_index: we.order_index,
-        group_id: we.group_id ?? undefined,
+        id: we.id, workout_id: we.workout_id, exercise_id: we.exercise_id,
+        order_index: we.order_index, group_id: we.group_id ?? undefined,
       });
 
-      const { data: predefinedSets } = await routineRepo.getPredefinedSets(rde.id);
+      const { data: pSets } = await routineRepo.getPredefinedSets(rde.id);
       const createdSets: Parameters<typeof loadWorkout>[2][string] = [];
 
-      for (const ps of predefinedSets ?? []) {
+      for (const ps of pSets ?? []) {
         const { data: newSet } = await workoutRepo.createSet(
           {
             workout_exercise_id: we.id,
-            weight: ps.weight ?? undefined,
-            reps: ps.reps ?? undefined,
-            distance: ps.distance ?? undefined,
-            time_seconds: ps.time_seconds ?? undefined,
+            weight: ps.weight ?? undefined, reps: ps.reps ?? undefined,
+            distance: ps.distance ?? undefined, time_seconds: ps.time_seconds ?? undefined,
             order_index: ps.order_index,
           },
           userId
         );
         if (newSet) {
           createdSets.push({
-            id: newSet.id,
-            workout_exercise_id: newSet.workout_exercise_id,
-            weight: newSet.weight ?? undefined,
-            reps: newSet.reps ?? undefined,
-            distance: newSet.distance ?? undefined,
-            time_seconds: newSet.time_seconds ?? undefined,
-            is_complete: newSet.is_complete,
-            comment: newSet.comment ?? undefined,
+            id: newSet.id, workout_exercise_id: newSet.workout_exercise_id,
+            weight: newSet.weight ?? undefined, reps: newSet.reps ?? undefined,
+            distance: newSet.distance ?? undefined, time_seconds: newSet.time_seconds ?? undefined,
+            is_complete: newSet.is_complete, comment: newSet.comment ?? undefined,
             order_index: newSet.order_index,
           });
         }
@@ -291,6 +314,147 @@ export default function RoutineDetailScreen() {
 
   const exerciseMap = Object.fromEntries(exercises.map((e) => [e.id, e]));
 
+  // ─── Render item: exercise row ───────────────────────────────────────────────
+
+  function renderExerciseItem(dayId: string) {
+    return ({ item: rde, drag }: RenderItemParams<RoutineDayExercise>) => {
+      const ex = exerciseMap[rde.exercise_id];
+      const psCount = (predefinedSets[rde.id] ?? []).length;
+      return (
+        <ScaleDecorator>
+          <View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 2 }}>
+              {rde.group_id && <View style={{ width: 3, height: 28, borderRadius: 2, backgroundColor: "#6366f1" }} />}
+              {editMode && (
+                <TouchableOpacity onLongPress={drag} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+                  <Ionicons name="menu-outline" size={16} color="#cbd5e1" />
+                </TouchableOpacity>
+              )}
+              <Text style={{ flex: 1, fontSize: 13, color: "#0f172a" }}>{ex?.name ?? rde.exercise_id}</Text>
+              <TouchableOpacity
+                onPress={() => openPsModal(rde.id, rde.exercise_id)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
+              >
+                <Ionicons name="list-outline" size={14} color={psCount > 0 ? "#6366f1" : "#cbd5e1"} />
+                {psCount > 0 && <Text style={{ fontSize: 11, color: "#6366f1", fontWeight: "600" }}>{psCount}</Text>}
+              </TouchableOpacity>
+              {editMode && (
+                <TouchableOpacity onPress={() => handleRemoveExercise(dayId, rde.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close-circle" size={16} color="#ef4444" />
+                </TouchableOpacity>
+              )}
+            </View>
+            {psCount > 0 && (
+              <View style={{ marginLeft: rde.group_id ? 11 : 0, marginTop: 3, gap: 2 }}>
+                {(predefinedSets[rde.id] ?? []).map((ps, pi) => {
+                  const fields = ex ? getExerciseFields(ex.type) : { weight: false, reps: false, distance: false, time: false };
+                  const parts: string[] = [];
+                  if (fields.weight && ps.weight != null) parts.push(`${ps.weight} kg`);
+                  else if (fields.weight) parts.push("— kg");
+                  if (fields.reps && ps.reps != null) parts.push(`${ps.reps} reps`);
+                  else if (fields.reps) parts.push("— reps");
+                  if (fields.distance && ps.distance != null) parts.push(`${ps.distance} m`);
+                  else if (fields.distance) parts.push("— m");
+                  if (fields.time && ps.time_seconds != null) parts.push(`${ps.time_seconds} s`);
+                  else if (fields.time) parts.push("— s");
+                  return (
+                    <Text key={pi} style={{ fontSize: 11, color: "#64748b" }}>
+                      {pi + 1}. {parts.join("  ·  ")}
+                    </Text>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        </ScaleDecorator>
+      );
+    };
+  }
+
+  // ─── Render item: day card ───────────────────────────────────────────────────
+
+  function renderDayItem({ item: day, drag }: RenderItemParams<RoutineDay>) {
+    const dayExs = (routineDayExercises[day.id] ?? []).slice().sort((a, b) => a.order_index - b.order_index);
+    const isLoggingThis = loggingDayId === day.id;
+    return (
+      <ScaleDecorator>
+        <View style={{ borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 16, backgroundColor: "#fff", overflow: "hidden", marginBottom: 12 }}>
+          {/* Day header */}
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12, backgroundColor: "#f8fafc", gap: 8 }}>
+            {editMode && (
+              <TouchableOpacity onLongPress={drag} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+                <Ionicons name="menu-outline" size={18} color="#94a3b8" />
+              </TouchableOpacity>
+            )}
+            <Text style={{ flex: 1, fontSize: 14, fontWeight: "600", color: "#0f172a" }}>{day.name}</Text>
+            <Text style={{ fontSize: 12, color: "#94a3b8" }}>{dayExs.length} ejercicios</Text>
+            {editMode && (
+              <TouchableOpacity onPress={() => handleDeleteDay(day.id, day.name)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="trash-outline" size={14} color="#ef4444" />
+              </TouchableOpacity>
+            )}
+            {!editMode && (
+              <TouchableOpacity
+                onPress={() => handleLogDay(day.id)}
+                disabled={isLoggingThis}
+                style={{ backgroundColor: "#6366f1", borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, opacity: isLoggingThis ? 0.6 : 1, flexDirection: "row", alignItems: "center", gap: 4 }}
+              >
+                {isLoggingThis && <ActivityIndicator size="small" color="#fff" />}
+                <Text style={{ fontSize: 11, fontWeight: "600", color: "#fff" }}>
+                  {isLoggingThis ? "Registrando…" : "Registrar"}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Exercises */}
+          <View style={{ padding: 10, gap: 6 }}>
+            <NestableDraggableFlatList
+              data={dayExs}
+              keyExtractor={(rde) => rde.id}
+              onDragEnd={({ data }) => handleExDragEnd(day.id, data)}
+              renderItem={renderExerciseItem(day.id)}
+              scrollEnabled={false}
+              ItemSeparatorComponent={() => <View style={{ height: 6 }} />}
+            />
+
+            {/* Add exercise inline picker */}
+            {editMode && addingExToDay === day.id ? (
+              <View style={{ gap: 6, marginTop: 4 }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                  {exercises.map((ex) => (
+                    <TouchableOpacity
+                      key={ex.id}
+                      onPress={() => setSelectedExId(ex.id)}
+                      style={{ borderRadius: 8, borderWidth: 1, borderColor: selectedExId === ex.id ? "#6366f1" : "#e2e8f0", backgroundColor: selectedExId === ex.id ? "#6366f1" : "transparent", paddingHorizontal: 10, paddingVertical: 5 }}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: "500", color: selectedExId === ex.id ? "#fff" : "#0f172a" }}>{ex.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                <View style={{ flexDirection: "row", gap: 6 }}>
+                  <TouchableOpacity onPress={() => { setAddingExToDay(null); setSelectedExId(""); }} style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingVertical: 7, alignItems: "center" }}>
+                    <Text style={{ fontSize: 12 }}>Cancelar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => selectedExId && handleAddExercise(day.id, selectedExId)} style={{ flex: 1, backgroundColor: "#6366f1", borderRadius: 8, paddingVertical: 7, alignItems: "center" }}>
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: "#fff" }}>Añadir</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : editMode ? (
+              <TouchableOpacity onPress={() => { setAddingExToDay(day.id); setSelectedExId(""); }} style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 8, paddingVertical: 8, alignItems: "center", marginTop: 4 }}>
+                <Text style={{ fontSize: 12, color: "#94a3b8" }}>+ Añadir ejercicio</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </View>
+      </ScaleDecorator>
+    );
+  }
+
+  // ─── Render ──────────────────────────────────────────────────────────────────
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
       {/* Edit toggle */}
@@ -308,10 +472,10 @@ export default function RoutineDetailScreen() {
           <ActivityIndicator color="#6366f1" />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 60, gap: 12 }}>
+        <NestableScrollContainer contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 60 }}>
           {/* Notes */}
           {routine?.notes ? (
-            <Text style={{ fontSize: 13, color: "#64748b" }}>{routine.notes}</Text>
+            <Text style={{ fontSize: 13, color: "#64748b", marginBottom: 12 }}>{routine.notes}</Text>
           ) : null}
 
           {/* Days */}
@@ -320,121 +484,19 @@ export default function RoutineDetailScreen() {
               <Text style={{ fontSize: 13, color: "#94a3b8" }}>Sin días aún. Activa Editar para añadir días.</Text>
             </View>
           ) : (
-            days.map((day) => {
-              const dayExs = (routineDayExercises[day.id] ?? []).slice().sort((a, b) => a.order_index - b.order_index);
-              const isLoggingThis = loggingDayId === day.id;
-              return (
-                <View key={day.id} style={{ borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 16, backgroundColor: "#fff", overflow: "hidden" }}>
-                  {/* Day header */}
-                  <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12, backgroundColor: "#f8fafc", gap: 8 }}>
-                    <Text style={{ flex: 1, fontSize: 14, fontWeight: "600", color: "#0f172a" }}>{day.name}</Text>
-                    <Text style={{ fontSize: 12, color: "#94a3b8" }}>{dayExs.length} ejercicios</Text>
-                    {editMode && (
-                      <TouchableOpacity onPress={() => handleDeleteDay(day.id, day.name)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                        <Ionicons name="trash-outline" size={14} color="#ef4444" />
-                      </TouchableOpacity>
-                    )}
-                    {!editMode && (
-                      <TouchableOpacity
-                        onPress={() => handleLogDay(day.id)}
-                        disabled={isLoggingThis}
-                        style={{ backgroundColor: "#6366f1", borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, opacity: isLoggingThis ? 0.6 : 1, flexDirection: "row", alignItems: "center", gap: 4 }}
-                      >
-                        {isLoggingThis && <ActivityIndicator size="small" color="#fff" />}
-                        <Text style={{ fontSize: 11, fontWeight: "600", color: "#fff" }}>
-                          {isLoggingThis ? "Registrando…" : "Registrar"}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-
-                  {/* Exercises */}
-                  <View style={{ padding: 10, gap: 6 }}>
-                    {dayExs.map((rde) => {
-                      const ex = exerciseMap[rde.exercise_id];
-                      const psCount = (predefinedSets[rde.id] ?? []).length;
-                      return (
-                        <View key={rde.id}>
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                            {rde.group_id && <View style={{ width: 3, height: 28, borderRadius: 2, backgroundColor: "#6366f1" }} />}
-                            <Text style={{ flex: 1, fontSize: 13, color: "#0f172a" }}>{ex?.name ?? rde.exercise_id}</Text>
-                            <TouchableOpacity
-                              onPress={() => openPsModal(rde.id, rde.exercise_id)}
-                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                              style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
-                            >
-                              <Ionicons name="list-outline" size={14} color={psCount > 0 ? "#6366f1" : "#cbd5e1"} />
-                              {psCount > 0 && <Text style={{ fontSize: 11, color: "#6366f1", fontWeight: "600" }}>{psCount}</Text>}
-                            </TouchableOpacity>
-                            {editMode && (
-                              <TouchableOpacity onPress={() => handleRemoveExercise(day.id, rde.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                                <Ionicons name="close-circle" size={16} color="#ef4444" />
-                              </TouchableOpacity>
-                            )}
-                          </View>
-                          {psCount > 0 && (
-                            <View style={{ marginLeft: rde.group_id ? 11 : 0, marginTop: 3, gap: 2 }}>
-                              {(predefinedSets[rde.id] ?? []).map((ps, pi) => {
-                                const fields = ex ? getExerciseFields(ex.type) : { weight: false, reps: false, distance: false, time: false };
-                                const parts: string[] = [];
-                                if (fields.weight && ps.weight != null) parts.push(`${ps.weight} kg`);
-                                else if (fields.weight) parts.push("— kg");
-                                if (fields.reps && ps.reps != null) parts.push(`${ps.reps} reps`);
-                                else if (fields.reps) parts.push("— reps");
-                                if (fields.distance && ps.distance != null) parts.push(`${ps.distance} m`);
-                                else if (fields.distance) parts.push("— m");
-                                if (fields.time && ps.time_seconds != null) parts.push(`${ps.time_seconds} s`);
-                                else if (fields.time) parts.push("— s");
-                                return (
-                                  <Text key={pi} style={{ fontSize: 11, color: "#64748b" }}>
-                                    {pi + 1}. {parts.join("  ·  ")}
-                                  </Text>
-                                );
-                              })}
-                            </View>
-                          )}
-                        </View>
-                      );
-                    })}
-
-                    {/* Add exercise inline picker */}
-                    {editMode && addingExToDay === day.id ? (
-                      <View style={{ gap: 6, marginTop: 4 }}>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                          {exercises.map((ex) => (
-                            <TouchableOpacity
-                              key={ex.id}
-                              onPress={() => setSelectedExId(ex.id)}
-                              style={{ borderRadius: 8, borderWidth: 1, borderColor: selectedExId === ex.id ? "#6366f1" : "#e2e8f0", backgroundColor: selectedExId === ex.id ? "#6366f1" : "transparent", paddingHorizontal: 10, paddingVertical: 5 }}
-                            >
-                              <Text style={{ fontSize: 12, fontWeight: "500", color: selectedExId === ex.id ? "#fff" : "#0f172a" }}>{ex.name}</Text>
-                            </TouchableOpacity>
-                          ))}
-                        </ScrollView>
-                        <View style={{ flexDirection: "row", gap: 6 }}>
-                          <TouchableOpacity onPress={() => { setAddingExToDay(null); setSelectedExId(""); }} style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingVertical: 7, alignItems: "center" }}>
-                            <Text style={{ fontSize: 12 }}>Cancelar</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => selectedExId && handleAddExercise(day.id, selectedExId)} style={{ flex: 1, backgroundColor: "#6366f1", borderRadius: 8, paddingVertical: 7, alignItems: "center" }}>
-                            <Text style={{ fontSize: 12, fontWeight: "600", color: "#fff" }}>Añadir</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    ) : editMode ? (
-                      <TouchableOpacity onPress={() => { setAddingExToDay(day.id); setSelectedExId(""); }} style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 8, paddingVertical: 8, alignItems: "center", marginTop: 4 }}>
-                        <Text style={{ fontSize: 12, color: "#94a3b8" }}>+ Añadir ejercicio</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                </View>
-              );
-            })
+            <NestableDraggableFlatList
+              data={days}
+              keyExtractor={(item) => item.id}
+              onDragEnd={handleDayDragEnd}
+              renderItem={renderDayItem}
+              scrollEnabled={false}
+            />
           )}
 
           {/* Add day */}
           {editMode && (
             showDayInput ? (
-              <View style={{ flexDirection: "row", gap: 8 }}>
+              <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
                 <TextInput
                   style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14 }}
                   placeholder="Nombre del día (ej. Empuje)"
@@ -448,18 +510,18 @@ export default function RoutineDetailScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity onPress={() => setShowDayInput(true)} style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 16, paddingVertical: 14, alignItems: "center" }}>
+              <TouchableOpacity onPress={() => setShowDayInput(true)} style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 16, paddingVertical: 14, alignItems: "center", marginTop: 4 }}>
                 <Text style={{ fontSize: 13, color: "#94a3b8" }}>+ Añadir día</Text>
               </TouchableOpacity>
             )
           )}
-        </ScrollView>
+        </NestableScrollContainer>
       )}
+
       {/* Predefined Sets Modal */}
       <Modal visible={psRdeId !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setPsRdeId(null)}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
           <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-            {/* Header */}
             <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
               <Text style={{ flex: 1, fontSize: 16, fontWeight: "700", color: "#0f172a" }}>
                 {exerciseMap[psExerciseId]?.name ?? "Series predefinidas"}
@@ -478,7 +540,6 @@ export default function RoutineDetailScreen() {
                 <ActivityIndicator color="#6366f1" style={{ marginTop: 24 }} />
               ) : (
                 <>
-                  {/* Column headers */}
                   {psLocalSets.length > 0 && (() => {
                     const ex = exerciseMap[psExerciseId];
                     const fields = ex ? getExerciseFields(ex.type) : { weight: false, reps: false, distance: false, time: false };
@@ -494,7 +555,6 @@ export default function RoutineDetailScreen() {
                     );
                   })()}
 
-                  {/* Set rows */}
                   {psLocalSets.map((row, idx) => {
                     const ex = exerciseMap[psExerciseId];
                     const fields = ex ? getExerciseFields(ex.type) : { weight: false, reps: false, distance: false, time: false };
@@ -504,41 +564,29 @@ export default function RoutineDetailScreen() {
                         {fields.weight && (
                           <TextInput
                             style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, fontSize: 14, textAlign: "center", color: "#0f172a" }}
-                            placeholder="—"
-                            placeholderTextColor="#cbd5e1"
-                            keyboardType="decimal-pad"
-                            value={row.weight}
-                            onChangeText={(v) => psUpdateRow(row.localId, "weight", v)}
+                            placeholder="—" placeholderTextColor="#cbd5e1" keyboardType="decimal-pad"
+                            value={row.weight} onChangeText={(v) => psUpdateRow(row.localId, "weight", v)}
                           />
                         )}
                         {fields.reps && (
                           <TextInput
                             style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, fontSize: 14, textAlign: "center", color: "#0f172a" }}
-                            placeholder="—"
-                            placeholderTextColor="#cbd5e1"
-                            keyboardType="number-pad"
-                            value={row.reps}
-                            onChangeText={(v) => psUpdateRow(row.localId, "reps", v)}
+                            placeholder="—" placeholderTextColor="#cbd5e1" keyboardType="number-pad"
+                            value={row.reps} onChangeText={(v) => psUpdateRow(row.localId, "reps", v)}
                           />
                         )}
                         {fields.distance && (
                           <TextInput
                             style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, fontSize: 14, textAlign: "center", color: "#0f172a" }}
-                            placeholder="—"
-                            placeholderTextColor="#cbd5e1"
-                            keyboardType="decimal-pad"
-                            value={row.distance}
-                            onChangeText={(v) => psUpdateRow(row.localId, "distance", v)}
+                            placeholder="—" placeholderTextColor="#cbd5e1" keyboardType="decimal-pad"
+                            value={row.distance} onChangeText={(v) => psUpdateRow(row.localId, "distance", v)}
                           />
                         )}
                         {fields.time && (
                           <TextInput
                             style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, fontSize: 14, textAlign: "center", color: "#0f172a" }}
-                            placeholder="—"
-                            placeholderTextColor="#cbd5e1"
-                            keyboardType="number-pad"
-                            value={row.time_seconds}
-                            onChangeText={(v) => psUpdateRow(row.localId, "time_seconds", v)}
+                            placeholder="—" placeholderTextColor="#cbd5e1" keyboardType="number-pad"
+                            value={row.time_seconds} onChangeText={(v) => psUpdateRow(row.localId, "time_seconds", v)}
                           />
                         )}
                         <TouchableOpacity onPress={() => psRemoveRow(row.localId)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ width: 24, alignItems: "center" }}>
@@ -548,7 +596,6 @@ export default function RoutineDetailScreen() {
                     );
                   })}
 
-                  {/* Add row */}
                   <TouchableOpacity
                     onPress={psAddRow}
                     style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 10, paddingVertical: 10, alignItems: "center", marginTop: 4 }}
@@ -556,7 +603,6 @@ export default function RoutineDetailScreen() {
                     <Text style={{ fontSize: 13, color: "#6366f1", fontWeight: "600" }}>+ Añadir serie</Text>
                   </TouchableOpacity>
 
-                  {/* Save */}
                   <TouchableOpacity
                     onPress={handleSavePredefinedSets}
                     disabled={psSaving}

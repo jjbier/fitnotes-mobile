@@ -184,6 +184,14 @@ export function createRoutineRepository(client: Client) {
       );
     },
 
+    async reorderDays(updates: { id: string; order_index: number }[]) {
+      return Promise.all(
+        updates.map(({ id, order_index }) =>
+          client.from("routine_days").update({ order_index }).eq("id", id)
+        )
+      );
+    },
+
     // ─── Predefined Sets ───────────────────────────────────────────────────────
 
     async getPredefinedSets(routineDayExerciseId: string) {
