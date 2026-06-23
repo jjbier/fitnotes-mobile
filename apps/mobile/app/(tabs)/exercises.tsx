@@ -52,6 +52,7 @@ export default function ExercisesScreen() {
   const setLoading = useExerciseStore((s) => s.setLoading);
 
   const [search, setSearch] = useState("");
+  const [showFabMenu, setShowFabMenu] = useState(false);
   const [userId, setUserId] = useState("");
   const [exerciseStats, setExerciseStats] = useState<Record<string, { workout_count: number; last_used: string | null }>>({});
 
@@ -423,12 +424,41 @@ export default function ExercisesScreen() {
         </ScrollView>
       )}
 
-      {/* FAB */}
+      {/* FAB speed dial */}
+      {showFabMenu && (
+        <TouchableOpacity
+          style={{ position: "absolute", inset: 0 } as never}
+          onPress={() => setShowFabMenu(false)}
+          activeOpacity={1}
+        />
+      )}
+      {showFabMenu && (
+        <View style={{ position: "absolute", bottom: 100, right: 24, gap: 12, alignItems: "flex-end" }}>
+          <TouchableOpacity
+            onPress={() => { setShowFabMenu(false); router.push("/routines"); }}
+            style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#fff", borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 8, elevation: 4 }}
+          >
+            <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>Nueva rutina</Text>
+            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#6366f1", alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="clipboard-outline" size={18} color="white" />
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => { setShowFabMenu(false); openCreateModal(); }}
+            style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#fff", borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 8, elevation: 4 }}
+          >
+            <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>Nuevo ejercicio</Text>
+            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#6366f1", alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="barbell-outline" size={18} color="white" />
+            </View>
+          </TouchableOpacity>
+        </View>
+      )}
       <TouchableOpacity
-        onPress={openCreateModal}
+        onPress={() => setShowFabMenu((v) => !v)}
         style={{ position: "absolute", bottom: 32, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: "#6366f1", alignItems: "center", justifyContent: "center", shadowColor: "#6366f1", shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 }}
       >
-        <Ionicons name="add" size={28} color="white" />
+        <Ionicons name={showFabMenu ? "close" : "add"} size={28} color="white" />
       </TouchableOpacity>
 
       {/* Create / Edit Exercise Modal */}
@@ -561,16 +591,7 @@ export default function ExercisesScreen() {
               )}
 
               {/* Actions */}
-              <View style={{ gap: 10, marginTop: 4 }}>
-                {!editingExercise && (
-                  <TouchableOpacity
-                    onPress={() => handleSave(true)}
-                    disabled={saving}
-                    style={{ borderWidth: 1.5, borderColor: "#6366f1", borderRadius: 12, paddingVertical: 13, alignItems: "center", opacity: saving ? 0.6 : 1 }}
-                  >
-                    <Text style={{ color: "#6366f1", fontSize: 15, fontWeight: "700" }}>Guardar y nuevo</Text>
-                  </TouchableOpacity>
-                )}
+              <View style={{ marginTop: 4 }}>
                 <TouchableOpacity
                   onPress={() => handleSave(false)}
                   disabled={saving}

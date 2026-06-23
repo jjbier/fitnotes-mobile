@@ -406,24 +406,15 @@ export default function ExerciseCategoryScreen() {
                   </View>
                 </View>
               )}
-              <View style={{ gap: 10 }}>
-                <TouchableOpacity
-                  onPress={() => handleAdd(true)}
-                  disabled={addSaving || !newName.trim()}
-                  style={{ borderWidth: 1.5, borderColor: "#6366f1", borderRadius: 12, paddingVertical: 13, alignItems: "center", opacity: addSaving || !newName.trim() ? 0.6 : 1 }}
-                >
-                  <Text style={{ color: "#6366f1", fontSize: 15, fontWeight: "700" }}>Guardar y nuevo</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => handleAdd(false)}
-                  disabled={addSaving || !newName.trim()}
-                  style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: addSaving || !newName.trim() ? 0.6 : 1 }}
-                >
-                  <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>
-                    {addSaving ? "Creando…" : "Crear ejercicio"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                onPress={() => handleAdd(false)}
+                disabled={addSaving || !newName.trim()}
+                style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: addSaving || !newName.trim() ? 0.6 : 1 }}
+              >
+                <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>
+                  {addSaving ? "Creando…" : "Crear ejercicio"}
+                </Text>
+              </TouchableOpacity>
             </ScrollView>
           </SafeAreaView>
         </KeyboardAvoidingView>
