@@ -1,9 +1,16 @@
 export enum ExerciseType {
+  // Base types
   WEIGHT_REPS = "WEIGHT_REPS",
   DISTANCE_TIME = "DISTANCE_TIME",
   REPS_ONLY = "REPS_ONLY",
   WEIGHT_ONLY = "WEIGHT_ONLY",
   TIME_ONLY = "TIME_ONLY",
+  // Advanced types
+  WEIGHT_DISTANCE = "WEIGHT_DISTANCE",
+  WEIGHT_TIME = "WEIGHT_TIME",
+  REPS_DISTANCE = "REPS_DISTANCE",
+  REPS_TIME = "REPS_TIME",
+  DISTANCE_ONLY = "DISTANCE_ONLY",
 }
 
 export enum GoalType {

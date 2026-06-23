@@ -1,4 +1,20 @@
+import { ExerciseType } from "../types/index.js";
 import type { Set } from "../types/index.js";
+
+export interface ExerciseFields {
+  weight: boolean;
+  reps: boolean;
+  distance: boolean;
+  time: boolean;
+}
+
+export function getExerciseFields(type: ExerciseType): ExerciseFields {
+  const w = [ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHT_ONLY, ExerciseType.WEIGHT_DISTANCE, ExerciseType.WEIGHT_TIME].includes(type);
+  const r = [ExerciseType.WEIGHT_REPS, ExerciseType.REPS_ONLY, ExerciseType.REPS_DISTANCE, ExerciseType.REPS_TIME].includes(type);
+  const d = [ExerciseType.DISTANCE_TIME, ExerciseType.WEIGHT_DISTANCE, ExerciseType.REPS_DISTANCE, ExerciseType.DISTANCE_ONLY].includes(type);
+  const t = [ExerciseType.DISTANCE_TIME, ExerciseType.TIME_ONLY, ExerciseType.WEIGHT_TIME, ExerciseType.REPS_TIME].includes(type);
+  return { weight: w, reps: r, distance: d, time: t };
+}
 
 /**
  * Brzycki one-rep max formula.

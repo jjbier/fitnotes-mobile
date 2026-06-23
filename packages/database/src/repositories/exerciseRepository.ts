@@ -77,18 +77,21 @@ export function createExerciseRepository(client: Client) {
       return query;
     },
 
-    async createExercise(data: Omit<ExerciseInsert, "user_id">, userId: string) {
+    async createExercise(
+      data: Omit<ExerciseInsert, "user_id" | "type"> & { type: string; notes?: string | null },
+      userId: string
+    ) {
       return client
         .from("exercises")
-        .insert({ ...data, user_id: userId })
+        .insert({ ...(data as unknown as ExerciseInsert), user_id: userId })
         .select()
         .single();
     },
 
-    async updateExercise(id: string, data: ExerciseUpdate) {
+    async updateExercise(id: string, data: Omit<ExerciseUpdate, "type"> & { type?: string; notes?: string | null }) {
       return client
         .from("exercises")
-        .update(data)
+        .update(data as unknown as ExerciseUpdate)
         .eq("id", id)
         .select()
         .single();
@@ -105,6 +108,110 @@ export function createExerciseRepository(client: Client) {
         .eq("id", id)
         .select()
         .single();
+    },
+
+    async getExerciseHistory(exerciseId: string): Promise<{
+      data: {
+        workout_id: string;
+        date: string;
+        comment?: string;
+        sets: {
+          id: string;
+          weight?: number;
+          reps?: number;
+          distance?: number;
+          time_seconds?: number;
+          is_complete: boolean;
+          comment?: string;
+          order_index: number;
+        }[];
+      }[] | null;
+      error: { message: string } | null;
+    }> {
+      const weRes = await client
+        .from("workout_exercises")
+        .select("id, workout_id")
+        .eq("exercise_id", exerciseId);
+      if (weRes.error) return { data: null, error: weRes.error };
+      if (weRes.data.length === 0) return { data: [], error: null };
+
+      const weIds = weRes.data.map((we) => we.id);
+      const workoutIds = [...new Set(weRes.data.map((we) => we.workout_id))];
+
+      const [wRes, sRes] = await Promise.all([
+        client.from("workouts").select("id, date, comment").in("id", workoutIds),
+        client.from("sets")
+          .select("id, workout_exercise_id, weight, reps, distance, time_seconds, is_complete, comment, order_index")
+          .in("workout_exercise_id", weIds),
+      ]);
+      if (wRes.error) return { data: null, error: wRes.error };
+      if (sRes.error) return { data: null, error: sRes.error };
+
+      const workoutMap = new Map(wRes.data.map((w) => [w.id, w]));
+      const setsByWE = new Map<string, typeof sRes.data>();
+      for (const s of sRes.data) {
+        if (!setsByWE.has(s.workout_exercise_id)) setsByWE.set(s.workout_exercise_id, []);
+        setsByWE.get(s.workout_exercise_id)!.push(s);
+      }
+
+      const built: { workout_id: string; date: string; comment?: string; sets: { id: string; weight?: number; reps?: number; distance?: number; time_seconds?: number; is_complete: boolean; comment?: string; order_index: number }[] }[] = [];
+      for (const we of weRes.data) {
+        const workout = workoutMap.get(we.workout_id);
+        if (!workout) continue;
+        const sets = (setsByWE.get(we.id) ?? [])
+          .sort((a, b) => a.order_index - b.order_index)
+          .map((s) => ({
+            id: s.id,
+            weight: s.weight ?? undefined,
+            reps: s.reps ?? undefined,
+            distance: s.distance ?? undefined,
+            time_seconds: s.time_seconds ?? undefined,
+            is_complete: s.is_complete,
+            comment: s.comment ?? undefined,
+            order_index: s.order_index,
+          }));
+        built.push({ workout_id: we.workout_id, date: workout.date, comment: workout.comment ?? undefined, sets });
+      }
+      const sessions = built.sort((a, b) => b.date.localeCompare(a.date));
+
+      return { data: sessions, error: null };
+    },
+
+    async getExerciseStats(): Promise<{
+      data: Record<string, { workout_count: number; last_used: string | null }> | null;
+      error: { message: string } | null;
+    }> {
+      const [weRes, wRes] = await Promise.all([
+        client.from("workout_exercises").select("exercise_id, workout_id"),
+        client.from("workouts").select("id, date"),
+      ]);
+      if (weRes.error) return { data: null, error: weRes.error };
+      if (wRes.error) return { data: null, error: wRes.error };
+
+      const workoutDateMap = new Map(wRes.data.map((w) => [w.id, w.date]));
+      const workoutsByExercise = new Map<string, Set<string>>();
+      const lastUsedByExercise = new Map<string, string>();
+
+      for (const we of weRes.data) {
+        if (!workoutsByExercise.has(we.exercise_id)) {
+          workoutsByExercise.set(we.exercise_id, new Set());
+        }
+        workoutsByExercise.get(we.exercise_id)!.add(we.workout_id);
+        const date = workoutDateMap.get(we.workout_id);
+        if (date) {
+          const current = lastUsedByExercise.get(we.exercise_id);
+          if (!current || date > current) lastUsedByExercise.set(we.exercise_id, date);
+        }
+      }
+
+      const stats: Record<string, { workout_count: number; last_used: string | null }> = {};
+      for (const [exerciseId, workoutIds] of workoutsByExercise) {
+        stats[exerciseId] = {
+          workout_count: workoutIds.size,
+          last_used: lastUsedByExercise.get(exerciseId) ?? null,
+        };
+      }
+      return { data: stats, error: null };
     },
   };
 }

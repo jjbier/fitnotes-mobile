@@ -9,14 +9,19 @@ import { Ionicons } from "@expo/vector-icons";
 import { useExerciseStore, filterExercises, ExerciseType } from "@fitnotes/core";
 import { createExerciseRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
-import type { Category } from "@fitnotes/core";
+import type { Category, Exercise } from "@fitnotes/core";
 
 const TYPE_OPTIONS: { value: ExerciseType; label: string }[] = [
-  { value: ExerciseType.WEIGHT_REPS, label: "Peso × Repeticiones" },
-  { value: ExerciseType.REPS_ONLY, label: "Solo repeticiones" },
+  { value: ExerciseType.WEIGHT_REPS, label: "Peso × Reps" },
+  { value: ExerciseType.REPS_ONLY, label: "Solo reps" },
   { value: ExerciseType.WEIGHT_ONLY, label: "Solo peso" },
   { value: ExerciseType.DISTANCE_TIME, label: "Distancia / Tiempo" },
   { value: ExerciseType.TIME_ONLY, label: "Solo tiempo" },
+  { value: ExerciseType.WEIGHT_DISTANCE, label: "Peso + Distancia" },
+  { value: ExerciseType.WEIGHT_TIME, label: "Peso + Tiempo" },
+  { value: ExerciseType.REPS_DISTANCE, label: "Reps + Distancia" },
+  { value: ExerciseType.REPS_TIME, label: "Reps + Tiempo" },
+  { value: ExerciseType.DISTANCE_ONLY, label: "Solo distancia" },
 ];
 
 const PRESET_COLORS = [
@@ -25,6 +30,8 @@ const PRESET_COLORS = [
   "#3b82f6", "#64748b",
 ];
 
+const WEIGHT_TYPES = [ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHT_ONLY, ExerciseType.WEIGHT_DISTANCE, ExerciseType.WEIGHT_TIME];
+
 export default function ExercisesScreen() {
   const router = useRouter();
   const categories = useExerciseStore((s) => s.categories);
@@ -32,27 +39,43 @@ export default function ExercisesScreen() {
   const isLoading = useExerciseStore((s) => s.isLoading);
   const loadExercises = useExerciseStore((s) => s.loadExercises);
   const addExercise = useExerciseStore((s) => s.addExercise);
+  const updateExercise = useExerciseStore((s) => s.updateExercise);
+  const deleteExercise = useExerciseStore((s) => s.deleteExercise);
   const addCategory = useExerciseStore((s) => s.addCategory);
+  const updateCategory = useExerciseStore((s) => s.updateCategory);
+  const deleteCategory = useExerciseStore((s) => s.deleteCategory);
+  const reorderCategories = useExerciseStore((s) => s.reorderCategories);
   const toggleFavorite = useExerciseStore((s) => s.toggleFavorite);
   const setLoading = useExerciseStore((s) => s.setLoading);
 
   const [search, setSearch] = useState("");
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [userId, setUserId] = useState("");
+  const [exerciseStats, setExerciseStats] = useState<Record<string, { workout_count: number; last_used: string | null }>>({});
 
-  // Create exercise modal
+  // Exercise create/edit modal
   const [showModal, setShowModal] = useState(false);
+  const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
   const [exName, setExName] = useState("");
+  const [exNotes, setExNotes] = useState("");
   const [exCategoryId, setExCategoryId] = useState("");
   const [exType, setExType] = useState<ExerciseType>(ExerciseType.WEIGHT_REPS);
+  const [exWeightUnit, setExWeightUnit] = useState<"kg" | "lb">("kg");
   const [saving, setSaving] = useState(false);
+  const [modalCategories, setModalCategories] = useState<Category[]>([]);
 
-  // Inline new category
+  // Inline new category inside exercise modal
   const [showNewCat, setShowNewCat] = useState(false);
   const [newCatName, setNewCatName] = useState("");
   const [newCatColor, setNewCatColor] = useState(PRESET_COLORS[0]!);
   const [catSaving, setCatSaving] = useState(false);
-  const [modalCategories, setModalCategories] = useState<Category[]>([]);
+
+  // Category management modal
+  const [showCatModal, setShowCatModal] = useState(false);
+  const [editingCatId, setEditingCatId] = useState<string | null>(null);
+  const [editCatName, setEditCatName] = useState("");
+  const [editCatColor, setEditCatColor] = useState(PRESET_COLORS[0]!);
+  const [catEditSaving, setCatEditSaving] = useState(false);
 
   const repo = createExerciseRepository(supabase);
 
@@ -61,9 +84,10 @@ export default function ExercisesScreen() {
       setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) setUserId(session.user.id);
-      const [catRes, exRes] = await Promise.all([
+      const [catRes, exRes, statsRes] = await Promise.all([
         repo.getCategories(),
         repo.getExercises(),
+        repo.getExerciseStats(),
       ]);
       if (catRes.data && exRes.data) {
         loadExercises(
@@ -80,18 +104,37 @@ export default function ExercisesScreen() {
           }))
         );
       }
+      if (statsRes.data) setExerciseStats(statsRes.data);
       setLoading(false);
     }
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function openModal() {
+  function openCreateModal() {
     const cats = useExerciseStore.getState().categories;
     setModalCategories(cats);
-    setExCategoryId(cats[0]?.id ?? "");
+    setEditingExercise(null);
     setExName("");
+    setExNotes("");
+    setExCategoryId(cats[0]?.id ?? "");
     setExType(ExerciseType.WEIGHT_REPS);
+    setExWeightUnit("kg");
+    setShowNewCat(false);
+    setNewCatName("");
+    setNewCatColor(PRESET_COLORS[0]!);
+    setShowModal(true);
+  }
+
+  function openEditModal(ex: Exercise) {
+    const cats = useExerciseStore.getState().categories;
+    setModalCategories(cats);
+    setEditingExercise(ex);
+    setExName(ex.name);
+    setExNotes(ex.notes ?? "");
+    setExCategoryId(ex.category_id);
+    setExType(ex.type);
+    setExWeightUnit(ex.weight_unit ?? "kg");
     setShowNewCat(false);
     setNewCatName("");
     setNewCatColor(PRESET_COLORS[0]!);
@@ -113,43 +156,195 @@ export default function ExercisesScreen() {
     setCatSaving(false);
   }
 
-  async function handleCreateExercise() {
+  async function doSave(andNew: boolean) {
     if (!exName.trim()) { Alert.alert("Error", "El nombre es obligatorio"); return; }
     if (!exCategoryId) { Alert.alert("Error", "Selecciona o crea una categoría"); return; }
+
+    const weightUnit = WEIGHT_TYPES.includes(exType) ? exWeightUnit : "kg";
     setSaving(true);
-    const { data, error } = await repo.createExercise(
-      { name: exName.trim(), category_id: exCategoryId, type: exType, weight_unit: "kg" },
-      userId
-    );
-    if (error) { Alert.alert("Error", error.message); setSaving(false); return; }
-    addExercise({
-      id: data.id,
-      name: data.name,
-      category_id: data.category_id ?? "",
-      type: data.type as ExerciseType,
-      weight_unit: data.weight_unit as "kg" | "lb",
-      is_favorite: data.is_favorite,
-      created_at: data.created_at,
-    });
-    setSaving(false);
-    setShowModal(false);
+
+    if (editingExercise) {
+      const { data, error } = await repo.updateExercise(editingExercise.id, {
+        name: exName.trim(),
+        notes: exNotes.trim() || null,
+        category_id: exCategoryId,
+        type: exType,
+        weight_unit: weightUnit,
+      });
+      if (error) { Alert.alert("Error", error.message); setSaving(false); return; }
+      updateExercise(editingExercise.id, {
+        name: data.name,
+        notes: data.notes ?? undefined,
+        category_id: data.category_id ?? "",
+        type: data.type as ExerciseType,
+        weight_unit: data.weight_unit as "kg" | "lb",
+      });
+      setSaving(false);
+      setShowModal(false);
+    } else {
+      const { data, error } = await repo.createExercise(
+        { name: exName.trim(), notes: exNotes.trim() || null, category_id: exCategoryId, type: exType, weight_unit: weightUnit },
+        userId
+      );
+      if (error) { Alert.alert("Error", error.message); setSaving(false); return; }
+      addExercise({
+        id: data.id,
+        name: data.name,
+        category_id: data.category_id ?? "",
+        type: data.type as ExerciseType,
+        weight_unit: data.weight_unit as "kg" | "lb",
+        notes: data.notes ?? undefined,
+        is_favorite: data.is_favorite,
+        created_at: data.created_at,
+      });
+      setSaving(false);
+
+      if (andNew) {
+        const cats = useExerciseStore.getState().categories;
+        setModalCategories(cats);
+        setExName("");
+        setExNotes("");
+        setExType(ExerciseType.WEIGHT_REPS);
+        setExWeightUnit("kg");
+      } else {
+        setShowModal(false);
+      }
+    }
   }
 
-  const filtered = filterExercises(
-    selectedCategoryId ? exercises.filter((e) => e.category_id === selectedCategoryId) : exercises,
-    search
-  );
-  const sorted = [
-    ...filtered.filter((e) => e.is_favorite),
-    ...filtered.filter((e) => !e.is_favorite),
-  ];
+  function handleSave(andNew: boolean) {
+    const typeChanged = editingExercise && exType !== editingExercise.type;
+    const isWeightType = WEIGHT_TYPES.includes(exType);
+    const unitChanged = editingExercise && isWeightType && exWeightUnit !== (editingExercise.weight_unit ?? "kg");
+
+    if (typeChanged) {
+      Alert.alert(
+        "Cambiar tipo",
+        "Los campos que no existen en el nuevo tipo serán eliminados del historial de este ejercicio. ¿Continuar?",
+        [
+          { text: "Cancelar", style: "cancel" },
+          {
+            text: "Cambiar", style: "destructive", onPress: () => {
+              if (unitChanged) {
+                Alert.alert(
+                  "Cambiar unidad",
+                  `¿Cambiar la unidad a ${exWeightUnit}? Los valores del historial no se convertirán automáticamente.`,
+                  [
+                    { text: "Cancelar", style: "cancel" },
+                    { text: "Cambiar", onPress: () => doSave(andNew) },
+                  ]
+                );
+              } else {
+                doSave(andNew);
+              }
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    if (unitChanged) {
+      Alert.alert(
+        "Cambiar unidad",
+        `¿Cambiar la unidad a ${exWeightUnit}? Los valores del historial no se convertirán automáticamente.`,
+        [
+          { text: "Cancelar", style: "cancel" },
+          { text: "Cambiar", onPress: () => doSave(andNew) },
+        ]
+      );
+      return;
+    }
+
+    doSave(andNew);
+  }
 
   async function handleToggleFavorite(id: string, current: boolean) {
     await repo.toggleFavorite(id, !current);
     toggleFavorite(id);
   }
 
-  const selectedColor = modalCategories.find((c) => c.id === exCategoryId)?.color;
+  async function handleDeleteExercise(id: string, name: string) {
+    Alert.alert(
+      "Eliminar ejercicio",
+      `¿Eliminar "${name}" y todo su historial, PRs y objetivos?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: async () => {
+            await repo.deleteExercise(id);
+            deleteExercise(id);
+          },
+        },
+      ]
+    );
+  }
+
+  // Category management
+  function startEditCat(cat: Category) {
+    setEditingCatId(cat.id);
+    setEditCatName(cat.name);
+    setEditCatColor(cat.color);
+  }
+
+  function cancelEditCat() {
+    setEditingCatId(null);
+    setEditCatName("");
+    setEditCatColor(PRESET_COLORS[0]!);
+  }
+
+  async function handleUpdateCategory() {
+    if (!editingCatId || !editCatName.trim()) return;
+    setCatEditSaving(true);
+    const { error } = await repo.updateCategory(editingCatId, { name: editCatName.trim(), color: editCatColor });
+    if (error) { Alert.alert("Error", error.message); setCatEditSaving(false); return; }
+    updateCategory(editingCatId, { name: editCatName.trim(), color: editCatColor });
+    setCatEditSaving(false);
+    cancelEditCat();
+  }
+
+  async function moveCategory(catId: string, direction: "up" | "down") {
+    const idx = categories.findIndex((c) => c.id === catId);
+    const newIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (newIdx < 0 || newIdx >= categories.length) return;
+
+    const reordered = [...categories];
+    const tmp = reordered[idx]!;
+    reordered[idx] = reordered[newIdx]!;
+    reordered[newIdx] = tmp;
+
+    reorderCategories(reordered.map((c) => c.id));
+    await repo.reorderCategories(reordered.map((c, i) => ({ id: c.id, order_index: i })));
+  }
+
+  async function handleDeleteCategory(id: string, name: string) {
+    Alert.alert(
+      "Eliminar categoría",
+      `¿Eliminar "${name}" y todos sus ejercicios e historial?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: async () => {
+            await repo.deleteCategory(id);
+            deleteCategory(id);
+            if (selectedCategoryId === id) setSelectedCategoryId(null);
+          },
+        },
+      ]
+    );
+  }
+
+  const baseList = selectedCategoryId
+    ? exercises.filter((e) => e.category_id === selectedCategoryId)
+    : exercises;
+  const filtered = filterExercises(baseList, search);
+  const favorites = filtered.filter((e) => e.is_favorite);
+  const nonFavorites = filtered.filter((e) => !e.is_favorite);
+  const hasFavorites = favorites.length > 0;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
@@ -167,25 +362,35 @@ export default function ExercisesScreen() {
         </View>
       </View>
 
-      {/* Category chips */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8, gap: 8 }}>
-        <TouchableOpacity
-          onPress={() => setSelectedCategoryId(null)}
-          style={{ borderRadius: 20, borderWidth: 1, borderColor: selectedCategoryId === null ? "#6366f1" : "#e2e8f0", backgroundColor: selectedCategoryId === null ? "#6366f1" : "transparent", paddingHorizontal: 16, paddingVertical: 6 }}
-        >
-          <Text style={{ fontSize: 13, fontWeight: "500", color: selectedCategoryId === null ? "#fff" : "#0f172a" }}>Todos</Text>
-        </TouchableOpacity>
-        {categories.map((cat) => (
+      {/* Category chips + manage button */}
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8, gap: 8 }} style={{ flex: 1 }}>
           <TouchableOpacity
-            key={cat.id}
-            onPress={() => setSelectedCategoryId(cat.id === selectedCategoryId ? null : cat.id)}
-            style={{ flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 20, borderWidth: 1, borderColor: selectedCategoryId === cat.id ? cat.color : "#e2e8f0", backgroundColor: selectedCategoryId === cat.id ? cat.color + "22" : "transparent", paddingHorizontal: 12, paddingVertical: 6 }}
+            onPress={() => setSelectedCategoryId(null)}
+            style={{ borderRadius: 20, borderWidth: 1, borderColor: selectedCategoryId === null ? "#6366f1" : "#e2e8f0", backgroundColor: selectedCategoryId === null ? "#6366f1" : "transparent", paddingHorizontal: 16, paddingVertical: 6 }}
           >
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: cat.color }} />
-            <Text style={{ fontSize: 13, fontWeight: "500", color: "#0f172a" }}>{cat.name}</Text>
+            <Text style={{ fontSize: 13, fontWeight: "500", color: selectedCategoryId === null ? "#fff" : "#0f172a" }}>Todos</Text>
           </TouchableOpacity>
-        ))}
-      </ScrollView>
+          {categories.map((cat) => (
+            <TouchableOpacity
+              key={cat.id}
+              onPress={() => setSelectedCategoryId(cat.id === selectedCategoryId ? null : cat.id)}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 20, borderWidth: 1, borderColor: selectedCategoryId === cat.id ? cat.color : "#e2e8f0", backgroundColor: selectedCategoryId === cat.id ? cat.color + "22" : "transparent", paddingHorizontal: 12, paddingVertical: 6 }}
+            >
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: cat.color }} />
+              <Text style={{ fontSize: 13, fontWeight: "500", color: "#0f172a" }}>{cat.name}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        {categories.length > 0 && (
+          <TouchableOpacity
+            onPress={() => setShowCatModal(true)}
+            style={{ paddingRight: 16, paddingLeft: 4, paddingVertical: 8 }}
+          >
+            <Ionicons name="settings-outline" size={20} color="#64748b" />
+          </TouchableOpacity>
+        )}
+      </View>
 
       {/* Exercise list */}
       {isLoading ? (
@@ -194,58 +399,72 @@ export default function ExercisesScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100, gap: 8 }}>
-          {sorted.length === 0 ? (
+          {filtered.length === 0 ? (
             <View style={{ paddingVertical: 40, alignItems: "center", gap: 12 }}>
               <Text style={{ color: "#94a3b8", fontSize: 14 }}>
                 {search ? `Sin ejercicios que coincidan con "${search}"` : "Sin ejercicios aún"}
               </Text>
               {!search && (
-                <TouchableOpacity onPress={openModal} style={{ backgroundColor: "#6366f1", borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 }}>
+                <TouchableOpacity onPress={openCreateModal} style={{ backgroundColor: "#6366f1", borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 }}>
                   <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Crear primer ejercicio</Text>
                 </TouchableOpacity>
               )}
             </View>
           ) : (
-            sorted.map((ex) => {
-              const category = categories.find((c) => c.id === ex.category_id);
-              return (
-                <TouchableOpacity
+            <>
+              {hasFavorites && (
+                <>
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#94a3b8", letterSpacing: 1, marginTop: 4 }}>FAVORITOS</Text>
+                  {favorites.map((ex) => (
+                    <ExerciseRow
+                      key={ex.id}
+                      ex={ex}
+                      categories={categories}
+                      stats={exerciseStats[ex.id]}
+                      onPress={() => router.push({ pathname: "/exercise-history/[exerciseId]", params: { exerciseId: ex.id, name: ex.name, type: ex.type, weightUnit: ex.weight_unit } } as never)}
+                      onEdit={() => openEditModal(ex)}
+                      onDelete={() => handleDeleteExercise(ex.id, ex.name)}
+                      onToggleFavorite={() => handleToggleFavorite(ex.id, ex.is_favorite)}
+                    />
+                  ))}
+                  {nonFavorites.length > 0 && (
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: "#94a3b8", letterSpacing: 1, marginTop: 8 }}>EJERCICIOS</Text>
+                  )}
+                </>
+              )}
+              {nonFavorites.map((ex) => (
+                <ExerciseRow
                   key={ex.id}
-                  onPress={() => router.push(`/workout/${ex.id}`)}
-                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 12, backgroundColor: "#fff", paddingHorizontal: 16, paddingVertical: 14, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 }}
-                >
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
-                    {category && <View style={{ width: 4, height: 36, borderRadius: 2, backgroundColor: category.color }} />}
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 14, fontWeight: "500", color: "#0f172a" }}>{ex.name}</Text>
-                      <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>{ex.type.replace(/_/g, " ").toLowerCase()}</Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity onPress={() => handleToggleFavorite(ex.id, ex.is_favorite)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Ionicons name={ex.is_favorite ? "star" : "star-outline"} size={18} color={ex.is_favorite ? "#6366f1" : "#cbd5e1"} />
-                  </TouchableOpacity>
-                </TouchableOpacity>
-              );
-            })
+                  ex={ex}
+                  categories={categories}
+                  stats={exerciseStats[ex.id]}
+                  onPress={() => router.push({ pathname: "/exercise-history/[exerciseId]", params: { exerciseId: ex.id, name: ex.name, type: ex.type, weightUnit: ex.weight_unit } } as never)}
+                  onEdit={() => openEditModal(ex)}
+                  onDelete={() => handleDeleteExercise(ex.id, ex.name)}
+                  onToggleFavorite={() => handleToggleFavorite(ex.id, ex.is_favorite)}
+                />
+              ))}
+            </>
           )}
         </ScrollView>
       )}
 
       {/* FAB */}
       <TouchableOpacity
-        onPress={openModal}
+        onPress={openCreateModal}
         style={{ position: "absolute", bottom: 32, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: "#6366f1", alignItems: "center", justifyContent: "center", shadowColor: "#6366f1", shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 }}
       >
         <Ionicons name="add" size={28} color="white" />
       </TouchableOpacity>
 
-      {/* Create Exercise Modal */}
+      {/* Create / Edit Exercise Modal */}
       <Modal visible={showModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowModal(false)}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
           <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-            {/* Modal header */}
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
-              <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>Nuevo ejercicio</Text>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>
+                {editingExercise ? "Editar ejercicio" : "Nuevo ejercicio"}
+              </Text>
               <TouchableOpacity onPress={() => setShowModal(false)}>
                 <Ionicons name="close" size={24} color="#64748b" />
               </TouchableOpacity>
@@ -260,14 +479,26 @@ export default function ExercisesScreen() {
                   placeholder="ej. Press de banca"
                   value={exName}
                   onChangeText={setExName}
-                  autoFocus
+                  autoFocus={!editingExercise}
+                />
+              </View>
+
+              {/* Notes */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Notas</Text>
+                <TextInput
+                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, minHeight: 80, textAlignVertical: "top" }}
+                  placeholder="Forma, equipo, ajustes de máquina…"
+                  value={exNotes}
+                  onChangeText={setExNotes}
+                  multiline
+                  numberOfLines={3}
                 />
               </View>
 
               {/* Category */}
               <View style={{ gap: 8 }}>
                 <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Categoría</Text>
-
                 {modalCategories.length > 0 && (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                     {modalCategories.map((cat) => (
@@ -282,7 +513,6 @@ export default function ExercisesScreen() {
                     ))}
                   </ScrollView>
                 )}
-
                 <TouchableOpacity
                   onPress={() => setShowNewCat((v) => !v)}
                   style={{ flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 }}
@@ -292,7 +522,6 @@ export default function ExercisesScreen() {
                     {showNewCat ? "Cancelar" : "Nueva categoría"}
                   </Text>
                 </TouchableOpacity>
-
                 {showNewCat && (
                   <View style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, padding: 14, gap: 12, backgroundColor: "#f8fafc" }}>
                     <TextInput
@@ -300,7 +529,6 @@ export default function ExercisesScreen() {
                       placeholder="Nombre de la categoría"
                       value={newCatName}
                       onChangeText={setNewCatName}
-                      autoFocus
                     />
                     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                       {PRESET_COLORS.map((c) => (
@@ -340,20 +568,204 @@ export default function ExercisesScreen() {
                 </View>
               </View>
 
-              {/* Submit */}
-              <TouchableOpacity
-                onPress={handleCreateExercise}
-                disabled={saving}
-                style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", marginTop: 4, opacity: saving ? 0.6 : 1 }}
-              >
-                <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>
-                  {saving ? "Creando…" : "Crear ejercicio"}
-                </Text>
-              </TouchableOpacity>
+              {/* Weight unit — only for weight-based types */}
+              {WEIGHT_TYPES.includes(exType) && (
+                <View style={{ gap: 8 }}>
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Unidad de peso</Text>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    {(["kg", "lb"] as const).map((unit) => (
+                      <TouchableOpacity
+                        key={unit}
+                        onPress={() => setExWeightUnit(unit)}
+                        style={{ flex: 1, borderRadius: 10, borderWidth: 1.5, borderColor: exWeightUnit === unit ? "#6366f1" : "#e2e8f0", backgroundColor: exWeightUnit === unit ? "#6366f1" : "transparent", paddingVertical: 10, alignItems: "center" }}
+                      >
+                        <Text style={{ fontSize: 14, fontWeight: "600", color: exWeightUnit === unit ? "#fff" : "#374151" }}>{unit}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Actions */}
+              <View style={{ gap: 10, marginTop: 4 }}>
+                {!editingExercise && (
+                  <TouchableOpacity
+                    onPress={() => handleSave(true)}
+                    disabled={saving}
+                    style={{ borderWidth: 1.5, borderColor: "#6366f1", borderRadius: 12, paddingVertical: 13, alignItems: "center", opacity: saving ? 0.6 : 1 }}
+                  >
+                    <Text style={{ color: "#6366f1", fontSize: 15, fontWeight: "700" }}>Guardar y nuevo</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  onPress={() => handleSave(false)}
+                  disabled={saving}
+                  style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: saving ? 0.6 : 1 }}
+                >
+                  <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>
+                    {saving
+                      ? (editingExercise ? "Guardando…" : "Creando…")
+                      : (editingExercise ? "Guardar cambios" : "Crear ejercicio")}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </ScrollView>
           </SafeAreaView>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Category Management Modal */}
+      <Modal
+        visible={showCatModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => { setShowCatModal(false); cancelEditCat(); }}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>Categorías</Text>
+            <TouchableOpacity onPress={() => { setShowCatModal(false); cancelEditCat(); }}>
+              <Ionicons name="close" size={24} color="#64748b" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 8 }}>
+            {categories.length === 0 ? (
+              <View style={{ paddingVertical: 40, alignItems: "center" }}>
+                <Text style={{ color: "#94a3b8", fontSize: 14 }}>Sin categorías aún</Text>
+              </View>
+            ) : (
+              categories.map((cat, idx) => (
+                <View key={cat.id} style={{ gap: 4 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 12, backgroundColor: "#fff", paddingHorizontal: 14, paddingVertical: 12, gap: 10 }}>
+                    {/* Move up/down */}
+                    <View style={{ gap: 2 }}>
+                      <TouchableOpacity
+                        onPress={() => moveCategory(cat.id, "up")}
+                        disabled={idx === 0}
+                        hitSlop={{ top: 4, bottom: 4, left: 6, right: 6 }}
+                      >
+                        <Ionicons name="chevron-up" size={16} color={idx === 0 ? "#e2e8f0" : "#94a3b8"} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => moveCategory(cat.id, "down")}
+                        disabled={idx === categories.length - 1}
+                        hitSlop={{ top: 4, bottom: 4, left: 6, right: 6 }}
+                      >
+                        <Ionicons name="chevron-down" size={16} color={idx === categories.length - 1 ? "#e2e8f0" : "#94a3b8"} />
+                      </TouchableOpacity>
+                    </View>
+                    <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: cat.color }} />
+                    <Text style={{ flex: 1, fontSize: 14, fontWeight: "500", color: "#0f172a" }}>{cat.name}</Text>
+                    <TouchableOpacity
+                      onPress={() => editingCatId === cat.id ? cancelEditCat() : startEditCat(cat)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name={editingCatId === cat.id ? "close-outline" : "pencil-outline"} size={18} color="#94a3b8" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleDeleteCategory(cat.id, cat.name)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
+
+                  {editingCatId === cat.id && (
+                    <View style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, padding: 14, gap: 12, backgroundColor: "#f8fafc" }}>
+                      <TextInput
+                        style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, backgroundColor: "#fff" }}
+                        value={editCatName}
+                        onChangeText={setEditCatName}
+                        autoFocus
+                      />
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                        {PRESET_COLORS.map((c) => (
+                          <TouchableOpacity
+                            key={c}
+                            onPress={() => setEditCatColor(c)}
+                            style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: c, borderWidth: 2.5, borderColor: editCatColor === c ? "#0f172a" : "transparent" }}
+                          />
+                        ))}
+                      </View>
+                      <TouchableOpacity
+                        onPress={handleUpdateCategory}
+                        disabled={catEditSaving || !editCatName.trim()}
+                        style={{ backgroundColor: "#6366f1", borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: catEditSaving || !editCatName.trim() ? 0.5 : 1 }}
+                      >
+                        <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>
+                          {catEditSaving ? "Guardando…" : "Guardar cambios"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              ))
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
+  );
+}
+
+function formatLastUsed(dateStr: string): string {
+  const date = new Date(dateStr + "T00:00:00");
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return "Hoy";
+  if (diffDays === 1) return "Ayer";
+  if (diffDays < 7) return `Hace ${diffDays} días`;
+  return date.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function ExerciseRow({
+  ex,
+  categories,
+  stats,
+  onPress,
+  onEdit,
+  onDelete,
+  onToggleFavorite,
+}: {
+  ex: Exercise;
+  categories: Category[];
+  stats?: { workout_count: number; last_used: string | null };
+  onPress: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onToggleFavorite: () => void;
+}) {
+  const category = categories.find((c) => c.id === ex.category_id);
+  const statsLine = stats
+    ? `${stats.workout_count} ${stats.workout_count === 1 ? "sesión" : "sesiones"}${stats.last_used ? ` · ${formatLastUsed(stats.last_used)}` : ""}`
+    : null;
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 12, backgroundColor: "#fff", paddingHorizontal: 16, paddingVertical: 12, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+        {category && <View style={{ width: 4, height: statsLine ? 44 : 36, borderRadius: 2, backgroundColor: category.color }} />}
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 14, fontWeight: "500", color: "#0f172a" }}>{ex.name}</Text>
+          <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>{ex.type.replace(/_/g, " ").toLowerCase()}</Text>
+          {statsLine && <Text style={{ fontSize: 11, color: "#cbd5e1", marginTop: 2 }}>{statsLine}</Text>}
+        </View>
+      </View>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+        <TouchableOpacity onPress={onToggleFavorite} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name={ex.is_favorite ? "star" : "star-outline"} size={18} color={ex.is_favorite ? "#6366f1" : "#cbd5e1"} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onEdit} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="pencil-outline" size={16} color="#94a3b8" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onDelete} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="trash-outline" size={16} color="#ef4444" />
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
   );
 }

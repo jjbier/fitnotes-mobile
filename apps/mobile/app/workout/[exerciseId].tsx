@@ -171,10 +171,10 @@ export default function TrainingScreen() {
   }
 
   const exerciseType = (exercise?.type ?? ExerciseType.WEIGHT_REPS) as ExerciseType;
-  const showWeight = exerciseType === ExerciseType.WEIGHT_REPS || exerciseType === ExerciseType.WEIGHT_ONLY;
-  const showReps = exerciseType === ExerciseType.WEIGHT_REPS || exerciseType === ExerciseType.REPS_ONLY;
-  const showDistance = exerciseType === ExerciseType.DISTANCE_TIME;
-  const showTime = exerciseType === ExerciseType.DISTANCE_TIME || exerciseType === ExerciseType.TIME_ONLY;
+  const showWeight = [ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHT_ONLY, ExerciseType.WEIGHT_DISTANCE, ExerciseType.WEIGHT_TIME].includes(exerciseType);
+  const showReps = [ExerciseType.WEIGHT_REPS, ExerciseType.REPS_ONLY, ExerciseType.REPS_DISTANCE, ExerciseType.REPS_TIME].includes(exerciseType);
+  const showDistance = [ExerciseType.DISTANCE_TIME, ExerciseType.WEIGHT_DISTANCE, ExerciseType.REPS_DISTANCE, ExerciseType.DISTANCE_ONLY].includes(exerciseType);
+  const showTime = [ExerciseType.DISTANCE_TIME, ExerciseType.TIME_ONLY, ExerciseType.WEIGHT_TIME, ExerciseType.REPS_TIME].includes(exerciseType);
 
   const timerFinished = timerRemaining === 0;
   const timerActive = timerRunning;

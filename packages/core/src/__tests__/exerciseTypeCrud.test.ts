@@ -309,6 +309,266 @@ describe("TIME_ONLY — CRUD de sets", () => {
   });
 });
 
+// ─── WEIGHT_DISTANCE ──────────────────────────────────────────────────────────
+// Uso típico: arrastre de trineo cargado — se registra peso y distancia
+
+describe("WEIGHT_DISTANCE — CRUD de sets", () => {
+  const WE = makeWE("we-wd", "ex-wd");
+
+  beforeEach(() => {
+    useWorkoutStore.getState().loadWorkout(WORKOUT, [WE], { "we-wd": [] });
+  });
+
+  it("C — crea un set con weight y distance", () => {
+    useWorkoutStore.getState().createSet("we-wd", { weight: 80, distance: 20 });
+    const sets = useWorkoutStore.getState().sets["we-wd"]!;
+    expect(sets).toHaveLength(1);
+    expect(sets[0]!.weight).toBe(80);
+    expect(sets[0]!.distance).toBe(20);
+    expect(sets[0]!.reps).toBeUndefined();
+    expect(sets[0]!.time_seconds).toBeUndefined();
+  });
+
+  it("R — lee weight y distance desde el store", () => {
+    useWorkoutStore.getState().createSet("we-wd", { weight: 100, distance: 30 });
+    const s = useWorkoutStore.getState().sets["we-wd"]![0]!;
+    expect(s.weight).toBe(100);
+    expect(s.distance).toBe(30);
+  });
+
+  it("U — actualiza weight y distance", () => {
+    useWorkoutStore.getState().createSet("we-wd", { weight: 80, distance: 20 });
+    const id = useWorkoutStore.getState().sets["we-wd"]![0]!.id;
+    useWorkoutStore.getState().updateSet("we-wd", id, { weight: 90, distance: 25 });
+    const s = useWorkoutStore.getState().sets["we-wd"]![0]!;
+    expect(s.weight).toBe(90);
+    expect(s.distance).toBe(25);
+  });
+
+  it("D — elimina el set", () => {
+    useWorkoutStore.getState().createSet("we-wd", { weight: 80, distance: 20 });
+    const id = useWorkoutStore.getState().sets["we-wd"]![0]!.id;
+    useWorkoutStore.getState().deleteSet("we-wd", id);
+    expect(useWorkoutStore.getState().sets["we-wd"]).toHaveLength(0);
+  });
+
+  it("U — marcar como completado", () => {
+    useWorkoutStore.getState().createSet("we-wd", { weight: 80, distance: 20 });
+    const id = useWorkoutStore.getState().sets["we-wd"]![0]!.id;
+    useWorkoutStore.getState().markSetComplete("we-wd", id, true);
+    expect(useWorkoutStore.getState().sets["we-wd"]![0]!.is_complete).toBe(true);
+  });
+});
+
+// ─── WEIGHT_TIME ──────────────────────────────────────────────────────────────
+// Uso típico: farmer carry con tiempo — se registra peso y duración
+
+describe("WEIGHT_TIME — CRUD de sets", () => {
+  const WE = makeWE("we-wt", "ex-wt");
+
+  beforeEach(() => {
+    useWorkoutStore.getState().loadWorkout(WORKOUT, [WE], { "we-wt": [] });
+  });
+
+  it("C — crea un set con weight y time_seconds", () => {
+    useWorkoutStore.getState().createSet("we-wt", { weight: 24, time_seconds: 60 });
+    const sets = useWorkoutStore.getState().sets["we-wt"]!;
+    expect(sets).toHaveLength(1);
+    expect(sets[0]!.weight).toBe(24);
+    expect(sets[0]!.time_seconds).toBe(60);
+    expect(sets[0]!.reps).toBeUndefined();
+    expect(sets[0]!.distance).toBeUndefined();
+  });
+
+  it("R — lee weight y time_seconds desde el store", () => {
+    useWorkoutStore.getState().createSet("we-wt", { weight: 32, time_seconds: 90 });
+    const s = useWorkoutStore.getState().sets["we-wt"]![0]!;
+    expect(s.weight).toBe(32);
+    expect(s.time_seconds).toBe(90);
+  });
+
+  it("U — actualiza weight y time_seconds", () => {
+    useWorkoutStore.getState().createSet("we-wt", { weight: 24, time_seconds: 60 });
+    const id = useWorkoutStore.getState().sets["we-wt"]![0]!.id;
+    useWorkoutStore.getState().updateSet("we-wt", id, { weight: 28, time_seconds: 75 });
+    const s = useWorkoutStore.getState().sets["we-wt"]![0]!;
+    expect(s.weight).toBe(28);
+    expect(s.time_seconds).toBe(75);
+  });
+
+  it("D — elimina el set", () => {
+    useWorkoutStore.getState().createSet("we-wt", { weight: 24, time_seconds: 60 });
+    const id = useWorkoutStore.getState().sets["we-wt"]![0]!.id;
+    useWorkoutStore.getState().deleteSet("we-wt", id);
+    expect(useWorkoutStore.getState().sets["we-wt"]).toHaveLength(0);
+  });
+
+  it("U — marcar como completado", () => {
+    useWorkoutStore.getState().createSet("we-wt", { weight: 24, time_seconds: 60 });
+    const id = useWorkoutStore.getState().sets["we-wt"]![0]!.id;
+    useWorkoutStore.getState().markSetComplete("we-wt", id, true);
+    expect(useWorkoutStore.getState().sets["we-wt"]![0]!.is_complete).toBe(true);
+  });
+});
+
+// ─── REPS_DISTANCE ────────────────────────────────────────────────────────────
+// Uso típico: lanzamiento de balón medicinal — se registra reps y distancia
+
+describe("REPS_DISTANCE — CRUD de sets", () => {
+  const WE = makeWE("we-rd", "ex-rd");
+
+  beforeEach(() => {
+    useWorkoutStore.getState().loadWorkout(WORKOUT, [WE], { "we-rd": [] });
+  });
+
+  it("C — crea un set con reps y distance", () => {
+    useWorkoutStore.getState().createSet("we-rd", { reps: 5, distance: 8 });
+    const sets = useWorkoutStore.getState().sets["we-rd"]!;
+    expect(sets).toHaveLength(1);
+    expect(sets[0]!.reps).toBe(5);
+    expect(sets[0]!.distance).toBe(8);
+    expect(sets[0]!.weight).toBeUndefined();
+    expect(sets[0]!.time_seconds).toBeUndefined();
+  });
+
+  it("R — lee reps y distance desde el store", () => {
+    useWorkoutStore.getState().createSet("we-rd", { reps: 8, distance: 10 });
+    const s = useWorkoutStore.getState().sets["we-rd"]![0]!;
+    expect(s.reps).toBe(8);
+    expect(s.distance).toBe(10);
+  });
+
+  it("U — actualiza reps y distance", () => {
+    useWorkoutStore.getState().createSet("we-rd", { reps: 5, distance: 8 });
+    const id = useWorkoutStore.getState().sets["we-rd"]![0]!.id;
+    useWorkoutStore.getState().updateSet("we-rd", id, { reps: 6, distance: 9 });
+    const s = useWorkoutStore.getState().sets["we-rd"]![0]!;
+    expect(s.reps).toBe(6);
+    expect(s.distance).toBe(9);
+  });
+
+  it("D — elimina el set", () => {
+    useWorkoutStore.getState().createSet("we-rd", { reps: 5, distance: 8 });
+    const id = useWorkoutStore.getState().sets["we-rd"]![0]!.id;
+    useWorkoutStore.getState().deleteSet("we-rd", id);
+    expect(useWorkoutStore.getState().sets["we-rd"]).toHaveLength(0);
+  });
+
+  it("U — marcar como completado", () => {
+    useWorkoutStore.getState().createSet("we-rd", { reps: 5, distance: 8 });
+    const id = useWorkoutStore.getState().sets["we-rd"]![0]!.id;
+    useWorkoutStore.getState().markSetComplete("we-rd", id, true);
+    expect(useWorkoutStore.getState().sets["we-rd"]![0]!.is_complete).toBe(true);
+  });
+});
+
+// ─── REPS_TIME ────────────────────────────────────────────────────────────────
+// Uso típico: burpees con tiempo — se registra reps y duración
+
+describe("REPS_TIME — CRUD de sets", () => {
+  const WE = makeWE("we-rt", "ex-rt");
+
+  beforeEach(() => {
+    useWorkoutStore.getState().loadWorkout(WORKOUT, [WE], { "we-rt": [] });
+  });
+
+  it("C — crea un set con reps y time_seconds", () => {
+    useWorkoutStore.getState().createSet("we-rt", { reps: 10, time_seconds: 45 });
+    const sets = useWorkoutStore.getState().sets["we-rt"]!;
+    expect(sets).toHaveLength(1);
+    expect(sets[0]!.reps).toBe(10);
+    expect(sets[0]!.time_seconds).toBe(45);
+    expect(sets[0]!.weight).toBeUndefined();
+    expect(sets[0]!.distance).toBeUndefined();
+  });
+
+  it("R — lee reps y time_seconds desde el store", () => {
+    useWorkoutStore.getState().createSet("we-rt", { reps: 15, time_seconds: 60 });
+    const s = useWorkoutStore.getState().sets["we-rt"]![0]!;
+    expect(s.reps).toBe(15);
+    expect(s.time_seconds).toBe(60);
+  });
+
+  it("U — actualiza reps y time_seconds", () => {
+    useWorkoutStore.getState().createSet("we-rt", { reps: 10, time_seconds: 45 });
+    const id = useWorkoutStore.getState().sets["we-rt"]![0]!.id;
+    useWorkoutStore.getState().updateSet("we-rt", id, { reps: 12, time_seconds: 50 });
+    const s = useWorkoutStore.getState().sets["we-rt"]![0]!;
+    expect(s.reps).toBe(12);
+    expect(s.time_seconds).toBe(50);
+  });
+
+  it("D — elimina el set", () => {
+    useWorkoutStore.getState().createSet("we-rt", { reps: 10, time_seconds: 45 });
+    const id = useWorkoutStore.getState().sets["we-rt"]![0]!.id;
+    useWorkoutStore.getState().deleteSet("we-rt", id);
+    expect(useWorkoutStore.getState().sets["we-rt"]).toHaveLength(0);
+  });
+
+  it("U — marcar como completado", () => {
+    useWorkoutStore.getState().createSet("we-rt", { reps: 10, time_seconds: 45 });
+    const id = useWorkoutStore.getState().sets["we-rt"]![0]!.id;
+    useWorkoutStore.getState().markSetComplete("we-rt", id, true);
+    expect(useWorkoutStore.getState().sets["we-rt"]![0]!.is_complete).toBe(true);
+  });
+});
+
+// ─── DISTANCE_ONLY ────────────────────────────────────────────────────────────
+// Uso típico: salto de longitud — solo se registra la distancia
+
+describe("DISTANCE_ONLY — CRUD de sets", () => {
+  const WE = makeWE("we-do", "ex-do");
+
+  beforeEach(() => {
+    useWorkoutStore.getState().loadWorkout(WORKOUT, [WE], { "we-do": [] });
+  });
+
+  it("C — crea un set con distance (sin weight, reps ni time)", () => {
+    useWorkoutStore.getState().createSet("we-do", { distance: 250 });
+    const sets = useWorkoutStore.getState().sets["we-do"]!;
+    expect(sets).toHaveLength(1);
+    expect(sets[0]!.distance).toBe(250);
+    expect(sets[0]!.weight).toBeUndefined();
+    expect(sets[0]!.reps).toBeUndefined();
+    expect(sets[0]!.time_seconds).toBeUndefined();
+  });
+
+  it("R — lee distance desde el store", () => {
+    useWorkoutStore.getState().createSet("we-do", { distance: 300 });
+    expect(useWorkoutStore.getState().sets["we-do"]![0]!.distance).toBe(300);
+  });
+
+  it("U — actualiza distance", () => {
+    useWorkoutStore.getState().createSet("we-do", { distance: 250 });
+    const id = useWorkoutStore.getState().sets["we-do"]![0]!.id;
+    useWorkoutStore.getState().updateSet("we-do", id, { distance: 275 });
+    expect(useWorkoutStore.getState().sets["we-do"]![0]!.distance).toBe(275);
+  });
+
+  it("D — elimina el set", () => {
+    useWorkoutStore.getState().createSet("we-do", { distance: 250 });
+    const id = useWorkoutStore.getState().sets["we-do"]![0]!.id;
+    useWorkoutStore.getState().deleteSet("we-do", id);
+    expect(useWorkoutStore.getState().sets["we-do"]).toHaveLength(0);
+  });
+
+  it("U — marcar como completado", () => {
+    useWorkoutStore.getState().createSet("we-do", { distance: 250 });
+    const id = useWorkoutStore.getState().sets["we-do"]![0]!.id;
+    useWorkoutStore.getState().markSetComplete("we-do", id, true);
+    expect(useWorkoutStore.getState().sets["we-do"]![0]!.is_complete).toBe(true);
+  });
+
+  it("C — progresión de intentos con distancia creciente", () => {
+    useWorkoutStore.getState().createSet("we-do", { distance: 240 });
+    useWorkoutStore.getState().createSet("we-do", { distance: 260 });
+    useWorkoutStore.getState().createSet("we-do", { distance: 275 });
+    const sets = useWorkoutStore.getState().sets["we-do"]!;
+    expect(sets).toHaveLength(3);
+    expect(sets[2]!.distance).toBe(275);
+  });
+});
+
 // ─── Aislamiento entre tipos ──────────────────────────────────────────────────
 // Verifica que los sets de distintos tipos de ejercicio no interfieren entre sí
 
