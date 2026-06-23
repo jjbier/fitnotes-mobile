@@ -498,12 +498,16 @@ export default function RoutineDetailScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
       {/* Edit toggle */}
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, gap: 8 }}>
+        {!editMode && (
+          <Text style={{ fontSize: 12, color: "#94a3b8" }}>Pulsa Editar para gestionar días y ejercicios</Text>
+        )}
         <TouchableOpacity
           onPress={() => setEditMode((v) => !v)}
-          style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8, backgroundColor: editMode ? "#6366f1" : "#f1f5f9" }}
+          style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: editMode ? "#6366f1" : "#6366f1" }}
         >
-          <Text style={{ fontSize: 13, fontWeight: "600", color: editMode ? "#fff" : "#0f172a" }}>{editMode ? "Listo" : "Editar"}</Text>
+          <Ionicons name={editMode ? "checkmark" : "create-outline"} size={15} color="#fff" />
+          <Text style={{ fontSize: 13, fontWeight: "600", color: "#fff" }}>{editMode ? "Listo" : "Editar"}</Text>
         </TouchableOpacity>
       </View>
 
@@ -520,8 +524,16 @@ export default function RoutineDetailScreen() {
 
           {/* Days */}
           {days.length === 0 ? (
-            <View style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 16, padding: 32, alignItems: "center" }}>
-              <Text style={{ fontSize: 13, color: "#94a3b8" }}>Sin días aún. Activa Editar para añadir días.</Text>
+            <View style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 16, padding: 32, alignItems: "center", gap: 12 }}>
+              <Ionicons name="calendar-outline" size={36} color="#94a3b8" />
+              <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>Sin días aún</Text>
+              <Text style={{ fontSize: 12, color: "#94a3b8", textAlign: "center" }}>Pulsa el botón Editar (arriba a la derecha) y luego + Añadir día.</Text>
+              <TouchableOpacity
+                onPress={() => setEditMode(true)}
+                style={{ backgroundColor: "#6366f1", borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 }}
+              >
+                <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>Empezar a editar</Text>
+              </TouchableOpacity>
             </View>
           ) : (
             <NestableDraggableFlatList
