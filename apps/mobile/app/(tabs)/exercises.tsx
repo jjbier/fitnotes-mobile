@@ -8,6 +8,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import DraggableFlatList, { ScaleDecorator } from "react-native-draggable-flatlist";
 import type { RenderItemParams } from "react-native-draggable-flatlist";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useExerciseStore, filterExercises, ExerciseType } from "@fitnotes/core";
 import { createExerciseRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
@@ -311,8 +312,13 @@ export default function ExercisesScreen() {
   }
 
   async function handleCatDragEnd({ data }: { data: typeof categories }) {
+    const prevOrder = categories.map((c) => c.id);
     reorderCategories(data.map((c) => c.id));
-    await repo.reorderCategories(data.map((c, i) => ({ id: c.id, order_index: i })));
+    const results = await repo.reorderCategories(data.map((c, i) => ({ id: c.id, order_index: i })));
+    if (results.some((r) => r.error)) {
+      reorderCategories(prevOrder);
+      Alert.alert("Error", "No se pudo guardar el orden. Inténtalo de nuevo.");
+    }
   }
 
   async function handleDeleteCategory(id: string, name: string) {
@@ -589,6 +595,7 @@ export default function ExercisesScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => { setShowCatModal(false); cancelEditCat(); }}
       >
+        <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
             <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>Categorías</Text>
@@ -663,6 +670,7 @@ export default function ExercisesScreen() {
             )}
           />
         </SafeAreaView>
+        </GestureHandlerRootView>
       </Modal>
     </SafeAreaView>
   );

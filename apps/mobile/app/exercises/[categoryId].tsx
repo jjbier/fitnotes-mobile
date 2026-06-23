@@ -151,6 +151,7 @@ export default function ExerciseCategoryScreen() {
   async function handleAdd(andNew = false) {
     if (!newName.trim()) { Alert.alert("Error", "El nombre es obligatorio"); return; }
     const targetCategoryId = isFavorites ? (categories[0]?.id ?? "") : categoryId;
+    if (!targetCategoryId) { Alert.alert("Error", "Crea una categoría antes de añadir ejercicios"); return; }
     const weightUnit = WEIGHT_TYPES.includes(newType) ? newWeightUnit : "kg";
     setAddSaving(true);
     const { data, error } = await repo.createExercise(
