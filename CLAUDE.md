@@ -34,6 +34,7 @@ fitnotes-app/
 | Backend | Supabase (ref: `fbhjiwtriqrxibqwsyqj`) | Auth + Postgres + RLS |
 | Supabase client | `@supabase/supabase-js@^2.108.2` + `@supabase/ssr@^0.12.0` | FIJAS — cambiarlas rompe genéricos |
 | Validación | Zod 3 | schemas en `@fitnotes/core/schemas` |
+| Drag & drop | `react-native-draggable-flatlist@4.0.3` | NestableScrollContainer + NestableDraggableFlatList |
 
 ---
 
@@ -52,43 +53,60 @@ fitnotes-app/
 - **NativeWind v4**: `withNativeWind` en metro.config.js + `jsxImportSource: "nativewind"` en babel. NO `nativewind/babel` plugin
 - **Metro TS resolver**: mapea `.js` → `.ts` para workspace packages con `verbatimModuleSyntax`
 - **pnpm hoisting**: `.npmrc` `public-hoist-pattern[]=@babel/runtime*` — necesario para `assembleRelease`
+- **Supersets**: `group_id` en `routine_day_exercises` — tap icono 🔗 agrupa con siguiente ejercicio, tap morado disuelve
+- **Predefined sets race condition fix**: `useRef` para trackear qué ejercicio está cargando — descartar respuesta si el usuario cambió de ejercicio
 
 ---
 
 ## Estado actual — qué funciona
 
 ### `packages/core` ✅
-- Tipos: `Exercise`, `ExerciseType` (5 valores), `Workout`, `Set`, `WorkoutExercise`, `PersonalRecord`, `Routine`, `RoutineDay`, `RoutineDayExercise`, `PredefinedSet`, `BodyMeasurement`, `BodyMeasurementEntry`
-- Stores: `useWorkoutStore` (con `removeExerciseFromWorkout`, `removeWorkoutFromHistory`), `useExerciseStore`, `useProgressStore`, `useRoutineStore`
+- Tipos: `Exercise`, `ExerciseType` (10 valores), `Workout`, `Set`, `WorkoutExercise`, `PersonalRecord`, `Routine`, `RoutineDay`, `RoutineDayExercise`, `PredefinedSet`, `BodyMeasurement`, `BodyMeasurementEntry`
+- Stores: `useWorkoutStore`, `useExerciseStore`, `useProgressStore`, `useRoutineStore`
 - Utils: `calculate1RM`, `estimateRepMax`, `calculateVolume`, `calculatePace`, `calculateSpeed`, `roundToNearest`, `calculateSetWeight`, `calculatePlates`, `formatWorkoutDate`, `getWeekRange`, `groupWorkoutsByMonth`
-- **144 tests Vitest** — incluye CRUD tests para los 5 ExerciseTypes (WEIGHT_REPS, DISTANCE_TIME, REPS_ONLY, WEIGHT_ONLY, TIME_ONLY)
+- **144 tests Vitest**
 
 ### `packages/database` ✅
-- `createBrowserClient()` / `createServerClient()` tipados con `Database`
-- `types.ts` generado con `supabase gen types typescript`
 - Repositorios: `exercise`, `routine`, `workout`, `progress`, `bodyTracker`, `calendar`
+- `routineRepository` incluye: `copyRoutine`, `updateRoutine`, `updateDayExercise`, `reorderDays`, `reorderExercises`, `getPredefinedSets`, `savePredefinedSets`
 - `SyncEngine` — push/pull/sync
 
 ### `apps/web` ✅ — todas las rutas conectadas a Supabase
 `/dashboard`, `/exercise`, `/exercise/[id]`, `/progress`, `/calendar`, `/routines`, `/routines/[id]`, `/body-tracker`, `/tools`, `/settings` (incl. export CSV + delete account)
 
 ### `apps/mobile` ✅ — APK release funcionando en dispositivo Android
-- **Hoy**: workout por fecha, delete ejercicio del workout ✅, navegar a training
-- **Training** (`workout/[exerciseId]`): sets CRUD completo ✅ (add/edit/delete), delete ejercicio ✅, RestTimer con haptics, todos los ExerciseTypes
-- **Ejercicios**: browse + FAB crear ejercicio + categoría inline
-- **Progreso**: PRs expandibles, 1RM estimado
-- **Herramientas**: 1RM, Set%, Plate calculators
-- **Configuración**: perfil, kg/lb (user_metadata), sign-out, delete account
-- **Rutinas**: lista/crear/eliminar/copiar, días + ejercicios, log routine day → crea workout real; predefined sets por ejercicio; drag & drop reordenar days y ejercicios; supersets (group_id)
-- **Body Tracker**: CRUD medidas + entradas, accesible desde Settings
-- **Calendario**: grid mensual, list view
-- **Sesión persistente**: FileStorage adapter, auto-refresh indefinido
-- **Sync**: AppState listener, `refetchSignal` actualiza workout de hoy al volver del background
+
+**Tabs:**
+| Tab | Contenido |
+|---|---|
+| Hoy | workout por fecha, delete ejercicio, navegar a training |
+| Calendario | grid mensual, list view |
+| Ejercicios | browse + speed dial FAB (crear ejercicio / nueva rutina) |
+| Progreso | PRs expandibles, 1RM estimado |
+| **Rutinas** | lista rutinas — crear/editar/copiar/eliminar vía menú ⋮ |
+| Configuración | perfil, kg/lb, **Herramientas** (→ calculadoras), body tracker, sign-out, delete account |
+
+**Rutas no-tab:**
+- `workout/[exerciseId]` — sets CRUD completo, todos los ExerciseTypes, RestTimer haptics
+- `routines/[id]` — días + ejercicios, edit mode, drag & drop days+ejercicios, predefined sets, supersets, log routine day → workout real
+- `calculators` — 1RM, Set%, Plate calculators (accesible desde Configuración)
+- `body-tracker` — CRUD medidas + entradas
+- `exercises/[categoryId]`
+
+**Rutinas — características completas:**
+- Crear/editar nombre+notas/copiar/eliminar vía menú ⋮
+- Días con drag & drop reordenar
+- Ejercicios por día con drag & drop reordenar
+- Predefined sets por ejercicio (modal, campos vacíos = copian del historial)
+- Supersets: icono 🔗 en edit mode — agrupa con siguiente (group_id), barra morada en lectura
+- Log routine day → crea workout real con predefined sets aplicados
+- `?create=1` param abre modal de nueva rutina automáticamente
 
 ### Android APK ✅
-- `apps/mobile/android/app/build/outputs/apk/release/app-release.apk`
-- `cd apps/mobile/android && ./gradlew assembleRelease --no-daemon`
-- `adb install <path>`
+```bash
+cd apps/mobile/android && ./gradlew assembleRelease --no-daemon
+/opt/Android-Sdk/platform-tools/adb install apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+```
 
 ---
 
@@ -97,6 +115,7 @@ fitnotes-app/
 - `shadcn/ui` no inicializado — incompatibilidad `eslint-config-next` + ESLint v9
 - `packages/ui` vacío
 - SyncEngine pull no actualiza stores de ejercicios/rutinas (solo today workout via `refetchSignal`)
+- `routines/index.tsx` es código muerto — el tab usa `(tabs)/tools.tsx` que duplica esa UI
 
 ---
 
@@ -108,5 +127,5 @@ pnpm --filter @fitnotes/mobile start
 pnpm --filter @fitnotes/core test
 cd apps/mobile && npx tsc --noEmit
 cd apps/mobile/android && ./gradlew assembleRelease --no-daemon
-adb install apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+/opt/Android-Sdk/platform-tools/adb install apps/mobile/android/app/build/outputs/apk/release/app-release.apk
 ```

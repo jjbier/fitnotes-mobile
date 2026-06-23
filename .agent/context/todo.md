@@ -1,26 +1,37 @@
 # Trabajo pendiente
 
-_Last updated: 2026-06-22_
+_Last updated: 2026-06-23_
 
-## Completado ✅ (historial)
-- [x] Auth web + mobile
-- [x] Ejercicios CRUD web + mobile
-- [x] Rutinas CRUD web + mobile + log routine day → workout real
-- [x] Workout logging: sets CRUD todos los ExerciseTypes
-- [x] Progreso: PRs auto-calculados (trigger SQL), charts web
-- [x] Body Tracker web + mobile
-- [x] Calendario web + mobile
-- [x] Herramientas (1RM, Set%, Plate calculators)
-- [x] Settings: perfil, kg/lb, export CSV, delete account
-- [x] SyncEngine integrado en mobile
-- [x] RestTimer con expo-haptics
-- [x] Sesión persistente mobile (FileStorage, 1 año, auto-refresh)
-- [x] Delete ejercicio del workout (home + training screen) ✅
-- [x] Edit sets persiste en DB ✅
-- [x] 144 tests Vitest en packages/core (CRUD 5 ExerciseTypes)
-- [x] Android APK release — CRUD verificado en dispositivo físico
+## Completado ✅
+- Auth web + mobile
+- Ejercicios CRUD web + mobile (todos los ExerciseTypes)
+- Workout logging: sets CRUD todos los ExerciseTypes
+- Progreso: PRs auto-calculados (trigger SQL), charts web
+- Body Tracker web + mobile
+- Calendario web + mobile
+- Herramientas (1RM, Set%, Plate calculators) web + mobile
+- Settings: perfil, kg/lb, export CSV, delete account
+- SyncEngine integrado en mobile
+- RestTimer con expo-haptics
+- Sesión persistente mobile (FileStorage, auto-refresh)
+- Delete ejercicio del workout (home + training screen)
+- Edit sets persiste en DB
+- 144 tests Vitest en packages/core
+- Android APK release — verificado en dispositivo físico
+- **Rutinas completas:**
+  - Lista + crear/editar/copiar/eliminar (menú ⋮)
+  - Días + ejercicios por día
+  - Drag & drop reordenar days y ejercicios
+  - Predefined sets por ejercicio (modal, race condition fix)
+  - Supersets (group_id, barra morada)
+  - Log routine day → workout real
+- Speed dial FAB en Ejercicios (crear ejercicio / nueva rutina)
+- Reorganización tabs: Rutinas en tab "Herramientas", calculadoras en Configuración
 
-## Pendiente / descartado
-- [ ] `shadcn/ui` — descartado: incompatibilidad eslint-config-next + ESLint v9
-- [ ] `packages/ui` — descartado: sin spec de design tokens
-- [ ] SyncEngine: pull no actualiza stores de ejercicios/rutinas (solo workout de hoy via refetchSignal)
+## Pendiente
+- Eliminar `routines/index.tsx` (código muerto — `tools.tsx` lo duplica)
+- SyncEngine: pull no actualiza stores de ejercicios/rutinas (solo workout de hoy)
+
+## Descartado
+- `shadcn/ui` — incompatibilidad eslint-config-next + ESLint v9
+- `packages/ui` — sin spec de design tokens

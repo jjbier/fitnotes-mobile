@@ -1,6 +1,6 @@
 # Stores — @fitnotes/core
 
-_Last updated: 2026-06-22_
+_Last updated: 2026-06-23_
 
 Zustand 5 + Immer. Importados via `@fitnotes/core`. Estado en memoria — Supabase es la fuente de verdad.
 
@@ -9,23 +9,20 @@ Zustand 5 + Immer. Importados via `@fitnotes/core`. Estado en memoria — Supaba
 ```ts
 // State
 activeWorkout: Workout | null
-exercises: WorkoutExercise[]       // workout_exercises del workout activo
+exercises: WorkoutExercise[]       // del workout activo
 sets: Record<string, Set[]>        // keyed by workoutExerciseId
-workouts: Workout[]                // historial reciente
+workouts: Workout[]                // historial
 isLoading: boolean
 
 // Actions clave
-startWorkout(date)                           // crea workout local (ID temporal)
+startWorkout(date)
 loadWorkout(workout, exercises, sets)        // reemplaza estado desde DB
-loadWorkouts(workouts)                       // carga historial
+loadWorkouts(workouts)
 addExerciseToWorkout(exerciseId, weId?)      // weId = UUID real de DB (crítico)
-removeExerciseFromWorkout(workoutExerciseId) // optimistic delete
+removeExerciseFromWorkout(workoutExerciseId)
 removeWorkoutFromHistory(workoutId)
-createSet(workoutExerciseId, partial?)
-updateSet(workoutExerciseId, setId, patch)
-deleteSet(workoutExerciseId, setId)
-markSetComplete(workoutExerciseId, setId, complete)
-finishWorkout()                              // sets end_time + duration_minutes
+createSet / updateSet / deleteSet / markSetComplete
+finishWorkout()
 ```
 
 ## useExerciseStore
@@ -38,9 +35,7 @@ isLoading: boolean
 
 // Actions
 loadExercises(categories, exercises)
-addExercise(exercise)
-updateExercise(id, updates)
-deleteExercise(id)
+addExercise / updateExercise / deleteExercise
 toggleFavorite(id)
 addCategory(category)
 ```
@@ -50,7 +45,6 @@ addCategory(category)
 ```ts
 // State
 personalRecords: Record<exerciseId, PersonalRecord[]>
-isLoading: boolean
 
 // Actions
 loadPersonalRecords(exerciseId, records)
@@ -65,12 +59,16 @@ routines: Routine[]
 routineDays: Record<routineId, RoutineDay[]>
 routineDayExercises: Record<dayId, RoutineDayExercise[]>
 predefinedSets: Record<rdExerciseId, PredefinedSet[]>
+isLoading: boolean
 
 // Actions
-loadRoutines, createRoutine, updateRoutine, deleteRoutine
-loadRoutineDays, addRoutineDay, deleteRoutineDay
-loadDayExercises, addExerciseToDay, removeExerciseFromDay
-loadPredefinedSets, setPredefinedSets
+loadRoutines / createRoutine / updateRoutine / deleteRoutine
+loadRoutineDays / addRoutineDay / deleteRoutineDay
+reorderDays(routineId, updates)              // optimistic update en UI
+loadRoutineDayExercises(dayId, exercises)   // reemplaza ejercicios de un día (usado por supersets)
+addExerciseToDay / removeExerciseFromDay
+reorderExercisesInDay(dayId, updates)
+loadPredefinedSets / savePredefinedSets
 ```
 
-**Nota:** `logRoutineWorkout()` está implementado en `routines/[id].tsx` directamente, no en el store.
+**Nota:** `logRoutineWorkout()` está implementado directamente en `routines/[id].tsx`, no en el store.

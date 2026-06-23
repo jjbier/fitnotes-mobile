@@ -1,6 +1,6 @@
 # packages/database — @fitnotes/database
 
-_Last updated: 2026-06-22_
+_Last updated: 2026-06-23_
 
 ## Cliente Supabase (`src/supabase/client.ts`)
 
@@ -13,14 +13,14 @@ createServerClient(cookieStore)    // Server Components / Route Handlers
 
 ## Repositorios (`src/repositories/`)
 
-| Repositorio | Métodos clave |
+| Repositorio | Métodos destacados |
 |---|---|
-| `workoutRepository` | `getWorkoutByDate`, `createWorkout`, `updateWorkout`, `deleteWorkout`, `getWorkoutExercises`, `addExercise`, `removeExercise`, `getSets`, `createSet`, `updateSet`, `deleteSet`, `getWorkouts` |
-| `exerciseRepository` | `getCategories`, `getExercises`, `createExercise`, `updateExercise`, `deleteExercise`, `createCategory`, `toggleFavorite` |
-| `routineRepository` | `getRoutines`, `createRoutine`, `deleteRoutine`, `getRoutineDays`, `createDay`, `addExercise`, `getPredefinedSets`, `createPredefinedSet` |
-| `progressRepository` | `getPersonalRecords`, `getExerciseHistory` |
-| `bodyTrackerRepository` | `getMeasurements`, `createMeasurement`, `getEntries`, `createEntry`, `deleteEntry`, `getAllEntries` |
-| `calendarRepository` | `getWorkoutsByMonth` |
+| `workoutRepository` | getWorkoutByDate, createWorkout, addExercise, getSets, createSet, updateSet, deleteSet |
+| `exerciseRepository` | getCategories, getExercises, createExercise, toggleFavorite |
+| `routineRepository` | copyRoutine (deep), updateRoutine, updateDayExercise, reorderDays, reorderExercises, savePredefinedSets |
+| `progressRepository` | getAllPersonalRecords, getChartData |
+| `bodyTrackerRepository` | getMeasurements, addEntry, deleteEntry, getAllEntries |
+| `calendarRepository` | getWorkoutsForMonth, getWorkoutSummary |
 
 ## Migraciones (`src/supabase/migrations/`)
 
@@ -30,12 +30,9 @@ createServerClient(cookieStore)    // Server Components / Route Handlers
 ## SyncEngine (`src/sync/syncEngine.ts`)
 
 ```ts
-class SyncEngine {
-  sync(lastSyncAt?: string): Promise<{ pushed: number, pulled: number }>
-  getPendingCount(): number
-}
+sync(lastSyncAt?): Promise<{ pushed: number, pulled: number }>
+getPendingCount(): number
 ```
 
-- Mobile usa singleton: `lib/sync.ts` → `export const syncEngine = new SyncEngine(supabase)`
-- Pull actualiza workout de hoy via `refetchSignal` en SyncContext
-- Pull **no** actualiza stores de ejercicios/rutinas
+- Mobile singleton: `lib/sync.ts` → `export const syncEngine = new SyncEngine(supabase)`
+- Pull solo actualiza workout de hoy via `refetchSignal` — NO actualiza stores de ejercicios/rutinas
