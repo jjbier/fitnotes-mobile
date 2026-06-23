@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator } from "react-native";
+import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, KeyboardAvoidingView, Platform } from "react-native";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useRoutineStore, useExerciseStore, useWorkoutStore, ExerciseType, todayISO } from "@fitnotes/core";
+import { useRoutineStore, useExerciseStore, useWorkoutStore, ExerciseType, todayISO, getExerciseFields } from "@fitnotes/core";
+import type { PredefinedSet } from "@fitnotes/core";
 import { createRoutineRepository, createExerciseRepository, createWorkoutRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 
@@ -30,6 +31,10 @@ export default function RoutineDetailScreen() {
   const loadWorkout = useWorkoutStore((s) => s.loadWorkout);
   const loadWorkouts = useWorkoutStore((s) => s.loadWorkouts);
 
+  const predefinedSets = useRoutineStore((s) => s.predefinedSets);
+  const loadPredefinedSets = useRoutineStore((s) => s.loadPredefinedSets);
+  const savePredefinedSetsStore = useRoutineStore((s) => s.savePredefinedSets);
+
   const [editMode, setEditMode] = useState(false);
   const [userId, setUserId] = useState("");
   const [newDayName, setNewDayName] = useState("");
@@ -37,6 +42,14 @@ export default function RoutineDetailScreen() {
   const [addingExToDay, setAddingExToDay] = useState<string | null>(null);
   const [selectedExId, setSelectedExId] = useState("");
   const [loggingDayId, setLoggingDayId] = useState<string | null>(null);
+
+  // Predefined sets modal
+  type LocalPS = { localId: string; weight: string; reps: string; distance: string; time_seconds: string };
+  const [psRdeId, setPsRdeId] = useState<string | null>(null);
+  const [psExerciseId, setPsExerciseId] = useState<string>("");
+  const [psLocalSets, setPsLocalSets] = useState<LocalPS[]>([]);
+  const [psLoading, setPsLoading] = useState(false);
+  const [psSaving, setPsSaving] = useState(false);
 
   const routineRepo = createRoutineRepository(supabase);
   const exRepo = createExerciseRepository(supabase);
@@ -127,6 +140,68 @@ export default function RoutineDetailScreen() {
   async function handleRemoveExercise(dayId: string, rdeId: string) {
     await routineRepo.removeExercise(rdeId);
     removeExerciseFromDay(dayId, rdeId);
+  }
+
+  function psToLocal(sets: PredefinedSet[]): { localId: string; weight: string; reps: string; distance: string; time_seconds: string }[] {
+    return sets.map((s, i) => ({
+      localId: `${i}-${s.order_index}`,
+      weight: s.weight != null ? String(s.weight) : "",
+      reps: s.reps != null ? String(s.reps) : "",
+      distance: s.distance != null ? String(s.distance) : "",
+      time_seconds: s.time_seconds != null ? String(s.time_seconds) : "",
+    }));
+  }
+
+  async function openPsModal(rdeId: string, exerciseId: string) {
+    setPsRdeId(rdeId);
+    setPsExerciseId(exerciseId);
+    const cached = predefinedSets[rdeId];
+    if (cached !== undefined) {
+      setPsLocalSets(psToLocal(cached));
+    } else {
+      setPsLoading(true);
+      const { data } = await routineRepo.getPredefinedSets(rdeId);
+      const sets = (data ?? []).map((s) => ({
+        id: s.id, routine_day_exercise_id: s.routine_day_exercise_id,
+        weight: s.weight ?? undefined, reps: s.reps ?? undefined,
+        distance: s.distance ?? undefined, time_seconds: s.time_seconds ?? undefined,
+        order_index: s.order_index,
+      }));
+      loadPredefinedSets(rdeId, sets);
+      setPsLocalSets(psToLocal(sets));
+      setPsLoading(false);
+    }
+  }
+
+  function psAddRow() {
+    setPsLocalSets((prev) => [...prev, { localId: String(Date.now()), weight: "", reps: "", distance: "", time_seconds: "" }]);
+  }
+
+  function psUpdateRow(localId: string, field: "weight" | "reps" | "distance" | "time_seconds", value: string) {
+    setPsLocalSets((prev) => prev.map((r) => r.localId === localId ? { ...r, [field]: value } : r));
+  }
+
+  function psRemoveRow(localId: string) {
+    setPsLocalSets((prev) => prev.filter((r) => r.localId !== localId));
+  }
+
+  async function handleSavePredefinedSets() {
+    if (!psRdeId) return;
+    setPsSaving(true);
+    const sets = psLocalSets.map((r, i) => ({
+      weight: r.weight !== "" ? parseFloat(r.weight) : undefined,
+      reps: r.reps !== "" ? parseInt(r.reps, 10) : undefined,
+      distance: r.distance !== "" ? parseFloat(r.distance) : undefined,
+      time_seconds: r.time_seconds !== "" ? parseInt(r.time_seconds, 10) : undefined,
+      order_index: i,
+    }));
+    const { error } = await routineRepo.savePredefinedSets(psRdeId, sets, userId);
+    if (error) { Alert.alert("Error", error.message); setPsSaving(false); return; }
+    savePredefinedSetsStore(psRdeId, sets.map((s, i) => ({
+      id: `local-${i}`, routine_day_exercise_id: psRdeId, ...s, order_index: i,
+    })));
+    setPsSaving(false);
+    setPsRdeId(null);
   }
 
   async function handleLogDay(dayId: string) {
@@ -277,15 +352,46 @@ export default function RoutineDetailScreen() {
                   <View style={{ padding: 10, gap: 6 }}>
                     {dayExs.map((rde) => {
                       const ex = exerciseMap[rde.exercise_id];
+                      const psCount = (predefinedSets[rde.id] ?? []).length;
                       return (
-                        <View key={rde.id} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                          {rde.group_id && <View style={{ width: 3, height: 28, borderRadius: 2, backgroundColor: "#6366f1" }} />}
-                          <Text style={{ flex: 1, fontSize: 13, color: "#0f172a" }}>{ex?.name ?? rde.exercise_id}</Text>
-                          <Text style={{ fontSize: 11, color: "#94a3b8" }}>{ex?.type?.replace(/_/g, " ").toLowerCase()}</Text>
-                          {editMode && (
-                            <TouchableOpacity onPress={() => handleRemoveExercise(day.id, rde.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                              <Ionicons name="close-circle" size={16} color="#ef4444" />
+                        <View key={rde.id}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                            {rde.group_id && <View style={{ width: 3, height: 28, borderRadius: 2, backgroundColor: "#6366f1" }} />}
+                            <Text style={{ flex: 1, fontSize: 13, color: "#0f172a" }}>{ex?.name ?? rde.exercise_id}</Text>
+                            <TouchableOpacity
+                              onPress={() => openPsModal(rde.id, rde.exercise_id)}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
+                            >
+                              <Ionicons name="list-outline" size={14} color={psCount > 0 ? "#6366f1" : "#cbd5e1"} />
+                              {psCount > 0 && <Text style={{ fontSize: 11, color: "#6366f1", fontWeight: "600" }}>{psCount}</Text>}
                             </TouchableOpacity>
+                            {editMode && (
+                              <TouchableOpacity onPress={() => handleRemoveExercise(day.id, rde.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                <Ionicons name="close-circle" size={16} color="#ef4444" />
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                          {psCount > 0 && (
+                            <View style={{ marginLeft: rde.group_id ? 11 : 0, marginTop: 3, gap: 2 }}>
+                              {(predefinedSets[rde.id] ?? []).map((ps, pi) => {
+                                const fields = ex ? getExerciseFields(ex.type) : { weight: false, reps: false, distance: false, time: false };
+                                const parts: string[] = [];
+                                if (fields.weight && ps.weight != null) parts.push(`${ps.weight} kg`);
+                                else if (fields.weight) parts.push("— kg");
+                                if (fields.reps && ps.reps != null) parts.push(`${ps.reps} reps`);
+                                else if (fields.reps) parts.push("— reps");
+                                if (fields.distance && ps.distance != null) parts.push(`${ps.distance} m`);
+                                else if (fields.distance) parts.push("— m");
+                                if (fields.time && ps.time_seconds != null) parts.push(`${ps.time_seconds} s`);
+                                else if (fields.time) parts.push("— s");
+                                return (
+                                  <Text key={pi} style={{ fontSize: 11, color: "#64748b" }}>
+                                    {pi + 1}. {parts.join("  ·  ")}
+                                  </Text>
+                                );
+                              })}
+                            </View>
                           )}
                         </View>
                       );
@@ -349,6 +455,121 @@ export default function RoutineDetailScreen() {
           )}
         </ScrollView>
       )}
+      {/* Predefined Sets Modal */}
+      <Modal visible={psRdeId !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setPsRdeId(null)}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+          <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+            {/* Header */}
+            <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
+              <Text style={{ flex: 1, fontSize: 16, fontWeight: "700", color: "#0f172a" }}>
+                {exerciseMap[psExerciseId]?.name ?? "Series predefinidas"}
+              </Text>
+              <TouchableOpacity onPress={() => setPsRdeId(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={22} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+              <Text style={{ fontSize: 12, color: "#94a3b8" }}>
+                Deja un campo vacío para que copie el valor del último entrenamiento registrado.
+              </Text>
+
+              {psLoading ? (
+                <ActivityIndicator color="#6366f1" style={{ marginTop: 24 }} />
+              ) : (
+                <>
+                  {/* Column headers */}
+                  {psLocalSets.length > 0 && (() => {
+                    const ex = exerciseMap[psExerciseId];
+                    const fields = ex ? getExerciseFields(ex.type) : { weight: false, reps: false, distance: false, time: false };
+                    return (
+                      <View style={{ flexDirection: "row", gap: 6, paddingHorizontal: 4 }}>
+                        <Text style={{ width: 24, fontSize: 11, color: "#94a3b8" }}>#</Text>
+                        {fields.weight && <Text style={{ flex: 1, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>Peso (kg)</Text>}
+                        {fields.reps && <Text style={{ flex: 1, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>Reps</Text>}
+                        {fields.distance && <Text style={{ flex: 1, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>Dist (m)</Text>}
+                        {fields.time && <Text style={{ flex: 1, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>Tiempo (s)</Text>}
+                        <View style={{ width: 24 }} />
+                      </View>
+                    );
+                  })()}
+
+                  {/* Set rows */}
+                  {psLocalSets.map((row, idx) => {
+                    const ex = exerciseMap[psExerciseId];
+                    const fields = ex ? getExerciseFields(ex.type) : { weight: false, reps: false, distance: false, time: false };
+                    return (
+                      <View key={row.localId} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <Text style={{ width: 24, fontSize: 13, color: "#94a3b8", textAlign: "center" }}>{idx + 1}</Text>
+                        {fields.weight && (
+                          <TextInput
+                            style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, fontSize: 14, textAlign: "center", color: "#0f172a" }}
+                            placeholder="—"
+                            placeholderTextColor="#cbd5e1"
+                            keyboardType="decimal-pad"
+                            value={row.weight}
+                            onChangeText={(v) => psUpdateRow(row.localId, "weight", v)}
+                          />
+                        )}
+                        {fields.reps && (
+                          <TextInput
+                            style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, fontSize: 14, textAlign: "center", color: "#0f172a" }}
+                            placeholder="—"
+                            placeholderTextColor="#cbd5e1"
+                            keyboardType="number-pad"
+                            value={row.reps}
+                            onChangeText={(v) => psUpdateRow(row.localId, "reps", v)}
+                          />
+                        )}
+                        {fields.distance && (
+                          <TextInput
+                            style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, fontSize: 14, textAlign: "center", color: "#0f172a" }}
+                            placeholder="—"
+                            placeholderTextColor="#cbd5e1"
+                            keyboardType="decimal-pad"
+                            value={row.distance}
+                            onChangeText={(v) => psUpdateRow(row.localId, "distance", v)}
+                          />
+                        )}
+                        {fields.time && (
+                          <TextInput
+                            style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, fontSize: 14, textAlign: "center", color: "#0f172a" }}
+                            placeholder="—"
+                            placeholderTextColor="#cbd5e1"
+                            keyboardType="number-pad"
+                            value={row.time_seconds}
+                            onChangeText={(v) => psUpdateRow(row.localId, "time_seconds", v)}
+                          />
+                        )}
+                        <TouchableOpacity onPress={() => psRemoveRow(row.localId)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ width: 24, alignItems: "center" }}>
+                          <Ionicons name="close-circle" size={18} color="#ef4444" />
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+
+                  {/* Add row */}
+                  <TouchableOpacity
+                    onPress={psAddRow}
+                    style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 10, paddingVertical: 10, alignItems: "center", marginTop: 4 }}
+                  >
+                    <Text style={{ fontSize: 13, color: "#6366f1", fontWeight: "600" }}>+ Añadir serie</Text>
+                  </TouchableOpacity>
+
+                  {/* Save */}
+                  <TouchableOpacity
+                    onPress={handleSavePredefinedSets}
+                    disabled={psSaving}
+                    style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: psSaving ? 0.6 : 1, marginTop: 8 }}
+                  >
+                    <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>{psSaving ? "Guardando…" : "Guardar"}</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </ScrollView>
+          </SafeAreaView>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
