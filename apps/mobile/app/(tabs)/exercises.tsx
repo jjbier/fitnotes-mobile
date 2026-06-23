@@ -49,7 +49,6 @@ export default function ExercisesScreen() {
   const setLoading = useExerciseStore((s) => s.setLoading);
 
   const [search, setSearch] = useState("");
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [userId, setUserId] = useState("");
   const [exerciseStats, setExerciseStats] = useState<Record<string, { workout_count: number; last_used: string | null }>>({});
 
@@ -331,26 +330,19 @@ export default function ExercisesScreen() {
           onPress: async () => {
             await repo.deleteCategory(id);
             deleteCategory(id);
-            if (selectedCategoryId === id) setSelectedCategoryId(null);
           },
         },
       ]
     );
   }
 
-  const baseList = selectedCategoryId
-    ? exercises.filter((e) => e.category_id === selectedCategoryId)
-    : exercises;
-  const filtered = filterExercises(baseList, search);
-  const favorites = filtered.filter((e) => e.is_favorite);
-  const nonFavorites = filtered.filter((e) => !e.is_favorite);
-  const hasFavorites = favorites.length > 0;
+  const filteredAll = filterExercises(exercises, search);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-      {/* Search */}
-      <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#e2e8f0", backgroundColor: "#f8fafc", borderRadius: 12, paddingHorizontal: 12, gap: 8 }}>
+      {/* Search + manage categories */}
+      <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8, flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <View style={{ flex: 1, flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#e2e8f0", backgroundColor: "#f8fafc", borderRadius: 12, paddingHorizontal: 12, gap: 8 }}>
           <Ionicons name="search" size={16} color="#64748b" />
           <TextInput
             style={{ flex: 1, paddingVertical: 12, fontSize: 14 }}
@@ -360,88 +352,67 @@ export default function ExercisesScreen() {
             clearButtonMode="while-editing"
           />
         </View>
-      </View>
-
-      {/* Category chips + manage button */}
-      <View style={{ flexDirection: "row", alignItems: "center" }}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8, gap: 8 }} style={{ flex: 1 }}>
-          <TouchableOpacity
-            onPress={() => setSelectedCategoryId(null)}
-            style={{ borderRadius: 20, borderWidth: 1, borderColor: selectedCategoryId === null ? "#6366f1" : "#e2e8f0", backgroundColor: selectedCategoryId === null ? "#6366f1" : "transparent", paddingHorizontal: 16, paddingVertical: 6 }}
-          >
-            <Text style={{ fontSize: 13, fontWeight: "500", color: selectedCategoryId === null ? "#fff" : "#0f172a" }}>Todos</Text>
-          </TouchableOpacity>
-          {categories.map((cat) => (
-            <TouchableOpacity
-              key={cat.id}
-              onPress={() => setSelectedCategoryId(cat.id === selectedCategoryId ? null : cat.id)}
-              style={{ flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 20, borderWidth: 1, borderColor: selectedCategoryId === cat.id ? cat.color : "#e2e8f0", backgroundColor: selectedCategoryId === cat.id ? cat.color + "22" : "transparent", paddingHorizontal: 12, paddingVertical: 6 }}
-            >
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: cat.color }} />
-              <Text style={{ fontSize: 13, fontWeight: "500", color: "#0f172a" }}>{cat.name}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
         {categories.length > 0 && (
-          <TouchableOpacity
-            onPress={() => setShowCatModal(true)}
-            style={{ paddingRight: 16, paddingLeft: 4, paddingVertical: 8 }}
-          >
+          <TouchableOpacity onPress={() => setShowCatModal(true)} style={{ padding: 8 }}>
             <Ionicons name="settings-outline" size={20} color="#64748b" />
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Exercise list */}
+      {/* Categories or Search results */}
       {isLoading ? (
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
           <ActivityIndicator color="#6366f1" />
         </View>
-      ) : (
+      ) : search ? (
+        /* Flat list when searching */
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100, gap: 8 }}>
-          {filtered.length === 0 ? (
+          {filteredAll.length === 0 ? (
+            <View style={{ paddingVertical: 40, alignItems: "center" }}>
+              <Text style={{ color: "#94a3b8", fontSize: 14 }}>Sin ejercicios que coincidan con "{search}"</Text>
+            </View>
+          ) : (
+            filteredAll.map((ex) => (
+              <ExerciseRow
+                key={ex.id}
+                ex={ex}
+                categories={categories}
+                stats={exerciseStats[ex.id]}
+                onPress={() => router.push({ pathname: "/exercise-history/[exerciseId]", params: { exerciseId: ex.id, name: ex.name, type: ex.type, weightUnit: ex.weight_unit } } as never)}
+                onEdit={() => openEditModal(ex)}
+                onDelete={() => handleDeleteExercise(ex.id, ex.name)}
+                onToggleFavorite={() => handleToggleFavorite(ex.id, ex.is_favorite)}
+              />
+            ))
+          )}
+        </ScrollView>
+      ) : (
+        /* Category cards when not searching */
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100, gap: 8, paddingTop: 4 }}>
+          {categories.length === 0 ? (
             <View style={{ paddingVertical: 40, alignItems: "center", gap: 12 }}>
-              <Text style={{ color: "#94a3b8", fontSize: 14 }}>
-                {search ? `Sin ejercicios que coincidan con "${search}"` : "Sin ejercicios aún"}
-              </Text>
-              {!search && (
-                <TouchableOpacity onPress={openCreateModal} style={{ backgroundColor: "#6366f1", borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 }}>
-                  <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Crear primer ejercicio</Text>
-                </TouchableOpacity>
-              )}
+              <Text style={{ color: "#94a3b8", fontSize: 14 }}>Sin categorías aún</Text>
+              <TouchableOpacity onPress={openCreateModal} style={{ backgroundColor: "#6366f1", borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 }}>
+                <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Crear primer ejercicio</Text>
+              </TouchableOpacity>
             </View>
           ) : (
             <>
-              {hasFavorites && (
-                <>
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#94a3b8", letterSpacing: 1, marginTop: 4 }}>FAVORITOS</Text>
-                  {favorites.map((ex) => (
-                    <ExerciseRow
-                      key={ex.id}
-                      ex={ex}
-                      categories={categories}
-                      stats={exerciseStats[ex.id]}
-                      onPress={() => router.push({ pathname: "/exercise-history/[exerciseId]", params: { exerciseId: ex.id, name: ex.name, type: ex.type, weightUnit: ex.weight_unit } } as never)}
-                      onEdit={() => openEditModal(ex)}
-                      onDelete={() => handleDeleteExercise(ex.id, ex.name)}
-                      onToggleFavorite={() => handleToggleFavorite(ex.id, ex.is_favorite)}
-                    />
-                  ))}
-                  {nonFavorites.length > 0 && (
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: "#94a3b8", letterSpacing: 1, marginTop: 8 }}>EJERCICIOS</Text>
-                  )}
-                </>
+              {exercises.some((e) => e.is_favorite) && (
+                <CategoryCard
+                  name="Favoritos"
+                  color="#6366f1"
+                  count={exercises.filter((e) => e.is_favorite).length}
+                  onPress={() => router.push({ pathname: "/exercises/[categoryId]", params: { categoryId: "favorites" } } as never)}
+                />
               )}
-              {nonFavorites.map((ex) => (
-                <ExerciseRow
-                  key={ex.id}
-                  ex={ex}
-                  categories={categories}
-                  stats={exerciseStats[ex.id]}
-                  onPress={() => router.push({ pathname: "/exercise-history/[exerciseId]", params: { exerciseId: ex.id, name: ex.name, type: ex.type, weightUnit: ex.weight_unit } } as never)}
-                  onEdit={() => openEditModal(ex)}
-                  onDelete={() => handleDeleteExercise(ex.id, ex.name)}
-                  onToggleFavorite={() => handleToggleFavorite(ex.id, ex.is_favorite)}
+              {categories.map((cat) => (
+                <CategoryCard
+                  key={cat.id}
+                  name={cat.name}
+                  color={cat.color}
+                  count={exercises.filter((e) => e.category_id === cat.id).length}
+                  onPress={() => router.push({ pathname: "/exercises/[categoryId]", params: { categoryId: cat.id } } as never)}
                 />
               ))}
             </>
@@ -706,6 +677,22 @@ export default function ExercisesScreen() {
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
+  );
+}
+
+function CategoryCard({ name, color, count, onPress }: { name: string; color: string; count: number; onPress: () => void }) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 12, backgroundColor: "#fff", paddingHorizontal: 16, paddingVertical: 14, gap: 12, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 }}
+    >
+      <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: color }} />
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 15, fontWeight: "600", color: "#0f172a" }}>{name}</Text>
+        <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>{count} {count === 1 ? "ejercicio" : "ejercicios"}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
+    </TouchableOpacity>
   );
 }
 
