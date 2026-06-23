@@ -63,6 +63,7 @@ export default function ExerciseCategoryScreen() {
   // Create modal
   const [showAddModal, setShowAddModal] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newNotes, setNewNotes] = useState("");
   const [newType, setNewType] = useState<ExerciseType>(ExerciseType.WEIGHT_REPS);
   const [newWeightUnit, setNewWeightUnit] = useState<"kg" | "lb">("kg");
   const [addSaving, setAddSaving] = useState(false);
@@ -141,18 +142,19 @@ export default function ExerciseCategoryScreen() {
 
   function openAddModal() {
     setNewName("");
+    setNewNotes("");
     setNewType(ExerciseType.WEIGHT_REPS);
     setNewWeightUnit("kg");
     setShowAddModal(true);
   }
 
-  async function handleAdd() {
+  async function handleAdd(andNew = false) {
     if (!newName.trim()) { Alert.alert("Error", "El nombre es obligatorio"); return; }
     const targetCategoryId = isFavorites ? (categories[0]?.id ?? "") : categoryId;
     const weightUnit = WEIGHT_TYPES.includes(newType) ? newWeightUnit : "kg";
     setAddSaving(true);
     const { data, error } = await repo.createExercise(
-      { name: newName.trim(), category_id: targetCategoryId, type: newType, weight_unit: weightUnit },
+      { name: newName.trim(), notes: newNotes.trim() || null, category_id: targetCategoryId, type: newType, weight_unit: weightUnit },
       userId
     );
     if (error) { Alert.alert("Error", error.message); setAddSaving(false); return; }
@@ -162,11 +164,17 @@ export default function ExerciseCategoryScreen() {
       category_id: data.category_id ?? "",
       type: data.type as ExerciseType,
       weight_unit: data.weight_unit as "kg" | "lb",
+      notes: data.notes ?? undefined,
       is_favorite: data.is_favorite,
       created_at: data.created_at,
     });
     setAddSaving(false);
-    setShowAddModal(false);
+    if (andNew) {
+      setNewName("");
+      setNewNotes("");
+    } else {
+      setShowAddModal(false);
+    }
   }
 
   function openEditModal(ex: Exercise) {
@@ -356,6 +364,17 @@ export default function ExerciseCategoryScreen() {
                   autoFocus
                 />
               </View>
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Notas</Text>
+                <TextInput
+                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, minHeight: 80, textAlignVertical: "top" }}
+                  placeholder="Forma, equipo, ajustes de máquina…"
+                  value={newNotes}
+                  onChangeText={setNewNotes}
+                  multiline
+                  numberOfLines={3}
+                />
+              </View>
               <View style={{ gap: 8 }}>
                 <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Tipo</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
@@ -386,15 +405,24 @@ export default function ExerciseCategoryScreen() {
                   </View>
                 </View>
               )}
-              <TouchableOpacity
-                onPress={handleAdd}
-                disabled={addSaving || !newName.trim()}
-                style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: addSaving || !newName.trim() ? 0.6 : 1 }}
-              >
-                <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>
-                  {addSaving ? "Creando…" : "Crear ejercicio"}
-                </Text>
-              </TouchableOpacity>
+              <View style={{ gap: 10 }}>
+                <TouchableOpacity
+                  onPress={() => handleAdd(true)}
+                  disabled={addSaving || !newName.trim()}
+                  style={{ borderWidth: 1.5, borderColor: "#6366f1", borderRadius: 12, paddingVertical: 13, alignItems: "center", opacity: addSaving || !newName.trim() ? 0.6 : 1 }}
+                >
+                  <Text style={{ color: "#6366f1", fontSize: 15, fontWeight: "700" }}>Guardar y nuevo</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleAdd(false)}
+                  disabled={addSaving || !newName.trim()}
+                  style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: addSaving || !newName.trim() ? 0.6 : 1 }}
+                >
+                  <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>
+                    {addSaving ? "Creando…" : "Crear ejercicio"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </ScrollView>
           </SafeAreaView>
         </KeyboardAvoidingView>
