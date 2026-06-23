@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, TextInput, Modal, Alert, ActivityIndicator } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useRoutineStore } from "@fitnotes/core";
 import { createRoutineRepository } from "@fitnotes/database";
@@ -8,6 +8,7 @@ import { supabase } from "../../lib/supabase";
 
 export default function RoutinesScreen() {
   const router = useRouter();
+  const { create } = useLocalSearchParams<{ create?: string }>();
   const routines = useRoutineStore((s) => s.routines);
   const isLoading = useRoutineStore((s) => s.isLoading);
   const loadRoutines = useRoutineStore((s) => s.loadRoutines);
@@ -42,6 +43,7 @@ export default function RoutinesScreen() {
       const { data } = await repo.getRoutines();
       if (data) loadRoutines(data.map((r) => ({ id: r.id, name: r.name, notes: r.notes ?? undefined })));
       setLoading(false);
+      if (create === "1") setShowCreate(true);
     }
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps

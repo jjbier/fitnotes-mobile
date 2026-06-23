@@ -435,7 +435,7 @@ export default function ExercisesScreen() {
       {showFabMenu && (
         <View style={{ position: "absolute", bottom: 100, right: 24, gap: 12, alignItems: "flex-end" }}>
           <TouchableOpacity
-            onPress={() => { setShowFabMenu(false); router.push("/routines"); }}
+            onPress={() => { setShowFabMenu(false); router.push("/tools?create=1"); }}
             style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#fff", borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 8, elevation: 4 }}
           >
             <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>Nueva rutina</Text>

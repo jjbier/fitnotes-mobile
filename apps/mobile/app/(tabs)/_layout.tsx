@@ -13,7 +13,7 @@ const TABS: {
   { name: "calendar", title: "Calendario", icon: "calendar-outline", iconActive: "calendar" },
   { name: "exercises", title: "Ejercicios", icon: "barbell-outline", iconActive: "barbell" },
   { name: "progress", title: "Progreso", icon: "trending-up-outline", iconActive: "trending-up" },
-  { name: "tools", title: "Herramientas", icon: "calculator-outline", iconActive: "calculator" },
+  { name: "tools", title: "Rutinas", icon: "list-outline", iconActive: "list" },
   { name: "settings", title: "Configuración", icon: "settings-outline", iconActive: "settings" },
 ];
 

@@ -113,6 +113,20 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {/* Tools */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Herramientas</Text>
+          <TouchableOpacity
+            onPress={() => router.push("/calculators")}
+            style={[styles.btn, styles.btnOutline]}
+          >
+            <Ionicons name="calculator-outline" size={16} color="#64748b" />
+            <Text style={styles.btnOutlineText}>Calculadoras de entrenamiento</Text>
+            <View style={{ flex: 1 }} />
+            <Ionicons name="chevron-forward" size={14} color="#94a3b8" />
+          </TouchableOpacity>
+        </View>
+
         {/* Health */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Salud</Text>
