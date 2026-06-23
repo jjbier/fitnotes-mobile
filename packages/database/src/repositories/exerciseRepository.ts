@@ -177,6 +177,30 @@ export function createExerciseRepository(client: Client) {
       return { data: sessions, error: null };
     },
 
+    async convertExerciseWeights(exerciseId: string, factor: number): Promise<{ error: { message: string } | null }> {
+      const weRes = await client.from("workout_exercises").select("id").eq("exercise_id", exerciseId);
+      if (weRes.error) return { error: weRes.error };
+      if (weRes.data.length === 0) return { error: null };
+
+      const weIds = weRes.data.map((we) => we.id);
+      const setsRes = await client
+        .from("sets")
+        .select("id, weight")
+        .in("workout_exercise_id", weIds)
+        .not("weight", "is", null);
+      if (setsRes.error) return { error: setsRes.error };
+      if (setsRes.data.length === 0) return { error: null };
+
+      const results = await Promise.all(
+        setsRes.data.map((s) =>
+          client.from("sets").update({ weight: Math.round(s.weight! * factor * 100) / 100 }).eq("id", s.id)
+        )
+      );
+      const failed = results.find((r) => r.error);
+      if (failed?.error) return { error: failed.error };
+      return { error: null };
+    },
+
     async getExerciseStats(): Promise<{
       data: Record<string, { workout_count: number; last_used: string | null }> | null;
       error: { message: string } | null;

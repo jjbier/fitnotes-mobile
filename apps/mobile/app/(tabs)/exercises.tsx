@@ -155,7 +155,7 @@ export default function ExercisesScreen() {
     setCatSaving(false);
   }
 
-  async function doSave(andNew: boolean) {
+  async function doSave(andNew: boolean, convertFactor?: number) {
     if (!exName.trim()) { Alert.alert("Error", "El nombre es obligatorio"); return; }
     if (!exCategoryId) { Alert.alert("Error", "Selecciona o crea una categoría"); return; }
 
@@ -178,6 +178,9 @@ export default function ExercisesScreen() {
         type: data.type as ExerciseType,
         weight_unit: data.weight_unit as "kg" | "lb",
       });
+      if (convertFactor) {
+        await repo.convertExerciseWeights(editingExercise.id, convertFactor);
+      }
       setSaving(false);
       setShowModal(false);
     } else {
@@ -215,6 +218,21 @@ export default function ExercisesScreen() {
     const typeChanged = editingExercise && exType !== editingExercise.type;
     const isWeightType = WEIGHT_TYPES.includes(exType);
     const unitChanged = editingExercise && isWeightType && exWeightUnit !== (editingExercise.weight_unit ?? "kg");
+    const convFactor = editingExercise
+      ? ((editingExercise.weight_unit ?? "kg") === "kg" ? 2.20462 : 0.453592)
+      : undefined;
+
+    function showUnitAlert(onConfirm: () => void, onConfirmConvert: () => void) {
+      Alert.alert(
+        "Cambiar unidad",
+        `¿Cómo actualizar los valores históricos al cambiar a ${exWeightUnit}?`,
+        [
+          { text: "Cancelar", style: "cancel" },
+          { text: "Solo etiqueta", onPress: onConfirm },
+          { text: "Convertir", onPress: onConfirmConvert },
+        ]
+      );
+    }
 
     if (typeChanged) {
       Alert.alert(
@@ -225,14 +243,7 @@ export default function ExercisesScreen() {
           {
             text: "Cambiar", style: "destructive", onPress: () => {
               if (unitChanged) {
-                Alert.alert(
-                  "Cambiar unidad",
-                  `¿Cambiar la unidad a ${exWeightUnit}? Los valores del historial no se convertirán automáticamente.`,
-                  [
-                    { text: "Cancelar", style: "cancel" },
-                    { text: "Cambiar", onPress: () => doSave(andNew) },
-                  ]
-                );
+                showUnitAlert(() => doSave(andNew), () => doSave(andNew, convFactor));
               } else {
                 doSave(andNew);
               }
@@ -244,14 +255,7 @@ export default function ExercisesScreen() {
     }
 
     if (unitChanged) {
-      Alert.alert(
-        "Cambiar unidad",
-        `¿Cambiar la unidad a ${exWeightUnit}? Los valores del historial no se convertirán automáticamente.`,
-        [
-          { text: "Cancelar", style: "cancel" },
-          { text: "Cambiar", onPress: () => doSave(andNew) },
-        ]
-      );
+      showUnitAlert(() => doSave(andNew), () => doSave(andNew, convFactor));
       return;
     }
 

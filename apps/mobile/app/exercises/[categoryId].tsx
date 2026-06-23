@@ -177,7 +177,7 @@ export default function ExerciseCategoryScreen() {
     setExWeightUnit(ex.weight_unit ?? "kg");
   }
 
-  async function doEdit() {
+  async function doEdit(convertFactor?: number) {
     if (!editingExercise || !exName.trim()) return;
     const weightUnit = WEIGHT_TYPES.includes(exType) ? exWeightUnit : "kg";
     setEditSaving(true);
@@ -195,6 +195,9 @@ export default function ExerciseCategoryScreen() {
       type: data.type as ExerciseType,
       weight_unit: data.weight_unit as "kg" | "lb",
     });
+    if (convertFactor) {
+      await repo.convertExerciseWeights(editingExercise.id, convertFactor);
+    }
     setEditSaving(false);
     setEditingExercise(null);
   }
@@ -203,6 +206,19 @@ export default function ExerciseCategoryScreen() {
     const typeChanged = exType !== ex.type;
     const isWeightType = WEIGHT_TYPES.includes(exType);
     const unitChanged = isWeightType && exWeightUnit !== (ex.weight_unit ?? "kg");
+    const convFactor = (ex.weight_unit ?? "kg") === "kg" ? 2.20462 : 0.453592;
+
+    function showUnitAlert(onConfirm: () => void, onConfirmConvert: () => void) {
+      Alert.alert(
+        "Cambiar unidad",
+        `¿Cómo actualizar los valores históricos al cambiar a ${exWeightUnit}?`,
+        [
+          { text: "Cancelar", style: "cancel" },
+          { text: "Solo etiqueta", onPress: onConfirm },
+          { text: "Convertir", onPress: onConfirmConvert },
+        ]
+      );
+    }
 
     if (typeChanged) {
       Alert.alert(
@@ -210,18 +226,17 @@ export default function ExerciseCategoryScreen() {
         "Los campos que no existen en el nuevo tipo serán eliminados del historial de este ejercicio. ¿Continuar?",
         [
           { text: "Cancelar", style: "cancel" },
-          { text: "Cambiar", style: "destructive", onPress: () => unitChanged
-            ? Alert.alert("Cambiar unidad", `¿Cambiar la unidad a ${exWeightUnit}? Los valores no se convertirán.`,
-                [{ text: "Cancelar", style: "cancel" }, { text: "Cambiar", onPress: doEdit }])
-            : doEdit()
+          { text: "Cambiar", style: "destructive", onPress: () =>
+              unitChanged
+                ? showUnitAlert(() => doEdit(), () => doEdit(convFactor))
+                : doEdit()
           },
         ]
       );
       return;
     }
     if (unitChanged) {
-      Alert.alert("Cambiar unidad", `¿Cambiar la unidad a ${exWeightUnit}? Los valores no se convertirán.`,
-        [{ text: "Cancelar", style: "cancel" }, { text: "Cambiar", onPress: doEdit }]);
+      showUnitAlert(() => doEdit(), () => doEdit(convFactor));
       return;
     }
     doEdit();
