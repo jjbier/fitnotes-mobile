@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 import type { AppStateStatus } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useRouter, useSegments } from "expo-router";
@@ -73,8 +74,8 @@ export default function RootLayout() {
   }, [lastSyncAt]);
 
   return (
-    <SyncContext.Provider value={{ status: syncStatus, pendingCount, lastSyncAt, refetchSignal }}>
-      <>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SyncContext.Provider value={{ status: syncStatus, pendingCount, lastSyncAt, refetchSignal }}>
         <Stack>
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="(auth)" options={{ headerShown: false }} />
@@ -93,7 +94,7 @@ export default function RootLayout() {
           <Stack.Screen name="body-tracker/index" options={{ headerTitle: "Medidas corporales" }} />
         </Stack>
         <StatusBar style="auto" />
-      </>
-    </SyncContext.Provider>
+      </SyncContext.Provider>
+    </GestureHandlerRootView>
   );
 }

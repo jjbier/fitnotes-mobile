@@ -6,6 +6,8 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import DraggableFlatList, { ScaleDecorator } from "react-native-draggable-flatlist";
+import type { RenderItemParams } from "react-native-draggable-flatlist";
 import { useExerciseStore, filterExercises, ExerciseType } from "@fitnotes/core";
 import { createExerciseRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
@@ -308,18 +310,9 @@ export default function ExercisesScreen() {
     cancelEditCat();
   }
 
-  async function moveCategory(catId: string, direction: "up" | "down") {
-    const idx = categories.findIndex((c) => c.id === catId);
-    const newIdx = direction === "up" ? idx - 1 : idx + 1;
-    if (newIdx < 0 || newIdx >= categories.length) return;
-
-    const reordered = [...categories];
-    const tmp = reordered[idx]!;
-    reordered[idx] = reordered[newIdx]!;
-    reordered[newIdx] = tmp;
-
-    reorderCategories(reordered.map((c) => c.id));
-    await repo.reorderCategories(reordered.map((c, i) => ({ id: c.id, order_index: i })));
+  async function handleCatDragEnd({ data }: { data: typeof categories }) {
+    reorderCategories(data.map((c) => c.id));
+    await repo.reorderCategories(data.map((c, i) => ({ id: c.id, order_index: i })));
   }
 
   async function handleDeleteCategory(id: string, name: string) {
@@ -604,32 +597,23 @@ export default function ExercisesScreen() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView contentContainerStyle={{ padding: 16, gap: 8 }}>
-            {categories.length === 0 ? (
+          <DraggableFlatList
+            data={categories}
+            keyExtractor={(item) => item.id}
+            onDragEnd={handleCatDragEnd}
+            contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+            ListEmptyComponent={
               <View style={{ paddingVertical: 40, alignItems: "center" }}>
                 <Text style={{ color: "#94a3b8", fontSize: 14 }}>Sin categorías aún</Text>
               </View>
-            ) : (
-              categories.map((cat, idx) => (
-                <View key={cat.id} style={{ gap: 4 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 12, backgroundColor: "#fff", paddingHorizontal: 14, paddingVertical: 12, gap: 10 }}>
-                    {/* Move up/down */}
-                    <View style={{ gap: 2 }}>
-                      <TouchableOpacity
-                        onPress={() => moveCategory(cat.id, "up")}
-                        disabled={idx === 0}
-                        hitSlop={{ top: 4, bottom: 4, left: 6, right: 6 }}
-                      >
-                        <Ionicons name="chevron-up" size={16} color={idx === 0 ? "#e2e8f0" : "#94a3b8"} />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => moveCategory(cat.id, "down")}
-                        disabled={idx === categories.length - 1}
-                        hitSlop={{ top: 4, bottom: 4, left: 6, right: 6 }}
-                      >
-                        <Ionicons name="chevron-down" size={16} color={idx === categories.length - 1 ? "#e2e8f0" : "#94a3b8"} />
-                      </TouchableOpacity>
-                    </View>
+            }
+            renderItem={({ item: cat, drag, isActive }: RenderItemParams<typeof categories[number]>) => (
+              <ScaleDecorator activeScale={1.02}>
+                <View style={{ marginBottom: 8 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: isActive ? "#6366f1" : "#f1f5f9", borderRadius: 12, backgroundColor: isActive ? "#f5f3ff" : "#fff", paddingHorizontal: 14, paddingVertical: 12, gap: 10 }}>
+                    <TouchableOpacity onPressIn={drag} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="menu" size={20} color={isActive ? "#6366f1" : "#94a3b8"} />
+                    </TouchableOpacity>
                     <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: cat.color }} />
                     <Text style={{ flex: 1, fontSize: 14, fontWeight: "500", color: "#0f172a" }}>{cat.name}</Text>
                     <TouchableOpacity
@@ -647,7 +631,7 @@ export default function ExercisesScreen() {
                   </View>
 
                   {editingCatId === cat.id && (
-                    <View style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, padding: 14, gap: 12, backgroundColor: "#f8fafc" }}>
+                    <View style={{ marginTop: 4, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, padding: 14, gap: 12, backgroundColor: "#f8fafc" }}>
                       <TextInput
                         style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, backgroundColor: "#fff" }}
                         value={editCatName}
@@ -675,9 +659,9 @@ export default function ExercisesScreen() {
                     </View>
                   )}
                 </View>
-              ))
+              </ScaleDecorator>
             )}
-          </ScrollView>
+          />
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
