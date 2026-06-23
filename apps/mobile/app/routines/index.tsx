@@ -19,6 +19,9 @@ export default function RoutinesScreen() {
   const [newName, setNewName] = useState("");
   const [newNotes, setNewNotes] = useState("");
   const [userId, setUserId] = useState("");
+  const [copySource, setCopySource] = useState<{ id: string; name: string } | null>(null);
+  const [copyName, setCopyName] = useState("");
+  const [copying, setCopying] = useState(false);
 
   const repo = createRoutineRepository(supabase);
 
@@ -46,13 +49,26 @@ export default function RoutinesScreen() {
   }
 
   async function handleDelete(id: string, name: string) {
-    Alert.alert("Eliminar rutina", `¿Eliminar "${name}" y todos sus días?`, [
+    await repo.deleteRoutine(id);
+    deleteRoutine(id);
+  }
+
+  function handleLongPress(id: string, name: string) {
+    Alert.alert(name, undefined, [
       { text: "Cancelar", style: "cancel" },
-      { text: "Eliminar", style: "destructive", onPress: async () => {
-        await repo.deleteRoutine(id);
-        deleteRoutine(id);
-      }},
+      { text: "Copiar rutina", onPress: () => { setCopySource({ id, name }); setCopyName(`Copia de ${name}`); } },
+      { text: "Eliminar", style: "destructive", onPress: () => handleDelete(id, name) },
     ]);
+  }
+
+  async function handleCopy() {
+    if (!copySource || !copyName.trim()) return;
+    setCopying(true);
+    const { data, error } = await repo.copyRoutine(copySource.id, copyName.trim(), userId);
+    if (error || !data) { Alert.alert("Error", error?.message ?? "Error al copiar"); setCopying(false); return; }
+    createRoutine({ id: data.id, name: data.name, notes: data.notes ?? undefined });
+    setCopying(false);
+    setCopySource(null);
   }
 
   return (
@@ -78,7 +94,7 @@ export default function RoutinesScreen() {
               <TouchableOpacity
                 key={r.id}
                 onPress={() => router.push(`/routines/${r.id}`)}
-                onLongPress={() => handleDelete(r.id, r.name)}
+                onLongPress={() => handleLongPress(r.id, r.name)}
                 style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 16, backgroundColor: "#fff", paddingHorizontal: 16, paddingVertical: 14, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 }}
               >
                 <View style={{ flex: 1 }}>
@@ -99,6 +115,39 @@ export default function RoutinesScreen() {
       >
         <Ionicons name="add" size={28} color="white" />
       </TouchableOpacity>
+
+      {/* Copy modal */}
+      <Modal visible={copySource !== null} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setCopySource(null)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+          <View style={{ padding: 20, gap: 16 }}>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>Copiar rutina</Text>
+            <Text style={{ fontSize: 13, color: "#64748b" }}>Se copiarán todos los días, ejercicios y series predefinidas.</Text>
+            <TextInput
+              style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 }}
+              placeholder="Nombre de la nueva rutina"
+              value={copyName}
+              onChangeText={setCopyName}
+              autoFocus
+              selectTextOnFocus
+            />
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <TouchableOpacity onPress={() => setCopySource(null)} style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, paddingVertical: 12, alignItems: "center" }}>
+                <Text style={{ fontSize: 14, fontWeight: "500" }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleCopy}
+                disabled={copying || !copyName.trim()}
+                style={{ flex: 1, backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 12, alignItems: "center", opacity: copying || !copyName.trim() ? 0.6 : 1 }}
+              >
+                {copying
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Copiar</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
 
       {/* Create modal */}
       <Modal visible={showCreate} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setShowCreate(false)}>
