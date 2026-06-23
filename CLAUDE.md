@@ -79,7 +79,7 @@ fitnotes-app/
 - **Progreso**: PRs expandibles, 1RM estimado
 - **Herramientas**: 1RM, Set%, Plate calculators
 - **Configuración**: perfil, kg/lb (user_metadata), sign-out, delete account
-- **Rutinas**: lista/crear/eliminar, días + ejercicios, log routine day → crea workout real
+- **Rutinas**: lista/crear/eliminar/copiar, días + ejercicios, log routine day → crea workout real; predefined sets por ejercicio; drag & drop reordenar days y ejercicios; supersets (group_id)
 - **Body Tracker**: CRUD medidas + entradas, accesible desde Settings
 - **Calendario**: grid mensual, list view
 - **Sesión persistente**: FileStorage adapter, auto-refresh indefinido
