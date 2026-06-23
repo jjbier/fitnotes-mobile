@@ -148,6 +148,34 @@ export default function RoutineDetailScreen() {
     removeExerciseFromDay(dayId, rdeId);
   }
 
+  async function handleToggleSuperset(dayId: string, rde: RoutineDayExercise) {
+    const dayExs = (routineDayExercises[dayId] ?? []).slice().sort((a, b) => a.order_index - b.order_index);
+
+    if (rde.group_id) {
+      // Quitar todos los miembros del grupo del superset
+      const members = dayExs.filter((e) => e.group_id === rde.group_id);
+      await Promise.all(members.map((e) => routineRepo.updateDayExercise(e.id, { group_id: null })));
+      loadRoutineDayExercises(dayId, dayExs.map((e) => members.find((m) => m.id === e.id) ? { ...e, group_id: undefined } : e));
+    } else {
+      // Agrupar con el siguiente ejercicio
+      const idx = dayExs.findIndex((e) => e.id === rde.id);
+      const next = dayExs[idx + 1];
+      if (!next) {
+        Alert.alert("Sin ejercicio siguiente", "Selecciona un ejercicio que no sea el último para crear un superset.");
+        return;
+      }
+      // Si el siguiente ya pertenece a un grupo, unirse a ese grupo; si no, crear uno nuevo
+      const groupId = next.group_id ?? `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      await routineRepo.updateDayExercise(rde.id, { group_id: groupId });
+      if (!next.group_id) await routineRepo.updateDayExercise(next.id, { group_id: groupId });
+      loadRoutineDayExercises(dayId, dayExs.map((e) => {
+        if (e.id === rde.id) return { ...e, group_id: groupId };
+        if (e.id === next.id && !next.group_id) return { ...e, group_id: groupId };
+        return e;
+      }));
+    }
+  }
+
   async function handleDayDragEnd({ data }: { data: RoutineDay[] }) {
     if (!routineId) return;
     const prevOrder = days.map((d) => ({ id: d.id, order_index: d.order_index }));
@@ -335,6 +363,14 @@ export default function RoutineDetailScreen() {
                 </TouchableOpacity>
               )}
               <Text style={{ flex: 1, fontSize: 13, color: "#0f172a" }}>{ex?.name ?? rde.exercise_id}</Text>
+              {editMode && (
+                <TouchableOpacity
+                  onPress={() => handleToggleSuperset(dayId, rde)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="link-outline" size={16} color={rde.group_id ? "#6366f1" : "#cbd5e1"} />
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 onPress={() => openPsModal(rde.id, rde.exercise_id)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}

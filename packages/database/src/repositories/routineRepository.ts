@@ -172,6 +172,15 @@ export function createRoutineRepository(client: Client) {
         .single();
     },
 
+    async updateDayExercise(id: string, data: { group_id?: string | null }) {
+      return client
+        .from("routine_day_exercises")
+        .update(data)
+        .eq("id", id)
+        .select()
+        .single();
+    },
+
     async removeExercise(id: string) {
       return client.from("routine_day_exercises").delete().eq("id", id);
     },
