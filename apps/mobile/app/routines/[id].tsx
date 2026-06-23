@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SafeAreaView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -55,6 +55,7 @@ export default function RoutineDetailScreen() {
   const [psLocalSets, setPsLocalSets] = useState<LocalPS[]>([]);
   const [psLoading, setPsLoading] = useState(false);
   const [psSaving, setPsSaving] = useState(false);
+  const psLoadingForRef = useRef<string | null>(null);
 
   const routineRepo = createRoutineRepository(supabase);
   const exRepo = createExerciseRepository(supabase);
@@ -189,8 +190,10 @@ export default function RoutineDetailScreen() {
     if (cached !== undefined) {
       setPsLocalSets(psToLocal(cached));
     } else {
+      psLoadingForRef.current = rdeId;
       setPsLoading(true);
       const { data } = await routineRepo.getPredefinedSets(rdeId);
+      if (psLoadingForRef.current !== rdeId) return; // modal cerrado/cambiado antes de que terminara
       const sets = (data ?? []).map((s) => ({
         id: s.id, routine_day_exercise_id: s.routine_day_exercise_id,
         weight: s.weight ?? undefined, reps: s.reps ?? undefined,
@@ -231,6 +234,7 @@ export default function RoutineDetailScreen() {
       id: `local-${i}`, routine_day_exercise_id: psRdeId, ...s, order_index: i,
     })));
     setPsSaving(false);
+    psLoadingForRef.current = null;
     setPsRdeId(null);
   }
 
