@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   SafeAreaView, ScrollView, Text, View, TouchableOpacity,
   TextInput, ActivityIndicator, Alert, Modal, KeyboardAvoidingView, Platform,
@@ -76,7 +76,7 @@ export default function ExerciseCategoryScreen() {
   const [exWeightUnit, setExWeightUnit] = useState<"kg" | "lb">("kg");
   const [editSaving, setEditSaving] = useState(false);
 
-  const repo = createExerciseRepository(supabase);
+  const repo = useMemo(() => createExerciseRepository(supabase), []);
   const isFavorites = categoryId === "favorites";
   const category = categories.find((c) => c.id === categoryId);
 

@@ -7,6 +7,9 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
+  Modal,
+  ActivityIndicator,
+  FlatList,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -17,7 +20,7 @@ import {
   calculatePlates,
 } from "@fitnotes/core";
 
-type Tab = "1rm" | "set" | "plates";
+type Tab = "1rm" | "set" | "plates" | "bmi";
 
 export default function CalculatorsScreen() {
   const router = useRouter();
@@ -34,7 +37,7 @@ export default function CalculatorsScreen() {
 
       {/* Tab bar */}
       <View style={styles.tabBar}>
-        {([["1rm", "1RM"], ["set", "Set %"], ["plates", "Plates"]] as [Tab, string][]).map(([key, label]) => (
+        {([["1rm", "1RM"], ["set", "Set %"], ["plates", "Plates"], ["bmi", "IMC"]] as [Tab, string][]).map(([key, label]) => (
           <TouchableOpacity
             key={key}
             onPress={() => setTab(key)}
@@ -49,6 +52,7 @@ export default function CalculatorsScreen() {
         {tab === "1rm" && <OneRMCalculator />}
         {tab === "set" && <SetCalculator />}
         {tab === "plates" && <PlateCalculatorPanel />}
+        {tab === "bmi" && <BMICalculator />}
       </ScrollView>
     </SafeAreaView>
   );
@@ -275,6 +279,109 @@ const PLATE_COLORS: Record<number, string> = {
   1: "#e2e8f0",
   0.5: "#f8fafc",
 };
+
+function BMICalculator() {
+  const [weight, setWeight] = useState("");
+  const [height, setHeight] = useState("");
+  const [unit, setUnit] = useState<"cm" | "m">("cm");
+
+  const w = parseFloat(weight);
+  const h = unit === "cm" ? parseFloat(height) / 100 : parseFloat(height);
+  const bmi = w > 0 && h > 0 ? w / (h * h) : null;
+
+  const bmiCategory = bmi === null ? null
+    : bmi < 18.5 ? { label: "Bajo peso", color: "#3b82f6" }
+    : bmi < 25   ? { label: "Peso normal", color: "#22c55e" }
+    : bmi < 30   ? { label: "Sobrepeso", color: "#f97316" }
+    : { label: "Obesidad", color: "#ef4444" };
+
+  const idealLow = h > 0 ? (18.5 * h * h) : 0;
+  const idealHigh = h > 0 ? (24.9 * h * h) : 0;
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>Índice de Masa Corporal</Text>
+      <Text style={styles.cardSubtitle}>IMC = peso (kg) / altura² (m)</Text>
+
+      <View style={styles.row}>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Peso (kg)</Text>
+          <TextInput
+            value={weight}
+            onChangeText={setWeight}
+            placeholder="ej. 75"
+            keyboardType="decimal-pad"
+            style={styles.input}
+            placeholderTextColor="#94a3b8"
+          />
+        </View>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Altura</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <TextInput
+              value={height}
+              onChangeText={setHeight}
+              placeholder={unit === "cm" ? "175" : "1.75"}
+              keyboardType="decimal-pad"
+              style={[styles.input, { width: 80 }]}
+              placeholderTextColor="#94a3b8"
+            />
+            <View style={{ flexDirection: "row", borderRadius: 8, overflow: "hidden", borderWidth: 1, borderColor: "#e2e8f0" }}>
+              {(["cm", "m"] as const).map((u) => (
+                <TouchableOpacity
+                  key={u}
+                  onPress={() => setUnit(u)}
+                  style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: unit === u ? "#6366f1" : "#fff" }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: unit === u ? "#fff" : "#64748b" }}>{u}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {bmi !== null && bmiCategory && (
+        <>
+          <View style={[styles.resultBox, { borderColor: bmiCategory.color + "40", backgroundColor: bmiCategory.color + "10" }]}>
+            <View>
+              <Text style={styles.resultLabel}>IMC</Text>
+              <Text style={[styles.resultValue, { color: bmiCategory.color }]}>{bmi.toFixed(1)}</Text>
+            </View>
+            <View style={{ alignItems: "flex-end" }}>
+              <Text style={styles.resultLabel}>Categoría</Text>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: bmiCategory.color }}>{bmiCategory.label}</Text>
+            </View>
+          </View>
+
+          {h > 0 && (
+            <View style={{ marginTop: 12, borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 12, padding: 14, gap: 6 }}>
+              <Text style={[styles.label, { marginBottom: 2 }]}>Rango de peso normal</Text>
+              <Text style={{ fontSize: 14, color: "#0f172a", fontWeight: "500" }}>
+                {idealLow.toFixed(1)} – {idealHigh.toFixed(1)} kg
+              </Text>
+            </View>
+          )}
+
+          <View style={{ marginTop: 12, gap: 6 }}>
+            {[
+              { label: "Bajo peso", range: "< 18.5", color: "#3b82f6" },
+              { label: "Peso normal", range: "18.5–24.9", color: "#22c55e" },
+              { label: "Sobrepeso", range: "25–29.9", color: "#f97316" },
+              { label: "Obesidad", range: "≥ 30", color: "#ef4444" },
+            ].map((cat) => (
+              <View key={cat.label} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: cat.color }} />
+                <Text style={{ flex: 1, fontSize: 13, color: "#475569" }}>{cat.label}</Text>
+                <Text style={{ fontSize: 12, color: "#94a3b8" }}>{cat.range}</Text>
+              </View>
+            ))}
+          </View>
+        </>
+      )}
+    </View>
+  );
+}
 
 function PlateBlock({ weight }: { weight: number }) {
   const color = PLATE_COLORS[weight] ?? "#94a3b8";

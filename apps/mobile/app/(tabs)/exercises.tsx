@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   SafeAreaView, ScrollView, Text, View, TouchableOpacity,
   TextInput, ActivityIndicator, Modal, KeyboardAvoidingView,
@@ -64,6 +64,9 @@ export default function ExercisesScreen() {
   const [exCategoryId, setExCategoryId] = useState("");
   const [exType, setExType] = useState<ExerciseType>(ExerciseType.WEIGHT_REPS);
   const [exWeightUnit, setExWeightUnit] = useState<"kg" | "lb">("kg");
+  const [exWeightIncrement, setExWeightIncrement] = useState("2.5");
+  const [exDefaultRest, setExDefaultRest] = useState("90");
+  const [exDefaultChart, setExDefaultChart] = useState<"weight" | "volume" | "reps">("weight");
   const [saving, setSaving] = useState(false);
   const [modalCategories, setModalCategories] = useState<Category[]>([]);
 
@@ -80,7 +83,7 @@ export default function ExercisesScreen() {
   const [editCatColor, setEditCatColor] = useState(PRESET_COLORS[0]!);
   const [catEditSaving, setCatEditSaving] = useState(false);
 
-  const repo = createExerciseRepository(supabase);
+  const repo = useMemo(() => createExerciseRepository(supabase), []);
 
   useEffect(() => {
     async function load() {
@@ -104,6 +107,9 @@ export default function ExercisesScreen() {
             notes: ex.notes ?? undefined,
             is_favorite: ex.is_favorite,
             created_at: ex.created_at,
+            weight_increment: ex.weight_increment ?? undefined,
+            default_rest_seconds: ex.default_rest_seconds ?? undefined,
+            default_chart: (ex.default_chart ?? "weight") as "weight" | "volume" | "reps",
           }))
         );
       }
@@ -123,6 +129,9 @@ export default function ExercisesScreen() {
     setExCategoryId(cats[0]?.id ?? "");
     setExType(ExerciseType.WEIGHT_REPS);
     setExWeightUnit("kg");
+    setExWeightIncrement("2.5");
+    setExDefaultRest("90");
+    setExDefaultChart("weight");
     setShowNewCat(false);
     setNewCatName("");
     setNewCatColor(PRESET_COLORS[0]!);
@@ -138,6 +147,9 @@ export default function ExercisesScreen() {
     setExCategoryId(ex.category_id);
     setExType(ex.type);
     setExWeightUnit(ex.weight_unit ?? "kg");
+    setExWeightIncrement(String(ex.weight_increment ?? 2.5));
+    setExDefaultRest(String(ex.default_rest_seconds ?? 90));
+    setExDefaultChart((ex.default_chart ?? "weight") as "weight" | "volume" | "reps");
     setShowNewCat(false);
     setNewCatName("");
     setNewCatColor(PRESET_COLORS[0]!);
@@ -166,6 +178,9 @@ export default function ExercisesScreen() {
     const weightUnit = WEIGHT_TYPES.includes(exType) ? exWeightUnit : "kg";
     setSaving(true);
 
+    const weightIncrement = parseFloat(exWeightIncrement) || 2.5;
+    const defaultRest = parseInt(exDefaultRest) || 90;
+
     if (editingExercise) {
       const { data, error } = await repo.updateExercise(editingExercise.id, {
         name: exName.trim(),
@@ -173,6 +188,9 @@ export default function ExercisesScreen() {
         category_id: exCategoryId,
         type: exType,
         weight_unit: weightUnit,
+        weight_increment: weightIncrement,
+        default_rest_seconds: defaultRest,
+        default_chart: exDefaultChart,
       });
       if (error) { Alert.alert("Error", error.message); setSaving(false); return; }
       updateExercise(editingExercise.id, {
@@ -181,6 +199,9 @@ export default function ExercisesScreen() {
         category_id: data.category_id ?? "",
         type: data.type as ExerciseType,
         weight_unit: data.weight_unit as "kg" | "lb",
+        weight_increment: data.weight_increment ?? undefined,
+        default_rest_seconds: data.default_rest_seconds ?? undefined,
+        default_chart: (data.default_chart ?? "weight") as "weight" | "volume" | "reps",
       });
       if (convertFactor) {
         await repo.convertExerciseWeights(editingExercise.id, convertFactor);
@@ -189,7 +210,7 @@ export default function ExercisesScreen() {
       setShowModal(false);
     } else {
       const { data, error } = await repo.createExercise(
-        { name: exName.trim(), notes: exNotes.trim() || null, category_id: exCategoryId, type: exType, weight_unit: weightUnit },
+        { name: exName.trim(), notes: exNotes.trim() || null, category_id: exCategoryId, type: exType, weight_unit: weightUnit, weight_increment: weightIncrement, default_rest_seconds: defaultRest, default_chart: exDefaultChart },
         userId
       );
       if (error) { Alert.alert("Error", error.message); setSaving(false); return; }
@@ -202,6 +223,9 @@ export default function ExercisesScreen() {
         notes: data.notes ?? undefined,
         is_favorite: data.is_favorite,
         created_at: data.created_at,
+        weight_increment: data.weight_increment ?? undefined,
+        default_rest_seconds: data.default_rest_seconds ?? undefined,
+        default_chart: (data.default_chart ?? "weight") as "weight" | "volume" | "reps",
       });
       setSaving(false);
 
@@ -589,6 +613,51 @@ export default function ExercisesScreen() {
                   </View>
                 </View>
               )}
+
+              {/* Weight increment + Rest — only for weight-based types */}
+              {WEIGHT_TYPES.includes(exType) && (
+                <View style={{ flexDirection: "row", gap: 12 }}>
+                  <View style={{ flex: 1, gap: 6 }}>
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Incremento peso</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, overflow: "hidden" }}>
+                      <TextInput
+                        style={{ flex: 1, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, textAlign: "center" }}
+                        keyboardType="decimal-pad"
+                        value={exWeightIncrement}
+                        onChangeText={setExWeightIncrement}
+                        placeholder="2.5"
+                      />
+                      <Text style={{ paddingRight: 10, fontSize: 13, color: "#94a3b8" }}>{exWeightUnit}</Text>
+                    </View>
+                  </View>
+                  <View style={{ flex: 1, gap: 6 }}>
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Descanso (seg)</Text>
+                    <TextInput
+                      style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, textAlign: "center" }}
+                      keyboardType="number-pad"
+                      value={exDefaultRest}
+                      onChangeText={setExDefaultRest}
+                      placeholder="90"
+                    />
+                  </View>
+                </View>
+              )}
+
+              {/* Default chart */}
+              <View style={{ gap: 8 }}>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Gráfico predeterminado</Text>
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  {([["weight", "Peso máx"], ["volume", "Volumen"], ["reps", "Reps máx"]] as const).map(([key, label]) => (
+                    <TouchableOpacity
+                      key={key}
+                      onPress={() => setExDefaultChart(key)}
+                      style={{ flex: 1, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, borderColor: exDefaultChart === key ? "#6366f1" : "#e2e8f0", backgroundColor: exDefaultChart === key ? "#6366f1" : "transparent", alignItems: "center" }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: "600", color: exDefaultChart === key ? "#fff" : "#64748b" }}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
 
               {/* Actions */}
               <View style={{ marginTop: 4 }}>

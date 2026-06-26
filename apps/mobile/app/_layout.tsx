@@ -89,8 +89,7 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen name="exercises/[categoryId]" options={{ headerTitle: "Exercises" }} />
-          <Stack.Screen name="routines/index" options={{ headerTitle: "Routines" }} />
-          <Stack.Screen name="routines/[id]" options={{ headerTitle: "Routine" }} />
+<Stack.Screen name="routines/[id]" options={{ headerTitle: "Routine" }} />
           <Stack.Screen name="body-tracker/index" options={{ headerTitle: "Medidas corporales" }} />
         </Stack>
         <StatusBar style="auto" />

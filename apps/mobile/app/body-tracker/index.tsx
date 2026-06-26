@@ -1,13 +1,14 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   SafeAreaView, ScrollView, Text, View, TouchableOpacity,
   TextInput, ActivityIndicator, Modal, KeyboardAvoidingView,
-  Platform, Alert,
+  Platform, Alert, useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { createBodyTrackerRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
+import LineChart, { type ChartDataPoint } from "../../components/LineChart";
 
 interface Measurement {
   id: string;
@@ -30,9 +31,11 @@ const PRESET_UNITS = ["kg", "lbs", "cm", "in", "%"];
 
 export default function BodyTrackerScreen() {
   const router = useRouter();
-  const [tab, setTab] = useState<"track" | "history">("track");
+  const { width } = useWindowDimensions();
+  const [tab, setTab] = useState<"track" | "history" | "chart">("track");
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [latestEntries, setLatestEntries] = useState<Record<string, Entry>>({});
+  const [previousEntries, setPreviousEntries] = useState<Record<string, Entry>>({});
   const [historyEntries, setHistoryEntries] = useState<Entry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [userId, setUserId] = useState("");
@@ -41,15 +44,22 @@ export default function BodyTrackerScreen() {
   const [logMeasurementId, setLogMeasurementId] = useState("");
   const [logValue, setLogValue] = useState("");
   const [logComment, setLogComment] = useState("");
+  const [logDate, setLogDate] = useState("");
   const [logSaving, setLogSaving] = useState(false);
+
+  const [chartMeasurementId, setChartMeasurementId] = useState<string | null>(null);
+  const [chartEntries, setChartEntries] = useState<Entry[]>([]);
+  const [chartLoading, setChartLoading] = useState(false);
 
   const [measureModal, setMeasureModal] = useState(false);
   const [editMeasurement, setEditMeasurement] = useState<Measurement | null>(null);
   const [measureName, setMeasureName] = useState("");
   const [measureUnit, setMeasureUnit] = useState("kg");
+  const [measureGoalType, setMeasureGoalType] = useState<"INCREASE" | "DECREASE">("INCREASE");
+  const [measureGoalValue, setMeasureGoalValue] = useState("");
   const [measureSaving, setMeasureSaving] = useState(false);
 
-  const repo = createBodyTrackerRepository(supabase);
+  const repo = useMemo(() => createBodyTrackerRepository(supabase), []);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -61,13 +71,16 @@ export default function BodyTrackerScreen() {
     if (mData) {
       setMeasurements(mData as Measurement[]);
       const latestMap: Record<string, Entry> = {};
+      const prevMap: Record<string, Entry> = {};
       await Promise.all(
         mData.filter((m) => m.is_enabled).map(async (m) => {
-          const { data: entries } = await repo.getEntries(m.id, 1);
+          const { data: entries } = await repo.getEntries(m.id, 2);
           if (entries?.[0]) latestMap[m.id] = entries[0] as Entry;
+          if (entries?.[1]) prevMap[m.id] = entries[1] as Entry;
         })
       );
       setLatestEntries(latestMap);
+      setPreviousEntries(prevMap);
     }
     setIsLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -81,22 +94,38 @@ export default function BodyTrackerScreen() {
     if (data) setHistoryEntries(data as Entry[]);
   }
 
+  async function loadChart(measurementId: string) {
+    setChartMeasurementId(measurementId);
+    setChartLoading(true);
+    const { data } = await repo.getEntries(measurementId, 60);
+    if (data) setChartEntries((data as Entry[]).slice().reverse());
+    setChartLoading(false);
+  }
+
   function openLogModal(measurementId: string) {
     setLogMeasurementId(measurementId);
     setLogValue("");
     setLogComment("");
+    setLogDate(new Date().toISOString().split("T")[0]!);
     setLogModal(true);
   }
 
   async function handleLogEntry() {
     if (!logMeasurementId || !logValue) return;
     setLogSaving(true);
+    const recordedAt = logDate ? `${logDate}T12:00:00` : new Date().toISOString();
     const { data, error } = await repo.addEntry(
-      { measurement_id: logMeasurementId, value: parseFloat(logValue), comment: logComment || undefined },
+      { measurement_id: logMeasurementId, value: parseFloat(logValue), comment: logComment || undefined, recorded_at: recordedAt },
       userId
     );
     if (error) { Alert.alert("Error", error.message); setLogSaving(false); return; }
-    if (data) setLatestEntries((prev) => ({ ...prev, [logMeasurementId]: data as Entry }));
+    if (data) {
+      setPreviousEntries((prev) => ({
+        ...prev,
+        ...(latestEntries[logMeasurementId] ? { [logMeasurementId]: latestEntries[logMeasurementId]! } : {}),
+      }));
+      setLatestEntries((prev) => ({ ...prev, [logMeasurementId]: data as Entry }));
+    }
     setLogModal(false);
     setLogSaving(false);
     if (tab === "history") loadHistory();
@@ -106,6 +135,8 @@ export default function BodyTrackerScreen() {
     setEditMeasurement(null);
     setMeasureName("");
     setMeasureUnit("kg");
+    setMeasureGoalType("INCREASE");
+    setMeasureGoalValue("");
     setMeasureModal(true);
   }
 
@@ -113,26 +144,33 @@ export default function BodyTrackerScreen() {
     setEditMeasurement(m);
     setMeasureName(m.name);
     setMeasureUnit(m.unit);
+    setMeasureGoalType((m.goal_type === "DECREASE" ? "DECREASE" : "INCREASE") as "INCREASE" | "DECREASE");
+    setMeasureGoalValue(m.goal_value != null ? String(m.goal_value) : "");
     setMeasureModal(true);
   }
 
   async function handleSaveMeasurement() {
     if (!measureName.trim() || !measureUnit.trim()) return;
     setMeasureSaving(true);
+    const goalVal = measureGoalValue.trim() ? parseFloat(measureGoalValue) : null;
     if (editMeasurement) {
       const { error } = await repo.updateMeasurement(editMeasurement.id, {
         name: measureName.trim(),
         unit: measureUnit.trim(),
+        goal_type: measureGoalType,
+        goal_value: goalVal,
       });
       if (error) { Alert.alert("Error", error.message); setMeasureSaving(false); return; }
       setMeasurements((prev) =>
         prev.map((m) =>
-          m.id === editMeasurement.id ? { ...m, name: measureName.trim(), unit: measureUnit.trim() } : m
+          m.id === editMeasurement.id
+            ? { ...m, name: measureName.trim(), unit: measureUnit.trim(), goal_type: measureGoalType, goal_value: goalVal }
+            : m
         )
       );
     } else {
       const { data, error } = await repo.createMeasurement(
-        { name: measureName.trim(), unit: measureUnit.trim(), is_enabled: true, goal_type: "INCREASE" as const, goal_value: null },
+        { name: measureName.trim(), unit: measureUnit.trim(), is_enabled: true, goal_type: measureGoalType, goal_value: goalVal },
         userId
       );
       if (error) { Alert.alert("Error", error.message); setMeasureSaving(false); return; }
@@ -200,15 +238,19 @@ export default function BodyTrackerScreen() {
 
       {/* Tab bar */}
       <View style={{ flexDirection: "row", marginHorizontal: 16, marginBottom: 12, borderRadius: 10, borderWidth: 1, borderColor: "#e2e8f0", overflow: "hidden" }}>
-        {(["track", "history"] as const).map((t) => (
+        {([["track", "Registrar"], ["history", "Historial"], ["chart", "Gráfico"]] as const).map(([t, label]) => (
           <TouchableOpacity
             key={t}
-            onPress={() => { setTab(t); if (t === "history") loadHistory(); }}
+            onPress={() => {
+              setTab(t);
+              if (t === "history") loadHistory();
+              if (t === "chart" && enabledMeasurements.length > 0 && !chartMeasurementId) {
+                void loadChart(enabledMeasurements[0]!.id);
+              }
+            }}
             style={{ flex: 1, paddingVertical: 10, alignItems: "center", backgroundColor: tab === t ? "#6366f1" : "transparent" }}
           >
-            <Text style={{ fontSize: 14, fontWeight: "600", color: tab === t ? "#fff" : "#64748b" }}>
-              {t === "track" ? "Registrar" : "Historial"}
-            </Text>
+            <Text style={{ fontSize: 13, fontWeight: "600", color: tab === t ? "#fff" : "#64748b" }}>{label}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -267,6 +309,20 @@ export default function BodyTrackerScreen() {
                         ? new Date(latest.recorded_at).toLocaleDateString("es-ES")
                         : "Sin registros aún"}
                     </Text>
+                    {(() => {
+                      const prev = previousEntries[m.id];
+                      if (!latest || !prev) return null;
+                      const delta = latest.value - prev.value;
+                      const sign = delta >= 0 ? "+" : "";
+                      const color = m.goal_type === "DECREASE"
+                        ? (delta <= 0 ? "#22c55e" : "#ef4444")
+                        : (delta >= 0 ? "#22c55e" : "#ef4444");
+                      return (
+                        <Text style={{ fontSize: 13, fontWeight: "600", color }}>
+                          {sign}{delta % 1 === 0 ? delta : delta.toFixed(1)} {m.unit} vs anterior
+                        </Text>
+                      );
+                    })()}
 
                     <TouchableOpacity
                       onPress={() => openLogModal(m.id)}
@@ -305,7 +361,7 @@ export default function BodyTrackerScreen() {
             </>
           )}
         </ScrollView>
-      ) : (
+      ) : tab === "history" ? (
         /* History tab */
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, gap: 6 }}>
           {historyEntries.length === 0 ? (
@@ -338,6 +394,70 @@ export default function BodyTrackerScreen() {
             ))
           )}
         </ScrollView>
+      ) : (
+        /* Chart tab */
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, gap: 16 }}>
+          {/* Measurement selector chips */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+            {enabledMeasurements.map((m) => (
+              <TouchableOpacity
+                key={m.id}
+                onPress={() => void loadChart(m.id)}
+                style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5, borderColor: chartMeasurementId === m.id ? "#6366f1" : "#e2e8f0", backgroundColor: chartMeasurementId === m.id ? "#6366f1" : "transparent" }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: "600", color: chartMeasurementId === m.id ? "#fff" : "#64748b" }}>{m.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {chartLoading ? (
+            <ActivityIndicator color="#6366f1" style={{ marginTop: 32 }} />
+          ) : chartEntries.length === 0 ? (
+            <View style={{ paddingVertical: 60, alignItems: "center", gap: 10 }}>
+              <Ionicons name="trending-up-outline" size={44} color="#cbd5e1" />
+              <Text style={{ fontSize: 14, color: "#94a3b8" }}>Sin datos para esta medida</Text>
+            </View>
+          ) : (() => {
+            const selectedM = measurements.find((m) => m.id === chartMeasurementId);
+            const chartData: ChartDataPoint[] = chartEntries.map((e) => ({
+              label: new Date(e.recorded_at).toLocaleDateString("es-ES", { day: "numeric", month: "short" }),
+              value: e.value,
+            }));
+            const vals = chartEntries.map((e) => e.value);
+            const latest = vals[vals.length - 1] ?? 0;
+            const first = vals[0] ?? 0;
+            const best = selectedM?.goal_type === "DECREASE" ? Math.min(...vals) : Math.max(...vals);
+            const trend = first > 0 ? ((latest - first) / first * 100) : 0;
+            const trendPositive = selectedM?.goal_type === "DECREASE" ? trend <= 0 : trend >= 0;
+
+            return (
+              <>
+                <View style={{ backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: "#f1f5f9", padding: 16 }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 8 }}>
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#0f172a" }}>{selectedM?.name}</Text>
+                    <Text style={{ fontSize: 11, color: "#94a3b8" }}>{selectedM?.unit}</Text>
+                  </View>
+                  <LineChart data={chartData} width={width - 64} height={200} color="#6366f1" />
+                </View>
+
+                <View style={{ flexDirection: "row", gap: 12 }}>
+                  {[
+                    { label: selectedM?.goal_type === "DECREASE" ? "Mínimo" : "Máximo", value: `${best}` },
+                    { label: "Actual", value: `${latest}` },
+                    { label: "Progresión", value: `${trend >= 0 ? "+" : ""}${trend.toFixed(1)}%`, positive: trendPositive },
+                  ].map((stat) => (
+                    <View key={stat.label} style={{ flex: 1, backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: "#f1f5f9", padding: 12, alignItems: "center", gap: 4 }}>
+                      <Text style={{ fontSize: 10, fontWeight: "600", color: "#94a3b8", textTransform: "uppercase" }}>{stat.label}</Text>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: "positive" in stat && stat.positive === false ? "#ef4444" : "#0f172a" }}>{stat.value}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                <Text style={{ fontSize: 11, color: "#94a3b8", textAlign: "center" }}>{chartEntries.length} registros</Text>
+              </>
+            );
+          })()}
+        </ScrollView>
       )}
 
       {/* Log Entry Modal */}
@@ -365,6 +485,17 @@ export default function BodyTrackerScreen() {
                   onChangeText={setLogValue}
                   keyboardType="decimal-pad"
                   autoFocus
+                />
+              </View>
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Fecha (AAAA-MM-DD)</Text>
+                <TextInput
+                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 }}
+                  placeholder="2025-06-25"
+                  placeholderTextColor="#94a3b8"
+                  value={logDate}
+                  onChangeText={setLogDate}
+                  keyboardType="numbers-and-punctuation"
                 />
               </View>
               <View style={{ gap: 6 }}>
@@ -442,6 +573,38 @@ export default function BodyTrackerScreen() {
                   onChangeText={setMeasureUnit}
                 />
               </View>
+              {/* Goal type */}
+              <View style={{ gap: 8 }}>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Objetivo (tendencia deseada)</Text>
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  {(["INCREASE", "DECREASE"] as const).map((t) => (
+                    <TouchableOpacity
+                      key={t}
+                      onPress={() => setMeasureGoalType(t)}
+                      style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 10, borderWidth: 1.5, borderColor: measureGoalType === t ? "#6366f1" : "#e2e8f0", backgroundColor: measureGoalType === t ? "#6366f1" : "transparent", paddingVertical: 10 }}
+                    >
+                      <Text style={{ fontSize: 16 }}>{t === "INCREASE" ? "↑" : "↓"}</Text>
+                      <Text style={{ fontSize: 13, fontWeight: "600", color: measureGoalType === t ? "#fff" : "#64748b" }}>
+                        {t === "INCREASE" ? "Aumentar" : "Disminuir"}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Goal value */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Valor objetivo (opcional)</Text>
+                <TextInput
+                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14 }}
+                  placeholder={`ej. ${measureGoalType === "DECREASE" ? "70" : "80"}`}
+                  placeholderTextColor="#94a3b8"
+                  keyboardType="decimal-pad"
+                  value={measureGoalValue}
+                  onChangeText={setMeasureGoalValue}
+                />
+              </View>
+
               <TouchableOpacity
                 onPress={handleSaveMeasurement}
                 disabled={measureSaving || !measureName.trim() || !measureUnit.trim()}

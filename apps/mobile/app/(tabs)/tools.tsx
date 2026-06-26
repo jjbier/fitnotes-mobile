@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, TextInput, Modal, Alert, ActivityIndicator } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -31,7 +31,9 @@ export default function RoutinesScreen() {
   const [copyName, setCopyName] = useState("");
   const [copying, setCopying] = useState(false);
 
-  const repo = createRoutineRepository(supabase);
+  const [routineStats, setRoutineStats] = useState<Record<string, { lastUsed: string | null; sessionCount: number }>>({});
+
+  const repo = useMemo(() => createRoutineRepository(supabase), []);
 
   useEffect(() => {
     async function load() {
@@ -39,7 +41,14 @@ export default function RoutinesScreen() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) setUserId(session.user.id);
       const { data } = await repo.getRoutines();
-      if (data) loadRoutines(data.map((r) => ({ id: r.id, name: r.name, notes: r.notes ?? undefined })));
+      if (data) {
+        loadRoutines(data.map((r) => ({ id: r.id, name: r.name, notes: r.notes ?? undefined })));
+        const ids = data.map((r) => r.id);
+        const { data: stats } = await repo.getRoutineStats(ids);
+        const statsMap: Record<string, { lastUsed: string | null; sessionCount: number }> = {};
+        for (const s of stats) statsMap[s.routineId] = { lastUsed: s.lastUsed, sessionCount: s.sessionCount };
+        setRoutineStats(statsMap);
+      }
       setLoading(false);
       if (create === "1") setShowCreate(true);
     }
@@ -124,6 +133,18 @@ export default function RoutinesScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>{r.name}</Text>
                   {r.notes ? <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }} numberOfLines={1}>{r.notes}</Text> : null}
+                  {(() => {
+                    const s = routineStats[r.id];
+                    if (!s) return null;
+                    const parts: string[] = [];
+                    if (s.sessionCount > 0) parts.push(`${s.sessionCount} sesión${s.sessionCount !== 1 ? "es" : ""}`);
+                    if (s.lastUsed) {
+                      const days = Math.floor((Date.now() - new Date(s.lastUsed).getTime()) / 86400000);
+                      parts.push(days === 0 ? "hoy" : days === 1 ? "ayer" : `hace ${days} días`);
+                    }
+                    if (parts.length === 0) return null;
+                    return <Text style={{ fontSize: 11, color: "#6366f1", marginTop: 3 }}>{parts.join(" · ")}</Text>;
+                  })()}
                 </View>
                 <TouchableOpacity
                   onPress={() => openMenu(r.id, r.name, r.notes ?? "")}

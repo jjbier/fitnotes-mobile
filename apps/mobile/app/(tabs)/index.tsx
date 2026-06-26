@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
-import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator, Alert } from "react-native";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator, Alert, TextInput, Share, Modal, FlatList } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useWorkoutStore, useExerciseStore, formatWorkoutDate, todayISO, ExerciseType } from "@fitnotes/core";
@@ -20,19 +20,31 @@ export default function HomeScreen() {
   const loadWorkouts = useWorkoutStore((s) => s.loadWorkouts);
   const startWorkout = useWorkoutStore((s) => s.startWorkout);
   const removeExerciseFromWorkout = useWorkoutStore((s) => s.removeExerciseFromWorkout);
+  const addExerciseToWorkout = useWorkoutStore((s) => s.addExerciseToWorkout);
   const removeWorkoutFromHistory = useWorkoutStore((s) => s.removeWorkoutFromHistory);
   const finishWorkout = useWorkoutStore((s) => s.finishWorkout);
   const setLoading = useWorkoutStore((s) => s.setLoading);
+  const setWorkoutComment = useWorkoutStore((s) => s.setWorkoutComment);
 
   const exercises = useExerciseStore((s) => s.exercises);
   const loadExercises = useExerciseStore((s) => s.loadExercises);
 
   const [userId, setUserId] = useState("");
   const [currentDate, setCurrentDate] = useState(today);
+  const [workoutComment, setWorkoutCommentLocal] = useState("");
+  const [workoutDuration, setWorkoutDuration] = useState(0);
+  const durationRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [showCopyModal, setShowCopyModal] = useState(false);
+  const [copyLoading, setCopyLoading] = useState(false);
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [moveDate, setMoveDate] = useState("");
+  const [showSummary, setShowSummary] = useState(false);
+  const [summaryStats, setSummaryStats] = useState<{ duration: number; exercises: number; sets: number; volume: number } | null>(null);
+  const [recentSummaries, setRecentSummaries] = useState<Record<string, { exerciseCount: number; volume: number }>>({});
   const { status: syncStatus, pendingCount, refetchSignal } = useSyncStatus();
 
-  const repo = createWorkoutRepository(supabase);
-  const exRepo = createExerciseRepository(supabase);
+  const repo = useMemo(() => createWorkoutRepository(supabase), []);
+  const exRepo = useMemo(() => createExerciseRepository(supabase), []);
 
   const loadWorkoutForDate = useCallback(async (date: string) => {
     const { data: workout } = await repo.getWorkoutByDate(date);
@@ -48,12 +60,12 @@ export default function HomeScreen() {
         id: s.id, workout_exercise_id: s.workout_exercise_id,
         weight: s.weight ?? undefined, reps: s.reps ?? undefined,
         distance: s.distance ?? undefined, time_seconds: s.time_seconds ?? undefined,
-        is_complete: s.is_complete, comment: s.comment ?? undefined, order_index: s.order_index,
+        is_complete: s.is_complete, is_warmup: s.is_warmup ?? false, comment: s.comment ?? undefined, order_index: s.order_index,
       }));
     }
     loadWorkout(
       { id: workout.id, date: workout.date, comment: workout.comment ?? undefined, start_time: workout.start_time ?? undefined, end_time: workout.end_time ?? undefined },
-      (wExercises ?? []).map((we) => ({ id: we.id, workout_id: we.workout_id, exercise_id: we.exercise_id, order_index: we.order_index, group_id: we.group_id ?? undefined })),
+      (wExercises ?? []).map((we) => ({ id: we.id, workout_id: we.workout_id, exercise_id: we.exercise_id, order_index: we.order_index, group_id: we.group_id ?? undefined, group_name: we.group_name ?? undefined })),
       setsMap
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -65,10 +77,10 @@ export default function HomeScreen() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) setUserId(session.user.id);
 
-      const [catRes, exRes, recentRes] = await Promise.all([
-        exRepo.getCategories(),
-        exRepo.getExercises(),
-        repo.getWorkouts(10),
+      const [recentRes, catRes, exRes] = await Promise.all([
+        repo.getWorkouts(60),
+        exercises.length > 0 ? Promise.resolve({ data: null }) : exRepo.getCategories(),
+        exercises.length > 0 ? Promise.resolve({ data: null }) : exRepo.getExercises(),
       ]);
       if (catRes.data && exRes.data) {
         loadExercises(catRes.data, exRes.data.map((ex) => ({
@@ -83,6 +95,10 @@ export default function HomeScreen() {
           start_time: w.start_time ?? undefined, end_time: w.end_time ?? undefined,
         })));
       }
+      const { data: summaries } = await repo.getWorkoutsWithSummary(10);
+      const summaryMap: Record<string, { exerciseCount: number; volume: number }> = {};
+      for (const s of summaries) summaryMap[s.id] = { exerciseCount: s.exerciseCount, volume: s.volume };
+      setRecentSummaries(summaryMap);
       await loadWorkoutForDate(today);
       setLoading(false);
     }
@@ -96,6 +112,23 @@ export default function HomeScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refetchSignal]);
 
+  // Sync local comment with store
+  useEffect(() => {
+    setWorkoutCommentLocal(activeWorkout?.comment ?? "");
+  }, [activeWorkout?.id]);
+
+  // Live workout duration counter
+  useEffect(() => {
+    if (durationRef.current) clearInterval(durationRef.current);
+    if (!activeWorkout?.start_time || activeWorkout.end_time) { setWorkoutDuration(0); return; }
+    const startMs = new Date(activeWorkout.start_time).getTime();
+    const tick = () => setWorkoutDuration(Math.floor((Date.now() - startMs) / 1000));
+    tick();
+    durationRef.current = setInterval(tick, 1000);
+    return () => { if (durationRef.current) clearInterval(durationRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeWorkout?.id, activeWorkout?.start_time]);
+
   async function handleStartWorkout() {
     const { data, error } = await repo.createWorkout({ date: currentDate, start_time: new Date().toISOString() }, userId);
     if (error || !data) { Alert.alert("Error", error?.message ?? "Ha ocurrido un error"); return; }
@@ -108,7 +141,17 @@ export default function HomeScreen() {
     Alert.alert("¿Finalizar entrenamiento?", "¿Estás seguro?", [
       { text: "Cancelar", style: "cancel" },
       { text: "Finalizar", onPress: async () => {
-        await repo.updateWorkout(activeWorkout.id, { end_time: new Date().toISOString() });
+        const endTime = new Date().toISOString();
+        await repo.updateWorkout(activeWorkout.id, { end_time: endTime });
+
+        // Compute summary before clearing store (warmup sets excluded from volume)
+        const allSets = Object.values(sets).flat();
+        const totalSets = allSets.filter((s) => s.is_complete && !s.is_warmup).length;
+        const totalVolume = allSets.filter((s) => !s.is_warmup).reduce((acc, s) => acc + (s.weight && s.reps ? s.weight * s.reps : 0), 0);
+        const dur = activeWorkout.start_time ? Math.floor((new Date(endTime).getTime() - new Date(activeWorkout.start_time).getTime()) / 1000) : 0;
+        setSummaryStats({ duration: dur, exercises: workoutExercises.length, sets: totalSets, volume: totalVolume });
+        setShowSummary(true);
+
         finishWorkout();
       }},
     ]);
@@ -134,6 +177,56 @@ export default function HomeScreen() {
     ]);
   }
 
+  async function handleSaveComment() {
+    setWorkoutComment(workoutComment);
+    if (activeWorkout?.id) await repo.updateWorkout(activeWorkout.id, { comment: workoutComment || undefined });
+  }
+
+  async function handleMoveWorkout() {
+    if (!activeWorkout?.id || !moveDate.match(/^\d{4}-\d{2}-\d{2}$/)) return;
+    await repo.updateWorkout(activeWorkout.id, { comment: activeWorkout.comment });
+    await supabase.from("workouts").update({ date: moveDate }).eq("id", activeWorkout.id);
+    setShowMoveModal(false);
+    setCurrentDate(moveDate);
+    await loadWorkoutForDate(moveDate);
+  }
+
+  async function handleShareWorkout() {
+    if (!activeWorkout?.id) return;
+    const text = await repo.shareWorkout(activeWorkout.id);
+    if (text) await Share.share({ message: text });
+  }
+
+  function formatDuration(secs: number) {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+
+  async function handleCopyWorkout(sourceWorkoutId: string) {
+    setCopyLoading(true);
+    setShowCopyModal(false);
+    let workoutId = activeWorkout?.id;
+    if (!workoutId) {
+      const { data, error } = await repo.createWorkout({ date: currentDate, start_time: new Date().toISOString() }, userId);
+      if (error || !data) { Alert.alert("Error", error?.message ?? "No se pudo crear el entrenamiento"); setCopyLoading(false); return; }
+      workoutId = data.id;
+    }
+    const { data: weList } = await repo.getWorkoutExercises(sourceWorkoutId);
+    for (let i = 0; i < (weList ?? []).length; i++) {
+      const we = weList![i]!;
+      const alreadyIn = workoutExercises.some((e) => e.exercise_id === we.exercise_id);
+      if (!alreadyIn) {
+        const { data: newWe } = await repo.addExercise({ workout_id: workoutId, exercise_id: we.exercise_id, order_index: workoutExercises.length + i }, userId);
+        if (newWe) addExerciseToWorkout(we.exercise_id, newWe.id);
+      }
+    }
+    await loadWorkoutForDate(currentDate);
+    setCopyLoading(false);
+  }
+
   async function handleNavigateDate(delta: number) {
     const date = new Date(currentDate);
     date.setDate(date.getDate() + delta);
@@ -143,6 +236,39 @@ export default function HomeScreen() {
   }
 
   const exerciseMap = Object.fromEntries(exercises.map((e) => [e.id, e]));
+
+  // Streak: consecutive days with workouts ending at today or yesterday
+  const workoutDateSet = new Set(workouts.map((w) => w.date));
+  const streak = (() => {
+    let count = 0;
+    const d = new Date(today + "T00:00:00");
+    // If today has no workout start counting from yesterday
+    if (!workoutDateSet.has(today)) d.setDate(d.getDate() - 1);
+    while (true) {
+      const dateStr = d.toISOString().split("T")[0]!;
+      if (!workoutDateSet.has(dateStr)) break;
+      count++;
+      d.setDate(d.getDate() - 1);
+    }
+    return count;
+  })();
+
+  // This-week workout days (Mon–Sun of current calendar week)
+  const weekDays = (() => {
+    const todayDate = new Date(today + "T00:00:00");
+    const dow = todayDate.getDay(); // 0=Sun
+    const mondayOffset = dow === 0 ? -6 : 1 - dow;
+    const monday = new Date(todayDate);
+    monday.setDate(todayDate.getDate() + mondayOffset);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const dateStr = d.toISOString().split("T")[0]!;
+      return { dateStr, has: workoutDateSet.has(dateStr), isToday: dateStr === today, isFuture: dateStr > today };
+    });
+  })();
+
+  const WEEK_LABELS = ["L", "M", "X", "J", "V", "S", "D"];
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
@@ -173,6 +299,37 @@ export default function HomeScreen() {
         ) : null}
       </View>
 
+      {/* Weekly summary strip */}
+      {!isLoading && (
+        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 8, gap: 0 }}>
+          {weekDays.map((wd, i) => (
+            <TouchableOpacity
+              key={wd.dateStr}
+              onPress={() => { setCurrentDate(wd.dateStr); void loadWorkoutForDate(wd.dateStr); }}
+              style={{ flex: 1, alignItems: "center", gap: 4 }}
+            >
+              <Text style={{ fontSize: 10, fontWeight: "600", color: wd.isToday ? "#6366f1" : "#94a3b8" }}>{WEEK_LABELS[i]}</Text>
+              <View style={{
+                width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center",
+                backgroundColor: wd.dateStr === currentDate ? "#6366f1" : wd.has ? "#6366f115" : "transparent",
+                borderWidth: wd.isToday && wd.dateStr !== currentDate ? 1.5 : 0,
+                borderColor: "#6366f1",
+              }}>
+                {wd.has && !wd.isFuture
+                  ? <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: wd.dateStr === currentDate ? "#fff" : "#6366f1" }} />
+                  : null}
+              </View>
+            </TouchableOpacity>
+          ))}
+          {streak > 0 && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "#fff7ed", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4, marginLeft: 8 }}>
+              <Ionicons name="flame" size={13} color="#f97316" />
+              <Text style={{ fontSize: 12, fontWeight: "700", color: "#f97316" }}>{streak}</Text>
+            </View>
+          )}
+        </View>
+      )}
+
       {isLoading ? (
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
           <ActivityIndicator color="#6366f1" />
@@ -190,36 +347,88 @@ export default function HomeScreen() {
               <TouchableOpacity onPress={handleStartWorkout} style={{ backgroundColor: "#6366f1", borderRadius: 14, paddingHorizontal: 32, paddingVertical: 12 }}>
                 <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Iniciar entrenamiento</Text>
               </TouchableOpacity>
+              {workouts.length > 0 && (
+                <TouchableOpacity onPress={() => setShowCopyModal(true)} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Ionicons name="copy-outline" size={15} color="#6366f1" />
+                  <Text style={{ fontSize: 13, color: "#6366f1", fontWeight: "500" }}>Copiar entrenamiento anterior</Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : (
             /* Active workout */
             <View style={{ gap: 8 }}>
-              {workoutExercises.map((we) => {
+              {/* Workout header: duration + share */}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                {activeWorkout.start_time && (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#f8fafc", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, flex: 1 }}>
+                    <Ionicons name="time-outline" size={14} color="#6366f1" />
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#6366f1" }}>{formatDuration(workoutDuration)}</Text>
+                    {activeWorkout.end_time && <Text style={{ fontSize: 11, color: "#94a3b8" }}>finalizado</Text>}
+                  </View>
+                )}
+                <TouchableOpacity
+                  onPress={() => { setMoveDate(activeWorkout.date); setShowMoveModal(true); }}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}
+                >
+                  <Ionicons name="calendar-outline" size={16} color="#64748b" />
+                  <Text style={{ fontSize: 13, color: "#64748b" }}>Mover</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleShareWorkout} style={{ flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
+                  <Ionicons name="share-outline" size={16} color="#64748b" />
+                  <Text style={{ fontSize: 13, color: "#64748b" }}>Compartir</Text>
+                </TouchableOpacity>
+              </View>
+
+              {workoutExercises.map((we, weIdx) => {
                 const ex = exerciseMap[we.exercise_id];
                 const weSets = (sets[we.id] ?? []);
                 const completedCount = weSets.filter((s) => s.is_complete).length;
+                const totalCount = weSets.length;
+                const allDone = totalCount > 0 && completedCount === totalCount;
+                const progress = totalCount > 0 ? completedCount / totalCount : 0;
                 const exName = ex?.name ?? we.exercise_id;
+                const isGrouped = !!we.group_id;
+                const prevGrouped = weIdx > 0 && workoutExercises[weIdx - 1]?.group_id === we.group_id;
+                const nextGrouped = weIdx < workoutExercises.length - 1 && workoutExercises[weIdx + 1]?.group_id === we.group_id;
                 return (
-                  <View key={we.id} style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 16, backgroundColor: "#fff", paddingRight: 8 }}>
-                    <TouchableOpacity
-                      onPress={() => router.push(`/workout/${we.exercise_id}`)}
-                      style={{ flex: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, gap: 12 }}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>{exName}</Text>
-                        <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>
-                          {weSets.length} series · {completedCount} completadas
-                        </Text>
+                  <View key={we.id} style={{ flexDirection: "row" }}>
+                    {isGrouped ? (
+                      <View style={{ width: 4, backgroundColor: "#8b5cf6", borderRadius: 2, marginRight: 8, marginTop: prevGrouped ? 0 : 8, marginBottom: nextGrouped ? 0 : 8 }} />
+                    ) : <View style={{ width: 12 }} />}
+                  <View style={{ flex: 1, borderWidth: 1, borderColor: allDone ? "#22c55e30" : isGrouped ? "#8b5cf620" : "#f1f5f9", borderRadius: 16, backgroundColor: allDone ? "#f0fdf4" : "#fff", overflow: "hidden" }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 8 }}>
+                      <TouchableOpacity
+                        onPress={() => router.push(`/workout/${we.exercise_id}`)}
+                        style={{ flex: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, gap: 12 }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>{exName}</Text>
+                          <Text style={{ fontSize: 12, color: allDone ? "#16a34a" : "#94a3b8", marginTop: 2 }}>
+                            {totalCount === 0
+                              ? "Sin series"
+                              : allDone
+                              ? `${totalCount} series completadas`
+                              : `${completedCount}/${totalCount} series`}
+                          </Text>
+                        </View>
+                        {allDone
+                          ? <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
+                          : <Ionicons name="chevron-forward" size={16} color="#94a3b8" />}
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleRemoveExercise(we.id, exName)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        style={{ padding: 8 }}
+                      >
+                        <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                      </TouchableOpacity>
+                    </View>
+                    {totalCount > 0 && !allDone && (
+                      <View style={{ height: 3, backgroundColor: "#f1f5f9" }}>
+                        <View style={{ height: 3, width: `${progress * 100}%`, backgroundColor: progress > 0 ? "#6366f1" : "#f1f5f9", borderRadius: 2 }} />
                       </View>
-                      <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => handleRemoveExercise(we.id, exName)}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      style={{ padding: 8 }}
-                    >
-                      <Ionicons name="trash-outline" size={16} color="#ef4444" />
-                    </TouchableOpacity>
+                    )}
+                  </View>
                   </View>
                 );
               })}
@@ -231,6 +440,17 @@ export default function HomeScreen() {
                 <Text style={{ fontSize: 13, color: "#94a3b8" }}>+ Añadir ejercicio</Text>
               </TouchableOpacity>
 
+              {/* Workout comment */}
+              <TextInput
+                style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, fontSize: 13, color: "#0f172a", backgroundColor: "#fafafa", minHeight: 44 }}
+                placeholder="Añadir nota al entrenamiento…"
+                placeholderTextColor="#94a3b8"
+                value={workoutComment}
+                onChangeText={setWorkoutCommentLocal}
+                onBlur={handleSaveComment}
+                multiline
+              />
+
               <TouchableOpacity onPress={handleFinish} style={{ borderWidth: 1, borderColor: "#ef4444", borderRadius: 14, paddingVertical: 12, alignItems: "center", marginTop: 4 }}>
                 <Text style={{ fontSize: 14, fontWeight: "600", color: "#ef4444" }}>Finalizar entrenamiento</Text>
               </TouchableOpacity>
@@ -241,28 +461,145 @@ export default function HomeScreen() {
           {workouts.length > 0 && (
             <View style={{ gap: 8 }}>
               <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>Actividad reciente</Text>
-              {workouts.slice(0, 5).map((w) => (
-                <View key={w.id} style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 14, paddingRight: 8 }}>
-                  <TouchableOpacity
-                    onPress={() => { setCurrentDate(w.date); void loadWorkoutForDate(w.date); }}
-                    style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12 }}
-                  >
-                    <Text style={{ fontSize: 13, color: "#0f172a" }}>{formatWorkoutDate(w.date)}</Text>
-                    <Ionicons name="chevron-forward" size={14} color="#94a3b8" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => handleDeleteWorkout(w.id, w.date)}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    style={{ padding: 8 }}
-                  >
-                    <Ionicons name="trash-outline" size={14} color="#ef4444" />
-                  </TouchableOpacity>
-                </View>
-              ))}
+              {workouts.slice(0, 5).map((w) => {
+                const s = recentSummaries[w.id];
+                return (
+                  <View key={w.id} style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 14, paddingRight: 8 }}>
+                    <TouchableOpacity
+                      onPress={() => { setCurrentDate(w.date); void loadWorkoutForDate(w.date); }}
+                      style={{ flex: 1, paddingHorizontal: 16, paddingVertical: 12 }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: "500", color: "#0f172a" }}>{formatWorkoutDate(w.date)}</Text>
+                      {s && s.exerciseCount > 0 ? (
+                        <View style={{ flexDirection: "row", gap: 10, marginTop: 3 }}>
+                          <Text style={{ fontSize: 11, color: "#94a3b8" }}>
+                            {s.exerciseCount} ejercicio{s.exerciseCount !== 1 ? "s" : ""}
+                          </Text>
+                          {s.volume > 0 && (
+                            <Text style={{ fontSize: 11, color: "#6366f1", fontWeight: "600" }}>
+                              {s.volume >= 1000 ? `${(s.volume / 1000).toFixed(1)}k` : s.volume} kg
+                            </Text>
+                          )}
+                        </View>
+                      ) : null}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleDeleteWorkout(w.id, w.date)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      style={{ padding: 8 }}
+                    >
+                      <Ionicons name="trash-outline" size={14} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
             </View>
           )}
         </ScrollView>
       )}
+      {/* Move workout modal */}
+      <Modal visible={showMoveModal} animationType="fade" transparent onRequestClose={() => setShowMoveModal(false)}>
+        <View style={{ flex: 1, backgroundColor: "#00000060", justifyContent: "center", paddingHorizontal: 32 }}>
+          <View style={{ backgroundColor: "#fff", borderRadius: 16, padding: 20, gap: 16 }}>
+            <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>Mover entrenamiento</Text>
+            <View style={{ gap: 6 }}>
+              <Text style={{ fontSize: 12, color: "#64748b" }}>Nueva fecha (AAAA-MM-DD)</Text>
+              <TextInput
+                style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 16 }}
+                value={moveDate}
+                onChangeText={setMoveDate}
+                placeholder="2025-06-25"
+                placeholderTextColor="#cbd5e1"
+                keyboardType="numbers-and-punctuation"
+                autoFocus
+              />
+            </View>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <TouchableOpacity onPress={() => setShowMoveModal(false)} style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: "#e2e8f0", alignItems: "center" }}>
+                <Text style={{ fontSize: 14, color: "#64748b" }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleMoveWorkout}
+                disabled={!moveDate.match(/^\d{4}-\d{2}-\d{2}$/)}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: moveDate.match(/^\d{4}-\d{2}-\d{2}$/) ? "#6366f1" : "#e2e8f0", alignItems: "center" }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: "600", color: moveDate.match(/^\d{4}-\d{2}-\d{2}$/) ? "#fff" : "#94a3b8" }}>Mover</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Copy workout modal */}
+      <Modal visible={showCopyModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowCopyModal(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
+            <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: "#0f172a" }}>Copiar ejercicios de…</Text>
+            <TouchableOpacity onPress={() => setShowCopyModal(false)}>
+              <Ionicons name="close" size={22} color="#64748b" />
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={workouts.filter((w) => w.id !== activeWorkout?.id).slice(0, 10)}
+            keyExtractor={(w) => w.id}
+            contentContainerStyle={{ padding: 16, gap: 8 }}
+            ListEmptyComponent={<Text style={{ color: "#94a3b8", textAlign: "center", marginTop: 40 }}>Sin entrenamientos anteriores</Text>}
+            renderItem={({ item: w }) => (
+              <TouchableOpacity
+                onPress={() => handleCopyWorkout(w.id)}
+                style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, gap: 12 }}
+              >
+                <Ionicons name="calendar-outline" size={20} color="#6366f1" />
+                <Text style={{ flex: 1, fontSize: 14, fontWeight: "500", color: "#0f172a" }}>{formatWorkoutDate(w.date)}</Text>
+                <Ionicons name="copy-outline" size={16} color="#94a3b8" />
+              </TouchableOpacity>
+            )}
+          />
+        </SafeAreaView>
+      </Modal>
+
+      {copyLoading && (
+        <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#00000030", justifyContent: "center", alignItems: "center" }}>
+          <View style={{ backgroundColor: "#fff", borderRadius: 16, padding: 24, alignItems: "center", gap: 12 }}>
+            <ActivityIndicator color="#6366f1" />
+            <Text style={{ fontSize: 14, color: "#64748b" }}>Copiando ejercicios…</Text>
+          </View>
+        </View>
+      )}
+
+      {/* Workout finish summary modal */}
+      <Modal visible={showSummary} animationType="fade" transparent onRequestClose={() => setShowSummary(false)}>
+        <View style={{ flex: 1, backgroundColor: "#00000050", justifyContent: "center", alignItems: "center", padding: 24 }}>
+          <View style={{ backgroundColor: "#fff", borderRadius: 24, padding: 28, width: "100%", alignItems: "center", gap: 20 }}>
+            <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: "#6366f115", alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="trophy" size={28} color="#6366f1" />
+            </View>
+            <Text style={{ fontSize: 20, fontWeight: "700", color: "#0f172a" }}>¡Entrenamiento completado!</Text>
+            {summaryStats && (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "center", width: "100%" }}>
+                {[
+                  { icon: "time-outline" as const, label: "Duración", value: formatDuration(summaryStats.duration) },
+                  { icon: "barbell-outline" as const, label: "Ejercicios", value: String(summaryStats.exercises) },
+                  { icon: "list-outline" as const, label: "Series", value: String(summaryStats.sets) },
+                  { icon: "flame-outline" as const, label: "Volumen", value: summaryStats.volume > 0 ? `${(summaryStats.volume / 1000).toFixed(1)}k kg` : "—" },
+                ].map((stat) => (
+                  <View key={stat.label} style={{ width: "45%", backgroundColor: "#f8fafc", borderRadius: 14, padding: 14, alignItems: "center", gap: 4 }}>
+                    <Ionicons name={stat.icon} size={20} color="#6366f1" />
+                    <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>{stat.value}</Text>
+                    <Text style={{ fontSize: 11, color: "#94a3b8", fontWeight: "600", textTransform: "uppercase" }}>{stat.label}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            <TouchableOpacity
+              onPress={() => setShowSummary(false)}
+              style={{ backgroundColor: "#6366f1", borderRadius: 14, paddingHorizontal: 40, paddingVertical: 14, width: "100%", alignItems: "center" }}
+            >
+              <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

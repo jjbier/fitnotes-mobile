@@ -1,13 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   SafeAreaView, Text, View, TouchableOpacity,
-  ActivityIndicator, FlatList,
+  ActivityIndicator, FlatList, useWindowDimensions, ScrollView,
+  Modal, TextInput, Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { ExerciseType, getExerciseFields } from "@fitnotes/core";
-import { createExerciseRepository } from "@fitnotes/database";
+import { ExerciseType, getExerciseFields, useExerciseStore, calculate1RM } from "@fitnotes/core";
+import { createExerciseRepository, createProgressRepository, createWorkoutRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
+import LineChart, { type ChartDataPoint } from "../../components/LineChart";
 
 type SetRow = {
   id: string;
@@ -16,6 +18,7 @@ type SetRow = {
   distance?: number;
   time_seconds?: number;
   is_complete: boolean;
+  is_warmup: boolean;
   comment?: string;
   order_index: number;
 };
@@ -27,11 +30,19 @@ type Session = {
   sets: SetRow[];
 };
 
+type Metric = "weight" | "volume" | "reps" | "est1rm" | "distance" | "time";
+type HistoryTab = "history" | "chart" | "stats";
+
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr + "T00:00:00");
   return date.toLocaleDateString("es-ES", {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
+}
+
+function formatDateShort(dateStr: string): string {
+  const date = new Date(dateStr + "T00:00:00");
+  return date.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
 }
 
 function formatDuration(secs: number): string {
@@ -51,23 +62,53 @@ function formatSet(set: SetRow, type: ExerciseType, unit: string): string {
   return parts.join(" × ") || "—";
 }
 
+const ALL_METRICS: { key: Metric; label: string; types: ExerciseType[] | "all" }[] = [
+  { key: "weight",   label: "Peso máx",  types: [ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHT_ONLY, ExerciseType.WEIGHT_DISTANCE, ExerciseType.WEIGHT_TIME] },
+  { key: "volume",   label: "Volumen",   types: [ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHT_DISTANCE, ExerciseType.WEIGHT_TIME] },
+  { key: "est1rm",   label: "1RM est.",  types: [ExerciseType.WEIGHT_REPS] },
+  { key: "reps",     label: "Reps máx",  types: [ExerciseType.WEIGHT_REPS, ExerciseType.REPS_ONLY, ExerciseType.REPS_DISTANCE, ExerciseType.REPS_TIME] },
+  { key: "distance", label: "Distancia", types: [ExerciseType.DISTANCE_TIME, ExerciseType.DISTANCE_ONLY, ExerciseType.WEIGHT_DISTANCE, ExerciseType.REPS_DISTANCE] },
+  { key: "time",     label: "Tiempo",    types: [ExerciseType.DISTANCE_TIME, ExerciseType.TIME_ONLY, ExerciseType.WEIGHT_TIME, ExerciseType.REPS_TIME] },
+];
+
 export default function ExerciseHistoryScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
   const { exerciseId, name, type, weightUnit } = useLocalSearchParams<{
     exerciseId: string; name: string; type: string; weightUnit: string;
   }>();
 
+  const storeExercise = useExerciseStore((s) => s.exercises.find((e) => e.id === exerciseId));
+  const updateExerciseStore = useExerciseStore((s) => s.updateExercise);
+  const exerciseRepo = useMemo(() => createExerciseRepository(supabase), []);
+  const workoutRepo = useMemo(() => createWorkoutRepository(supabase), []);
+  const progressRepo = useMemo(() => createProgressRepository(supabase), []);
+
+  const [tab, setTab] = useState<HistoryTab>("history");
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [chartPoints, setChartPoints] = useState<{ date: string; maxWeight: number; totalVolume: number; maxReps: number; est1RM: number; maxDistance: number; maxTime: number }[]>([]);
+  const [chartLoading, setChartLoading] = useState(false);
+  const [metric, setMetric] = useState<Metric>((storeExercise?.default_chart ?? "weight") as Metric);
+
+  const [hideWarmup, setHideWarmup] = useState(true);
+
+  // Edit set modal state
+  const [editSet, setEditSet] = useState<{ sessionIdx: number; setIdx: number; set: SetRow } | null>(null);
+  const [editWeight, setEditWeight] = useState("");
+  const [editReps, setEditReps] = useState("");
+  const [editDistance, setEditDistance] = useState("");
+  const [editTime, setEditTime] = useState("");
+  const [editComment, setEditComment] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
 
   const exerciseType = (type ?? ExerciseType.WEIGHT_REPS) as ExerciseType;
   const unit = weightUnit ?? "kg";
 
   useEffect(() => {
     async function load() {
-      const repo = createExerciseRepository(supabase);
-      const { data, error: err } = await repo.getExerciseHistory(exerciseId);
+      const { data, error: err } = await exerciseRepo.getExerciseHistory(exerciseId);
       if (err) { setError(err.message); setLoading(false); return; }
       setSessions(data ?? []);
       setLoading(false);
@@ -75,6 +116,90 @@ export default function ExerciseHistoryScreen() {
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exerciseId]);
+
+  useEffect(() => {
+    if (tab !== "chart" || chartPoints.length > 0) return;
+    setChartLoading(true);
+    progressRepo.getChartData(exerciseId).then((points) => {
+      setChartPoints(points);
+      setChartLoading(false);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  function openEditSet(sessionIdx: number, setIdx: number, set: SetRow) {
+    setEditSet({ sessionIdx, setIdx, set });
+    setEditWeight(set.weight != null ? String(set.weight) : "");
+    setEditReps(set.reps != null ? String(set.reps) : "");
+    setEditDistance(set.distance != null ? String(set.distance) : "");
+    setEditTime(set.time_seconds != null ? String(set.time_seconds) : "");
+    setEditComment(set.comment ?? "");
+  }
+
+  async function handleSaveEditSet() {
+    if (!editSet) return;
+    setEditSaving(true);
+    const patch: Partial<SetRow> = {
+      weight: editWeight ? parseFloat(editWeight) : undefined,
+      reps: editReps ? parseInt(editReps, 10) : undefined,
+      distance: editDistance ? parseFloat(editDistance) : undefined,
+      time_seconds: editTime ? parseInt(editTime, 10) : undefined,
+      comment: editComment || undefined,
+    };
+    await workoutRepo.updateSet(editSet.set.id, patch);
+    setSessions((prev) =>
+      prev.map((s, si) =>
+        si !== editSet.sessionIdx
+          ? s
+          : { ...s, sets: s.sets.map((set, setI) => setI !== editSet.setIdx ? set : { ...set, ...patch }) }
+      )
+    );
+    setEditSet(null);
+    setEditSaving(false);
+  }
+
+  async function handleDeleteHistorySet(sessionIdx: number, setIdx: number, setId: string) {
+    Alert.alert("¿Eliminar serie?", undefined, [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Eliminar",
+        style: "destructive",
+        onPress: async () => {
+          await workoutRepo.deleteSet(setId);
+          setSessions((prev) =>
+            prev.map((s, si) =>
+              si !== sessionIdx ? s : { ...s, sets: s.sets.filter((_, i) => i !== setIdx) }
+            )
+          );
+        },
+      },
+    ]);
+  }
+
+  const availableMetrics = ALL_METRICS.filter((m) =>
+    m.types === "all" || m.types.includes(exerciseType)
+  );
+
+  function metricValue(p: typeof chartPoints[number]): number {
+    if (metric === "weight") return p.maxWeight;
+    if (metric === "volume") return p.totalVolume;
+    if (metric === "est1rm") return p.est1RM;
+    if (metric === "reps") return p.maxReps;
+    if (metric === "distance") return p.maxDistance;
+    if (metric === "time") return p.maxTime;
+    return 0;
+  }
+
+  const chartData: ChartDataPoint[] = chartPoints.map((p) => ({
+    label: formatDateShort(p.date),
+    value: metricValue(p),
+  }));
+
+  const chartUnit = metric === "weight" || metric === "est1rm" ? unit
+    : metric === "volume" ? `${unit}·reps`
+    : metric === "reps" ? "reps"
+    : metric === "distance" ? "m"
+    : "s";
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#f8fafc" }}>
@@ -91,76 +216,318 @@ export default function ExerciseHistoryScreen() {
         </View>
       </View>
 
-      {loading ? (
-        <ActivityIndicator style={{ marginTop: 48 }} color="#6366f1" />
-      ) : error ? (
-        <Text style={{ textAlign: "center", marginTop: 48, color: "#ef4444", paddingHorizontal: 24 }}>{error}</Text>
-      ) : sessions.length === 0 ? (
-        <View style={{ alignItems: "center", marginTop: 80, paddingHorizontal: 32 }}>
-          <Ionicons name="time-outline" size={48} color="#cbd5e1" />
-          <Text style={{ fontSize: 16, fontWeight: "600", color: "#64748b", marginTop: 16 }}>Sin historial</Text>
-          <Text style={{ fontSize: 14, color: "#94a3b8", textAlign: "center", marginTop: 8 }}>
-            Este ejercicio no tiene series registradas todavía.
-          </Text>
+      {/* Tabs */}
+      <View style={{ backgroundColor: "#fff", borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
+        <View style={{ flexDirection: "row" }}>
+          {([["history", "time-outline", "Historial"], ["chart", "trending-up-outline", "Gráfico"], ["stats", "bar-chart-outline", "Estadísticas"]] as const).map(([key, icon, label]) => (
+            <TouchableOpacity
+              key={key}
+              onPress={() => setTab(key)}
+              style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderBottomWidth: 2, borderColor: tab === key ? "#6366f1" : "transparent" }}
+            >
+              <Ionicons name={icon} size={16} color={tab === key ? "#6366f1" : "#94a3b8"} />
+              <Text style={{ fontSize: 13, fontWeight: "600", color: tab === key ? "#6366f1" : "#94a3b8" }}>{label}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
-      ) : (
-        <FlatList
-          data={sessions}
-          keyExtractor={(s) => s.workout_id}
-          contentContainerStyle={{ padding: 16, gap: 12 }}
-          renderItem={({ item: session }) => (
-            <View style={{ backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: "#f1f5f9", overflow: "hidden" }}>
-              {/* Session header */}
-              <View style={{ backgroundColor: "#f8fafc", paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#0f172a", textTransform: "capitalize" }}>
-                  {formatDate(session.date)}
-                </Text>
-                {session.comment ? (
-                  <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }} numberOfLines={1}>{session.comment}</Text>
-                ) : null}
-              </View>
-
-              {/* Sets */}
-              <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
-                {session.sets.length === 0 ? (
-                  <Text style={{ fontSize: 13, color: "#cbd5e1", paddingVertical: 6 }}>Sin series</Text>
-                ) : (
-                  session.sets.map((set, idx) => (
-                    <View
-                      key={set.id}
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        paddingVertical: 7,
-                        borderBottomWidth: idx < session.sets.length - 1 ? 1 : 0,
-                        borderColor: "#f8fafc",
-                      }}
-                    >
-                      <View style={{
-                        width: 26, height: 26, borderRadius: 13,
-                        backgroundColor: set.is_complete ? "#6366f115" : "#f1f5f9",
-                        alignItems: "center", justifyContent: "center", marginRight: 12,
-                      }}>
-                        <Text style={{ fontSize: 11, fontWeight: "600", color: set.is_complete ? "#6366f1" : "#94a3b8" }}>
-                          {idx + 1}
-                        </Text>
-                      </View>
-                      <Text style={{ fontSize: 14, color: "#0f172a", flex: 1 }}>
-                        {formatSet(set, exerciseType, unit)}
-                      </Text>
-                      {set.comment ? (
-                        <Text style={{ fontSize: 11, color: "#94a3b8", maxWidth: 120 }} numberOfLines={1}>
-                          {set.comment}
-                        </Text>
-                      ) : null}
-                    </View>
-                  ))
-                )}
-              </View>
+        {tab === "history" && (
+          <TouchableOpacity
+            onPress={() => setHideWarmup((v) => !v)}
+            style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 7, borderTopWidth: 1, borderColor: "#f8fafc" }}
+          >
+            <View style={{ width: 16, height: 16, borderRadius: 4, borderWidth: 1.5, borderColor: hideWarmup ? "#6366f1" : "#cbd5e1", backgroundColor: hideWarmup ? "#6366f1" : "transparent", alignItems: "center", justifyContent: "center" }}>
+              {hideWarmup && <Ionicons name="checkmark" size={10} color="#fff" />}
             </View>
-          )}
-        />
+            <Text style={{ fontSize: 12, color: "#64748b" }}>Ocultar calentamientos</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* History tab */}
+      {tab === "history" && (
+        loading ? (
+          <ActivityIndicator style={{ marginTop: 48 }} color="#6366f1" />
+        ) : error ? (
+          <Text style={{ textAlign: "center", marginTop: 48, color: "#ef4444", paddingHorizontal: 24 }}>{error}</Text>
+        ) : sessions.length === 0 ? (
+          <View style={{ alignItems: "center", marginTop: 80, paddingHorizontal: 32 }}>
+            <Ionicons name="time-outline" size={48} color="#cbd5e1" />
+            <Text style={{ fontSize: 16, fontWeight: "600", color: "#64748b", marginTop: 16 }}>Sin historial</Text>
+            <Text style={{ fontSize: 14, color: "#94a3b8", textAlign: "center", marginTop: 8 }}>
+              Este ejercicio no tiene series registradas todavía.
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={sessions}
+            keyExtractor={(s) => s.workout_id}
+            contentContainerStyle={{ padding: 16, gap: 12 }}
+            renderItem={({ item: session }) => {
+              const visibleSets = hideWarmup ? session.sets.filter((s) => !s.is_warmup) : session.sets;
+              if (visibleSets.length === 0 && hideWarmup) return null;
+              return (
+              <View style={{ backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: "#f1f5f9", overflow: "hidden" }}>
+                <View style={{ backgroundColor: "#f8fafc", paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#0f172a", textTransform: "capitalize", flex: 1 }}>
+                      {formatDate(session.date)}
+                    </Text>
+                    {(() => {
+                      const vol = visibleSets.filter((s) => s.is_complete && !s.is_warmup).reduce((acc, s) => acc + (s.weight && s.reps ? s.weight * s.reps : 0), 0);
+                      return vol > 0 ? (
+                        <Text style={{ fontSize: 11, color: "#6366f1", fontWeight: "600" }}>{vol.toLocaleString()} {unit}</Text>
+                      ) : null;
+                    })()}
+                  </View>
+                  {session.comment ? (
+                    <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }} numberOfLines={1}>{session.comment}</Text>
+                  ) : null}
+                </View>
+                <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
+                  {visibleSets.length === 0 ? (
+                    <Text style={{ fontSize: 13, color: "#cbd5e1", paddingVertical: 6 }}>Sin series</Text>
+                  ) : (
+                    visibleSets.map((set, idx) => (
+                      <TouchableOpacity
+                        key={set.id}
+                        onPress={() => openEditSet(sessions.indexOf(session), idx, set)}
+                        style={{ flexDirection: "row", alignItems: "center", paddingVertical: 7, borderBottomWidth: idx < session.sets.length - 1 ? 1 : 0, borderColor: "#f8fafc" }}
+                      >
+                        <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: set.is_warmup ? "#fef3c7" : set.is_complete ? "#6366f115" : "#f1f5f9", alignItems: "center", justifyContent: "center", marginRight: 12 }}>
+                          <Text style={{ fontSize: 11, fontWeight: "600", color: set.is_warmup ? "#d97706" : set.is_complete ? "#6366f1" : "#94a3b8" }}>{set.is_warmup ? "W" : idx + 1}</Text>
+                        </View>
+                        <Text style={{ fontSize: 14, color: "#0f172a", flex: 1 }}>{formatSet(set, exerciseType, unit)}</Text>
+                        {set.comment ? (
+                          <Text style={{ fontSize: 11, color: "#94a3b8", maxWidth: 100 }} numberOfLines={1}>{set.comment}</Text>
+                        ) : null}
+                        <Ionicons name="pencil-outline" size={13} color="#cbd5e1" style={{ marginLeft: 6 }} />
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </View>
+              </View>
+              );
+            }}
+          />
+        )
       )}
+
+      {/* Stats tab */}
+      {tab === "stats" && (
+        loading ? (
+          <ActivityIndicator style={{ marginTop: 48 }} color="#6366f1" />
+        ) : sessions.length === 0 ? (
+          <View style={{ alignItems: "center", marginTop: 80, paddingHorizontal: 32 }}>
+            <Ionicons name="bar-chart-outline" size={48} color="#cbd5e1" />
+            <Text style={{ fontSize: 16, fontWeight: "600", color: "#64748b", marginTop: 16 }}>Sin datos</Text>
+          </View>
+        ) : (() => {
+          const allSets = sessions.flatMap((s) => s.sets);
+          const completeSets = allSets.filter((s) => s.is_complete && !s.is_warmup);
+          const setsWithWeight = completeSets.filter((s) => s.weight != null && s.reps != null);
+          const bestWeight = setsWithWeight.length > 0 ? Math.max(...setsWithWeight.map((s) => s.weight!)) : null;
+          const bestReps = completeSets.filter((s) => s.reps != null).length > 0 ? Math.max(...completeSets.filter((s) => s.reps != null).map((s) => s.reps!)) : null;
+          const totalVolume = setsWithWeight.reduce((acc, s) => acc + s.weight! * s.reps!, 0);
+          const totalSets = completeSets.length;
+          const avgSetsPerSession = sessions.length > 0 ? (totalSets / sessions.length).toFixed(1) : "0";
+          const bestORM = setsWithWeight.length > 0
+            ? Math.max(...setsWithWeight.filter((s) => s.reps! < 37).map((s) => calculate1RM(s.weight!, s.reps!)))
+            : null;
+          const stats = [
+            { label: "Sesiones", value: String(sessions.length), icon: "calendar-outline" as const },
+            { label: "Series totales", value: String(totalSets), icon: "list-outline" as const },
+            { label: "Series/sesión", value: avgSetsPerSession, icon: "stats-chart-outline" as const },
+            { label: "Mejor peso", value: bestWeight != null ? `${bestWeight} ${unit}` : "—", icon: "barbell-outline" as const },
+            { label: "Mejor reps", value: bestReps != null ? `${bestReps}` : "—", icon: "repeat-outline" as const },
+            { label: "Volumen total", value: totalVolume > 0 ? `${(totalVolume / 1000).toFixed(1)}k ${unit}` : "—", icon: "flame-outline" as const },
+            { label: "1RM estimado", value: bestORM != null ? `${bestORM % 1 === 0 ? bestORM : bestORM.toFixed(1)} ${unit}` : "—", icon: "trophy-outline" as const },
+            { label: "Primera sesión", value: sessions.at(-1)?.date ?? "—", icon: "time-outline" as const },
+            { label: "Última sesión", value: sessions[0]?.date ?? "—", icon: "checkmark-circle-outline" as const },
+          ];
+          return (
+            <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }}>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                {stats.map((stat) => (
+                  <View key={stat.label} style={{ width: "47%", backgroundColor: "#f8fafc", borderRadius: 14, borderWidth: 1, borderColor: "#f1f5f9", padding: 14, gap: 6 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Ionicons name={stat.icon} size={14} color="#94a3b8" />
+                      <Text style={{ fontSize: 11, fontWeight: "600", color: "#94a3b8", textTransform: "uppercase" }}>{stat.label}</Text>
+                    </View>
+                    <Text style={{ fontSize: 20, fontWeight: "700", color: "#0f172a" }}>{stat.value}</Text>
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+          );
+        })()
+      )}
+
+      {/* Chart tab */}
+      {tab === "chart" && (
+        chartLoading ? (
+          <ActivityIndicator style={{ marginTop: 48 }} color="#6366f1" />
+        ) : chartPoints.length === 0 ? (
+          <View style={{ alignItems: "center", marginTop: 80, paddingHorizontal: 32 }}>
+            <Ionicons name="trending-up-outline" size={48} color="#cbd5e1" />
+            <Text style={{ fontSize: 16, fontWeight: "600", color: "#64748b", marginTop: 16 }}>Sin datos</Text>
+            <Text style={{ fontSize: 14, color: "#94a3b8", textAlign: "center", marginTop: 8 }}>
+              Completa series marcándolas como completadas para ver tu progreso.
+            </Text>
+          </View>
+        ) : (
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+            {/* Metric selector */}
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {availableMetrics.map((m) => (
+                <TouchableOpacity
+                  key={m.key}
+                  onPress={() => {
+                    setMetric(m.key);
+                    if (["weight", "volume", "reps"].includes(m.key)) {
+                      exerciseRepo.updateExercise(exerciseId, { default_chart: m.key as "weight" | "volume" | "reps" });
+                      updateExerciseStore(exerciseId, { default_chart: m.key as "weight" | "volume" | "reps" });
+                    }
+                  }}
+                  style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, borderColor: metric === m.key ? "#6366f1" : "#e2e8f0", backgroundColor: metric === m.key ? "#6366f1" : "transparent", alignItems: "center" }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: metric === m.key ? "#fff" : "#64748b" }}>{m.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Chart */}
+            <View style={{ backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: "#f1f5f9", padding: 16 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 8 }}>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#0f172a" }}>
+                  {availableMetrics.find((m) => m.key === metric)?.label}
+                </Text>
+                <Text style={{ fontSize: 11, color: "#94a3b8" }}>{chartUnit}</Text>
+              </View>
+              <LineChart data={chartData} width={width - 64} height={200} />
+            </View>
+
+            {/* Summary stats */}
+            {(() => {
+              const vals = chartData.map((p) => p.value);
+              const best = Math.max(...vals);
+              const latest = vals[vals.length - 1] ?? 0;
+              const first = vals[0] ?? 0;
+              const trend = first > 0 ? ((latest - first) / first * 100) : 0;
+              return (
+                <View style={{ flexDirection: "row", gap: 12 }}>
+                  {[
+                    { label: "Mejor", value: `${best % 1 === 0 ? best : best.toFixed(1)} ${chartUnit}` },
+                    { label: "Último", value: `${latest % 1 === 0 ? latest : latest.toFixed(1)} ${chartUnit}` },
+                    { label: "Progresión", value: `${trend >= 0 ? "+" : ""}${trend.toFixed(1)}%`, positive: trend >= 0 },
+                  ].map((stat) => (
+                    <View key={stat.label} style={{ flex: 1, backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: "#f1f5f9", padding: 12, alignItems: "center", gap: 4 }}>
+                      <Text style={{ fontSize: 10, fontWeight: "600", color: "#94a3b8", textTransform: "uppercase" }}>{stat.label}</Text>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: "positive" in stat && stat.positive === false ? "#ef4444" : "#0f172a" }}>{stat.value}</Text>
+                    </View>
+                  ))}
+                </View>
+              );
+            })()}
+
+            {/* Sessions count */}
+            <Text style={{ fontSize: 11, color: "#94a3b8", textAlign: "center" }}>
+              {chartPoints.length} sesiones registradas
+            </Text>
+          </ScrollView>
+        )
+      )}
+      {/* Edit set modal */}
+      <Modal visible={editSet !== null} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setEditSet(null)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
+            <TouchableOpacity onPress={() => setEditSet(null)} style={{ marginRight: 12 }}>
+              <Ionicons name="close" size={22} color="#64748b" />
+            </TouchableOpacity>
+            <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: "#0f172a" }}>Editar serie</Text>
+            <TouchableOpacity
+              onPress={() => editSet && handleDeleteHistorySet(editSet.sessionIdx, editSet.setIdx, editSet.set.id)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="trash-outline" size={20} color="#ef4444" />
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
+            {editSet?.set.weight != null || exerciseType === ExerciseType.WEIGHT_REPS || exerciseType === ExerciseType.WEIGHT_ONLY ? (
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748b" }}>{unit.toUpperCase()}</Text>
+                <TextInput
+                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 }}
+                  keyboardType="decimal-pad"
+                  value={editWeight}
+                  onChangeText={setEditWeight}
+                  placeholder="—"
+                  placeholderTextColor="#cbd5e1"
+                />
+              </View>
+            ) : null}
+            {editSet?.set.reps != null || exerciseType === ExerciseType.WEIGHT_REPS || exerciseType === ExerciseType.REPS_ONLY ? (
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748b" }}>REPS</Text>
+                <TextInput
+                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 }}
+                  keyboardType="number-pad"
+                  value={editReps}
+                  onChangeText={setEditReps}
+                  placeholder="—"
+                  placeholderTextColor="#cbd5e1"
+                />
+              </View>
+            ) : null}
+            {editSet?.set.distance != null ? (
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748b" }}>KM</Text>
+                <TextInput
+                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 }}
+                  keyboardType="decimal-pad"
+                  value={editDistance}
+                  onChangeText={setEditDistance}
+                  placeholder="—"
+                  placeholderTextColor="#cbd5e1"
+                />
+              </View>
+            ) : null}
+            {editSet?.set.time_seconds != null ? (
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748b" }}>SEGUNDOS</Text>
+                <TextInput
+                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 }}
+                  keyboardType="number-pad"
+                  value={editTime}
+                  onChangeText={setEditTime}
+                  placeholder="—"
+                  placeholderTextColor="#cbd5e1"
+                />
+              </View>
+            ) : null}
+            <View style={{ gap: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748b" }}>NOTA</Text>
+              <TextInput
+                style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, minHeight: 80, textAlignVertical: "top" }}
+                value={editComment}
+                onChangeText={setEditComment}
+                placeholder="Nota opcional…"
+                placeholderTextColor="#cbd5e1"
+                multiline
+              />
+            </View>
+            <TouchableOpacity
+              onPress={handleSaveEditSet}
+              disabled={editSaving}
+              style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", marginTop: 8 }}
+            >
+              {editSaving
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={{ fontSize: 15, fontWeight: "600", color: "#fff" }}>Guardar cambios</Text>
+              }
+            </TouchableOpacity>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }

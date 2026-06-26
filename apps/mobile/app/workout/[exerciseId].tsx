@@ -1,18 +1,40 @@
-import { useEffect, useRef, useState } from "react";
-import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { SafeAreaView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, FlatList } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useWorkoutStore, useExerciseStore, ExerciseType } from "@fitnotes/core";
-import { createWorkoutRepository } from "@fitnotes/database";
+import { useKeepAwake } from "expo-keep-awake";
+import DraggableFlatList, { ScaleDecorator, NestableScrollContainer, NestableDraggableFlatList, type RenderItemParams } from "react-native-draggable-flatlist";
+import { useWorkoutStore, useExerciseStore, ExerciseType, calculate1RM } from "@fitnotes/core";
+import { createWorkoutRepository, createProgressRepository } from "@fitnotes/database";
+import type { WorkoutExercise } from "@fitnotes/core";
 import { supabase } from "../../lib/supabase";
 import type { Set as FitSet } from "@fitnotes/core";
+
+interface LastSet {
+  weight: number | null;
+  reps: number | null;
+  distance: number | null;
+  time_seconds: number | null;
+  order_index: number;
+}
 
 function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
+
+function formatLastSet(s: LastSet): string {
+  const parts: string[] = [];
+  if (s.weight != null) parts.push(`${s.weight}`);
+  if (s.reps != null) parts.push(`×${s.reps}`);
+  if (s.distance != null) parts.push(`${s.distance}km`);
+  if (s.time_seconds != null) parts.push(`${s.time_seconds}s`);
+  return parts.join("") || "—";
+}
+
+const GROUP_COLORS = ["#6366f1", "#ec4899", "#f59e0b", "#10b981"];
 
 export default function TrainingScreen() {
   const { exerciseId } = useLocalSearchParams<{ exerciseId: string }>();
@@ -30,10 +52,30 @@ export default function TrainingScreen() {
   const markSetComplete = useWorkoutStore((s) => s.markSetComplete);
   const addExerciseToWorkout = useWorkoutStore((s) => s.addExerciseToWorkout);
   const removeExerciseFromWorkout = useWorkoutStore((s) => s.removeExerciseFromWorkout);
+  const reorderExercises = useWorkoutStore((s) => s.reorderExercises);
+  const reorderSets = useWorkoutStore((s) => s.reorderSets);
+  const ungroupExercise = useWorkoutStore((s) => s.ungroupExercise);
+  const updateWorkoutExerciseGroup = useWorkoutStore((s) => s.updateWorkoutExerciseGroup);
+  const renameGroup = useWorkoutStore((s) => s.renameGroup);
+
+  useKeepAwake();
 
   const [userId, setUserId] = useState("");
   const [saving, setSaving] = useState(false);
   const [weightUnit, setWeightUnit] = useState<"kg" | "lb">("kg");
+  const [globalWeightIncrement, setGlobalWeightIncrement] = useState<number>(2.5);
+  const [autoSelectNextSet, setAutoSelectNextSet] = useState(true);
+  const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
+  const [lastSessionSets, setLastSessionSets] = useState<LastSet[]>([]);
+  const [showLastSession, setShowLastSession] = useState(false);
+  const [exercisePR, setExercisePR] = useState<{ weight: number; reps: number } | null>(null);
+  const [prByReps, setPrByReps] = useState<Record<number, number>>({});
+  const [showNotes, setShowNotes] = useState(false);
+  const [commentingSetId, setCommentingSetId] = useState<string | null>(null);
+  const [showAddExercise, setShowAddExercise] = useState(false);
+  const [addSearch, setAddSearch] = useState("");
+  const [showRenameGroup, setShowRenameGroup] = useState(false);
+  const [renameGroupText, setRenameGroupText] = useState("");
 
   // Rest timer
   const [timerDuration, setTimerDuration] = useState(90);
@@ -41,16 +83,28 @@ export default function TrainingScreen() {
   const [timerRunning, setTimerRunning] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const repo = createWorkoutRepository(supabase);
+  const repo = useMemo(() => createWorkoutRepository(supabase), []);
+  const progressRepo = useMemo(() => createProgressRepository(supabase), []);
 
   const workoutExercise = workoutExercises.find((we) => we.exercise_id === exerciseId);
   const exerciseSets = (workoutExercise ? sets[workoutExercise.id] ?? [] : []).slice().sort((a, b) => a.order_index - b.order_index);
+
+  const sorted = workoutExercises.slice().sort((a, b) => a.order_index - b.order_index);
+  const groupIds = [...new Set(workoutExercises.filter((we) => we.group_id).map((we) => we.group_id!))];
+  const groupColorMap: Record<string, string> = Object.fromEntries(
+    groupIds.map((id, i) => [id, GROUP_COLORS[i % GROUP_COLORS.length]!])
+  );
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUserId(session.user.id);
         setWeightUnit((session.user.user_metadata?.weight_unit as "kg" | "lb" | undefined) ?? "kg");
+        setGlobalWeightIncrement((session.user.user_metadata?.default_weight_increment as number | undefined) ?? 2.5);
+        setAutoSelectNextSet((session.user.user_metadata?.auto_select_next_set as boolean | undefined) ?? true);
+        const globalRest = (session.user.user_metadata?.default_rest_seconds as number | undefined) ?? 90;
+        setTimerDuration((prev) => prev === 90 ? globalRest : prev);
+        setTimerRemaining((prev) => prev === 90 ? globalRest : prev);
       }
     });
   }, []);
@@ -75,7 +129,33 @@ export default function TrainingScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exerciseId, activeWorkout?.id, userId]);
 
-  // Timer tick
+  useEffect(() => {
+    if (exercise?.default_rest_seconds) {
+      setTimerDuration(exercise.default_rest_seconds);
+      if (!timerRunning) setTimerRemaining(exercise.default_rest_seconds);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exercise?.id]);
+
+  useEffect(() => {
+    if (!workoutExercise || !activeWorkout?.id) return;
+    repo.getLastSessionSets(exerciseId ?? "", activeWorkout.id).then((s) => {
+      setLastSessionSets(s as LastSet[]);
+    });
+    progressRepo.getPersonalRecords(exerciseId ?? "").then(({ data }) => {
+      if (data && data.length > 0) {
+        const best = data.reduce((b, pr) => pr.weight > b.weight ? pr : b, data[0]!);
+        setExercisePR({ weight: best.weight, reps: best.reps });
+        const map: Record<number, number> = {};
+        for (const pr of data) {
+          if (pr.weight > (map[pr.reps] ?? 0)) map[pr.reps] = pr.weight;
+        }
+        setPrByReps(map);
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workoutExercise?.id, activeWorkout?.id]);
+
   useEffect(() => {
     if (timerRunning) {
       intervalRef.current = setInterval(() => {
@@ -130,17 +210,39 @@ export default function TrainingScreen() {
   async function handleAddSet() {
     if (!workoutExercise) return;
     setSaving(true);
+    const lastCurrentSet = exerciseSets[exerciseSets.length - 1];
+    const prefillSource = lastCurrentSet ?? lastSessionSets.at(-1);
+    const prefill = prefillSource ? {
+      weight: prefillSource.weight ?? undefined,
+      reps: prefillSource.reps ?? undefined,
+      distance: prefillSource.distance ?? undefined,
+      time_seconds: prefillSource.time_seconds ?? undefined,
+    } : {};
     const { data, error } = await repo.createSet({
       workout_exercise_id: workoutExercise.id,
       order_index: exerciseSets.length,
+      ...prefill,
     }, userId);
     if (!error && data) {
       createSet(workoutExercise.id, {
         id: data.id, workout_exercise_id: data.workout_exercise_id,
-        is_complete: data.is_complete, order_index: data.order_index,
+        is_complete: data.is_complete, is_warmup: data.is_warmup ?? false, order_index: data.order_index,
+        ...prefill,
       });
     }
     setSaving(false);
+    // Auto-start rest timer after logging a set
+    setTimerRemaining(timerDuration);
+    setTimerRunning(true);
+  }
+
+  async function handleIncrementField(s: FitSet, field: "weight" | "reps" | "distance" | "time_seconds", delta: number) {
+    if (!workoutExercise) return;
+    const current = s[field] ?? 0;
+    const next = Math.max(0, parseFloat((current + delta).toFixed(2)));
+    const patch = { [field]: next } as Partial<FitSet>;
+    updateSet(workoutExercise.id, s.id, patch);
+    await repo.updateSet(s.id, patch);
   }
 
   async function handleUpdateField(setId: string, field: keyof FitSet, rawValue: string) {
@@ -155,8 +257,58 @@ export default function TrainingScreen() {
 
   async function handleToggleComplete(setId: string, current: boolean) {
     if (!workoutExercise) return;
-    await repo.updateSet(setId, { is_complete: !current });
-    markSetComplete(workoutExercise.id, setId, !current);
+    const nowComplete = !current;
+    await repo.updateSet(setId, { is_complete: nowComplete });
+    markSetComplete(workoutExercise.id, setId, nowComplete);
+
+    if (nowComplete && workoutExercise.group_id) {
+      // Superset auto-jump forward, wrap around to first
+      const currentIdx = sorted.findIndex((we) => we.id === workoutExercise.id);
+      const nextInGroup = sorted.slice(currentIdx + 1).find((we) => we.group_id === workoutExercise.group_id);
+      if (nextInGroup) {
+        router.replace(`/workout/${nextInGroup.exercise_id}` as never);
+      } else {
+        const firstInGroup = sorted.find((we) => we.group_id === workoutExercise.group_id);
+        if (firstInGroup && firstInGroup.id !== workoutExercise.id) {
+          router.replace(`/workout/${firstInGroup.exercise_id}` as never);
+        }
+      }
+      return;
+    }
+
+    // Auto-start rest timer on set completion
+    if (nowComplete) {
+      setTimerRemaining(timerDuration);
+      setTimerRunning(true);
+    }
+
+    // Auto-select next incomplete set
+    if (nowComplete && autoSelectNextSet) {
+      const updatedSets = exerciseSets.map((s) => s.id === setId ? { ...s, is_complete: true } : s);
+      const nextIncomplete = updatedSets.find((s) => !s.is_complete);
+      setSelectedSetId(nextIncomplete?.id ?? null);
+    }
+
+    // Auto-prompt to next exercise when all sets complete (non-superset)
+    if (nowComplete) {
+      const updatedSets = exerciseSets.map((s) => s.id === setId ? { ...s, is_complete: true } : s);
+      const allComplete = updatedSets.length > 0 && updatedSets.every((s) => s.is_complete);
+      if (allComplete) {
+        const currentIdx = sorted.findIndex((we) => we.id === workoutExercise.id);
+        const nextWe = sorted[currentIdx + 1];
+        if (nextWe) {
+          const nextEx = exercises.find((e) => e.id === nextWe.exercise_id);
+          Alert.alert(
+            "¡Series completadas!",
+            `¿Pasar a "${nextEx?.name ?? "siguiente ejercicio"}"?`,
+            [
+              { text: "Quedarse", style: "cancel" },
+              { text: "Siguiente", onPress: () => router.replace(`/workout/${nextWe.exercise_id}` as never) },
+            ]
+          );
+        }
+      }
+    }
   }
 
   async function handleDeleteSet(setId: string) {
@@ -170,6 +322,76 @@ export default function TrainingScreen() {
     ]);
   }
 
+  async function handleToggleWarmup(s: FitSet) {
+    if (!workoutExercise) return;
+    const next = !s.is_warmup;
+    updateSet(workoutExercise.id, s.id, { is_warmup: next });
+    await repo.updateSet(s.id, { is_warmup: next });
+  }
+
+  async function handleReorderSets(data: FitSet[]) {
+    if (!workoutExercise) return;
+    const orderedIds = data.map((s) => s.id);
+    reorderSets(workoutExercise.id, orderedIds);
+    void repo.reorderSets(data.map((s, i) => ({ id: s.id, order_index: i })));
+  }
+
+  function handleGroupMenu() {
+    if (!workoutExercise) return;
+    const currentIdx = sorted.findIndex((we) => we.id === workoutExercise.id);
+    const hasNext = currentIdx < sorted.length - 1;
+    const hasPrev = currentIdx > 0;
+
+    if (workoutExercise.group_id) {
+      Alert.alert("Superset", workoutExercise.group_name ?? "Superset", [
+        {
+          text: "Renombrar grupo",
+          onPress: () => {
+            setRenameGroupText(workoutExercise.group_name ?? "");
+            setShowRenameGroup(true);
+          },
+        },
+        {
+          text: "Quitar del grupo",
+          style: "destructive",
+          onPress: () => {
+            ungroupExercise(workoutExercise.id);
+            void repo.updateWorkoutExercise(workoutExercise.id, { group_id: null });
+          },
+        },
+        { text: "Cancelar", style: "cancel" },
+      ]);
+    } else {
+      const options: { text: string; onPress?: () => void; style?: "cancel" | "destructive" }[] = [];
+      if (hasNext) {
+        options.push({
+          text: "Agrupar con siguiente",
+          onPress: () => handleJoinGroup(workoutExercise.id, sorted[currentIdx + 1]!.id),
+        });
+      }
+      if (hasPrev) {
+        options.push({
+          text: "Agrupar con anterior",
+          onPress: () => handleJoinGroup(workoutExercise.id, sorted[currentIdx - 1]!.id),
+        });
+      }
+      options.push({ text: "Cancelar", style: "cancel" });
+      Alert.alert("Superset", "Agrupar este ejercicio", options);
+    }
+  }
+
+  async function handleJoinGroup(weId: string, partnerId: string) {
+    const partner = workoutExercises.find((we) => we.id === partnerId);
+    if (!partner) return;
+    const groupId = partner.group_id ?? `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    updateWorkoutExerciseGroup(weId, groupId);
+    await repo.updateWorkoutExercise(weId, { group_id: groupId });
+    if (!partner.group_id) {
+      updateWorkoutExerciseGroup(partnerId, groupId);
+      await repo.updateWorkoutExercise(partnerId, { group_id: groupId });
+    }
+  }
+
   const exerciseType = (exercise?.type ?? ExerciseType.WEIGHT_REPS) as ExerciseType;
   const showWeight = [ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHT_ONLY, ExerciseType.WEIGHT_DISTANCE, ExerciseType.WEIGHT_TIME].includes(exerciseType);
   const showReps = [ExerciseType.WEIGHT_REPS, ExerciseType.REPS_ONLY, ExerciseType.REPS_DISTANCE, ExerciseType.REPS_TIME].includes(exerciseType);
@@ -178,6 +400,7 @@ export default function TrainingScreen() {
 
   const timerFinished = timerRemaining === 0;
   const timerActive = timerRunning;
+  const weightIncrement = exercise?.weight_increment ?? globalWeightIncrement;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
@@ -190,15 +413,91 @@ export default function TrainingScreen() {
           <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>{exercise?.name ?? "Ejercicio"}</Text>
           <Text style={{ fontSize: 11, color: "#94a3b8" }}>{exerciseType.replace(/_/g, " ").toLowerCase()}</Text>
         </View>
-        <TouchableOpacity onPress={handleRemoveExercise} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="trash-outline" size={20} color="#ef4444" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+          <TouchableOpacity onPress={() => router.push("/calculators" as never)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="calculator-outline" size={20} color="#64748b" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleRemoveExercise} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="trash-outline" size={20} color="#ef4444" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Exercise navigation strip — draggable */}
+      <View style={{ borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
+        <DraggableFlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={sorted}
+          keyExtractor={(we) => we.id}
+          contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 8, gap: 6, alignItems: "center" }}
+          onDragEnd={({ data }) => {
+            const orderedIds = data.map((we) => we.id);
+            reorderExercises(orderedIds);
+            void repo.reorderExercises(data.map((we, i) => ({ id: we.id, order_index: i })));
+          }}
+          renderItem={({ item: we, drag, isActive }: RenderItemParams<WorkoutExercise>) => {
+            const ex = exercises.find((e) => e.id === we.exercise_id);
+            const isCurrent = we.exercise_id === exerciseId;
+            const groupColor = we.group_id ? groupColorMap[we.group_id] : null;
+            const isFirstInGroup = groupColor && sorted.find((w) => w.group_id === we.group_id)?.id === we.id;
+            const weSets = sets[we.id] ?? [];
+            const completedCount = weSets.filter((s) => s.is_complete).length;
+            const totalCount = weSets.length;
+            return (
+              <ScaleDecorator activeScale={0.95}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  {isFirstInGroup && (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: groupColor + "20", borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: groupColor }} />
+                      <Text style={{ fontSize: 10, fontWeight: "600", color: groupColor }}>{we.group_name ?? "Superset"}</Text>
+                    </View>
+                  )}
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (isActive) return;
+                      if (isCurrent) {
+                        handleGroupMenu();
+                      } else {
+                        router.replace(`/workout/${we.exercise_id}` as never);
+                      }
+                    }}
+                    onLongPress={drag}
+                    delayLongPress={200}
+                    style={{
+                      paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20,
+                      backgroundColor: isActive ? "#818cf8" : isCurrent ? "#6366f1" : "#f1f5f9",
+                      borderWidth: groupColor && !isCurrent ? 2 : 0,
+                      borderColor: groupColor ?? "transparent",
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: isCurrent || isActive ? "#fff" : "#64748b" }} numberOfLines={1}>
+                      {ex?.name ?? "—"}
+                    </Text>
+                    {totalCount > 0 && (
+                      <Text style={{ fontSize: 9, fontWeight: "600", textAlign: "center", color: isCurrent ? "#ffffffb0" : completedCount === totalCount ? "#22c55e" : "#94a3b8", marginTop: 1 }}>
+                        {completedCount}/{totalCount}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </ScaleDecorator>
+            );
+          }}
+          ListFooterComponent={
+            <TouchableOpacity
+              onPress={() => { setAddSearch(""); setShowAddExercise(true); }}
+              style={{ marginLeft: 4, width: 30, height: 30, borderRadius: 15, backgroundColor: "#f1f5f9", alignItems: "center", justifyContent: "center" }}
+            >
+              <Ionicons name="add" size={18} color="#6366f1" />
+            </TouchableOpacity>
+          }
+        />
       </View>
 
       {/* Rest Timer */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#f8fafc", gap: 8, backgroundColor: timerActive ? "#f0f0ff" : timerFinished ? "#f0fff4" : "#fafafa" }}>
         <Ionicons name="timer-outline" size={16} color={timerActive ? "#6366f1" : timerFinished ? "#22c55e" : "#94a3b8"} />
-        {/* Duration controls */}
         <TouchableOpacity onPress={() => handleChangeDuration(-15)} disabled={timerRunning} style={{ padding: 4, opacity: timerRunning ? 0.4 : 1 }}>
           <Ionicons name="remove-circle-outline" size={20} color="#64748b" />
         </TouchableOpacity>
@@ -208,116 +507,285 @@ export default function TrainingScreen() {
         <TouchableOpacity onPress={() => handleChangeDuration(15)} disabled={timerRunning} style={{ padding: 4, opacity: timerRunning ? 0.4 : 1 }}>
           <Ionicons name="add-circle-outline" size={20} color="#64748b" />
         </TouchableOpacity>
-        {/* Start / Pause */}
         <TouchableOpacity
           onPress={handleTimerToggle}
-          style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: timerActive ? "#6366f1" : "#6366f1", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }}
+          style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#6366f1", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }}
         >
           <Ionicons name={timerActive ? "pause" : timerFinished ? "refresh" : "play"} size={14} color="#fff" />
           <Text style={{ fontSize: 12, fontWeight: "600", color: "#fff" }}>
             {timerActive ? "Pausar" : timerFinished ? "Reiniciar" : "Iniciar"}
           </Text>
         </TouchableOpacity>
-        {/* Reset */}
         <TouchableOpacity onPress={handleTimerReset} style={{ padding: 4 }}>
           <Ionicons name="refresh-outline" size={18} color="#94a3b8" />
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 60, gap: 8 }}>
+      {/* PR + última sesión */}
+      {(exercisePR || lastSessionSets.length > 0) && (
+        <>
+          <TouchableOpacity
+            onPress={() => setShowLastSession((v) => !v)}
+            style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#f1f5f9", gap: 8, backgroundColor: "#fafafa" }}
+          >
+            {exercisePR && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "#fef3c7", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
+                <Ionicons name="trophy-outline" size={11} color="#d97706" />
+                <Text style={{ fontSize: 11, fontWeight: "700", color: "#d97706" }}>
+                  {exercisePR.weight}{weightUnit} ×{exercisePR.reps}
+                </Text>
+              </View>
+            )}
+            {(() => {
+              const lastMax = lastSessionSets.reduce((m, s) => s.weight != null && s.weight > m ? s.weight : m, 0);
+              if (lastMax > 0 && showWeight) {
+                const suggested = parseFloat((lastMax + weightIncrement).toFixed(2));
+                return (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "#f0fdf4", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
+                    <Ionicons name="trending-up-outline" size={11} color="#16a34a" />
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: "#16a34a" }}>
+                      →{suggested}{weightUnit}
+                    </Text>
+                  </View>
+                );
+              }
+              return null;
+            })()}
+            {lastSessionSets.length > 0 && (
+              <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Ionicons name="time-outline" size={11} color="#94a3b8" />
+                <Text style={{ fontSize: 11, color: "#64748b", flex: 1 }} numberOfLines={1}>
+                  {lastSessionSets.map(formatLastSet).join("  ")}
+                </Text>
+              </View>
+            )}
+            <Ionicons name={showLastSession ? "chevron-up" : "chevron-down"} size={13} color="#94a3b8" />
+          </TouchableOpacity>
+          {showLastSession && (
+            <View style={{ paddingHorizontal: 16, paddingVertical: 10, backgroundColor: "#f8fafc", borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
+              <Text style={{ fontSize: 10, fontWeight: "700", color: "#94a3b8", letterSpacing: 0.5, marginBottom: 6 }}>ÚLTIMA SESIÓN</Text>
+              {lastSessionSets.map((s, i) => (
+                <Text key={i} style={{ fontSize: 13, color: "#475569", paddingVertical: 1 }}>
+                  {i + 1}.  {formatLastSet(s)}
+                </Text>
+              ))}
+            </View>
+          )}
+        </>
+      )}
+
+      {/* Exercise notes */}
+      {exercise?.notes && (
+        <TouchableOpacity
+          onPress={() => setShowNotes((v) => !v)}
+          style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#f1f5f9", gap: 8, backgroundColor: "#fffbeb" }}
+        >
+          <Ionicons name="document-text-outline" size={13} color="#d97706" />
+          <Text style={{ fontSize: 11, color: "#92400e", flex: 1 }} numberOfLines={showNotes ? undefined : 1}>
+            {exercise.notes}
+          </Text>
+          <Ionicons name={showNotes ? "chevron-up" : "chevron-down"} size={13} color="#d97706" />
+        </TouchableOpacity>
+      )}
+
+      {/* Sets — nestable scroll for drag support */}
+      <NestableScrollContainer contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 60, gap: 8 }}>
         {/* Column headers */}
         {exerciseSets.length > 0 && (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 4, marginBottom: 4 }}>
             <Text style={{ width: 24, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>#</Text>
-            {showWeight && <Text style={{ width: 64, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>{weightUnit}</Text>}
-            {showReps && <Text style={{ width: 56, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>reps</Text>}
-            {showDistance && <Text style={{ width: 64, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>km</Text>}
-            {showTime && <Text style={{ width: 56, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>sec</Text>}
+            {showWeight && <Text style={{ width: 80, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>{weightUnit}</Text>}
+            {showReps && <Text style={{ width: 72, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>reps</Text>}
+            {showDistance && <Text style={{ width: 80, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>km</Text>}
+            {showTime && <Text style={{ width: 72, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>sec</Text>}
             <View style={{ flex: 1 }} />
+            {exerciseSets.some((s) => !s.is_complete) && (
+              <TouchableOpacity
+                onPress={async () => {
+                  if (!workoutExercise) return;
+                  for (const s of exerciseSets.filter((s) => !s.is_complete)) {
+                    markSetComplete(workoutExercise.id, s.id, true);
+                    await repo.updateSet(s.id, { is_complete: true });
+                  }
+                }}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              >
+                <Text style={{ fontSize: 10, fontWeight: "600", color: "#6366f1" }}>Todo ✓</Text>
+              </TouchableOpacity>
+            )}
+            <Text style={{ fontSize: 11, color: "#cbd5e1", width: 16 }}>≡</Text>
           </View>
         )}
 
-        {/* Sets */}
+        {/* Sets list — draggable */}
         {exerciseSets.length === 0 ? (
           <View style={{ paddingVertical: 40, alignItems: "center", gap: 8 }}>
             <Ionicons name="barbell-outline" size={32} color="#94a3b8" />
             <Text style={{ fontSize: 13, color: "#94a3b8" }}>Sin series aún. Toca abajo para añadir tu primera serie.</Text>
           </View>
         ) : (
-          exerciseSets.map((s, idx) => (
-            <View
-              key={s.id}
-              style={{ flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderColor: s.is_complete ? "#6366f120" : "#f1f5f9", borderRadius: 12, backgroundColor: s.is_complete ? "#6366f108" : "#fff", paddingHorizontal: 10, paddingVertical: 8 }}
-            >
-              {/* Set number */}
-              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#f1f5f9", alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ fontSize: 11, fontWeight: "600", color: "#64748b" }}>{idx + 1}</Text>
-              </View>
+          <NestableDraggableFlatList
+            data={exerciseSets}
+            keyExtractor={(s) => s.id}
+            onDragEnd={({ data }) => handleReorderSets(data)}
+            scrollEnabled={false}
+            renderItem={({ item: s, drag, isActive }: RenderItemParams<FitSet>) => {
+              const idx = exerciseSets.findIndex((es) => es.id === s.id);
+              return (
+                <ScaleDecorator activeScale={0.97}>
+                  <View style={{ gap: 2, marginBottom: 8 }}>
+                    <View
+                      style={{ flexDirection: "row", alignItems: "center", gap: 8, borderWidth: s.id === selectedSetId ? 1.5 : 1, borderColor: s.id === selectedSetId ? "#6366f1" : s.is_complete ? "#6366f120" : "#f1f5f9", borderRadius: 12, backgroundColor: isActive ? "#f8fafc" : s.is_complete ? "#6366f108" : "#fff", paddingHorizontal: 10, paddingVertical: 8 }}
+                    >
+                      {/* Set number — long press to toggle warmup */}
+                      <TouchableOpacity
+                        onLongPress={() => handleToggleWarmup(s)}
+                        delayLongPress={400}
+                        style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: s.is_warmup ? "#fef3c7" : "#f1f5f9", alignItems: "center", justifyContent: "center" }}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: "600", color: s.is_warmup ? "#d97706" : "#64748b" }}>
+                          {s.is_warmup ? "W" : idx + 1}
+                        </Text>
+                      </TouchableOpacity>
 
-              {/* Weight */}
-              {showWeight && (
-                <TextInput
-                  style={{ width: 64, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingVertical: 6, paddingHorizontal: 8, fontSize: 14, fontWeight: "500", textAlign: "center" }}
-                  keyboardType="decimal-pad"
-                  value={s.weight !== undefined ? String(s.weight) : ""}
-                  onChangeText={(v) => handleUpdateField(s.id, "weight", v)}
-                  placeholder="—"
-                  placeholderTextColor="#cbd5e1"
-                />
-              )}
+                      {/* Weight */}
+                      {showWeight && (
+                        <View style={{ flexDirection: "row", alignItems: "center" }}>
+                          <TouchableOpacity onPress={() => handleIncrementField(s, "weight", -weightIncrement)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+                            <Text style={{ fontSize: 18, fontWeight: "500", color: "#64748b", paddingHorizontal: 4 }}>−</Text>
+                          </TouchableOpacity>
+                          <TextInput
+                            style={{ width: 52, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingVertical: 6, paddingHorizontal: 4, fontSize: 14, fontWeight: "500", textAlign: "center" }}
+                            keyboardType="decimal-pad"
+                            value={s.weight !== undefined ? String(s.weight) : ""}
+                            onChangeText={(v) => handleUpdateField(s.id, "weight", v)}
+                            placeholder="—"
+                            placeholderTextColor="#cbd5e1"
+                          />
+                          <TouchableOpacity onPress={() => handleIncrementField(s, "weight", weightIncrement)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+                            <Text style={{ fontSize: 18, fontWeight: "500", color: "#64748b", paddingHorizontal: 4 }}>+</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
 
-              {/* Reps */}
-              {showReps && (
-                <TextInput
-                  style={{ width: 56, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingVertical: 6, paddingHorizontal: 8, fontSize: 14, fontWeight: "500", textAlign: "center" }}
-                  keyboardType="number-pad"
-                  value={s.reps !== undefined ? String(s.reps) : ""}
-                  onChangeText={(v) => handleUpdateField(s.id, "reps", v)}
-                  placeholder="—"
-                  placeholderTextColor="#cbd5e1"
-                />
-              )}
+                      {/* Reps */}
+                      {showReps && (
+                        <View style={{ flexDirection: "row", alignItems: "center" }}>
+                          <TouchableOpacity onPress={() => handleIncrementField(s, "reps", -1)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+                            <Text style={{ fontSize: 18, fontWeight: "500", color: "#64748b", paddingHorizontal: 4 }}>−</Text>
+                          </TouchableOpacity>
+                          <TextInput
+                            style={{ width: 44, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingVertical: 6, paddingHorizontal: 4, fontSize: 14, fontWeight: "500", textAlign: "center" }}
+                            keyboardType="number-pad"
+                            value={s.reps !== undefined ? String(s.reps) : ""}
+                            onChangeText={(v) => handleUpdateField(s.id, "reps", v)}
+                            placeholder="—"
+                            placeholderTextColor="#cbd5e1"
+                          />
+                          <TouchableOpacity onPress={() => handleIncrementField(s, "reps", 1)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+                            <Text style={{ fontSize: 18, fontWeight: "500", color: "#64748b", paddingHorizontal: 4 }}>+</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
 
-              {/* Distance */}
-              {showDistance && (
-                <TextInput
-                  style={{ width: 64, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingVertical: 6, paddingHorizontal: 8, fontSize: 14, fontWeight: "500", textAlign: "center" }}
-                  keyboardType="decimal-pad"
-                  value={s.distance !== undefined ? String(s.distance) : ""}
-                  onChangeText={(v) => handleUpdateField(s.id, "distance", v)}
-                  placeholder="—"
-                  placeholderTextColor="#cbd5e1"
-                />
-              )}
+                      {/* Distance */}
+                      {showDistance && (
+                        <View style={{ flexDirection: "row", alignItems: "center" }}>
+                          <TouchableOpacity onPress={() => handleIncrementField(s, "distance", -0.1)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+                            <Text style={{ fontSize: 18, fontWeight: "500", color: "#64748b", paddingHorizontal: 4 }}>−</Text>
+                          </TouchableOpacity>
+                          <TextInput
+                            style={{ width: 52, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingVertical: 6, paddingHorizontal: 4, fontSize: 14, fontWeight: "500", textAlign: "center" }}
+                            keyboardType="decimal-pad"
+                            value={s.distance !== undefined ? String(s.distance) : ""}
+                            onChangeText={(v) => handleUpdateField(s.id, "distance", v)}
+                            placeholder="—"
+                            placeholderTextColor="#cbd5e1"
+                          />
+                          <TouchableOpacity onPress={() => handleIncrementField(s, "distance", 0.1)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+                            <Text style={{ fontSize: 18, fontWeight: "500", color: "#64748b", paddingHorizontal: 4 }}>+</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
 
-              {/* Time */}
-              {showTime && (
-                <TextInput
-                  style={{ width: 56, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingVertical: 6, paddingHorizontal: 8, fontSize: 14, fontWeight: "500", textAlign: "center" }}
-                  keyboardType="number-pad"
-                  value={s.time_seconds !== undefined ? String(s.time_seconds) : ""}
-                  onChangeText={(v) => handleUpdateField(s.id, "time_seconds", v)}
-                  placeholder="—"
-                  placeholderTextColor="#cbd5e1"
-                />
-              )}
+                      {/* Time */}
+                      {showTime && (
+                        <View style={{ flexDirection: "row", alignItems: "center" }}>
+                          <TouchableOpacity onPress={() => handleIncrementField(s, "time_seconds", -5)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+                            <Text style={{ fontSize: 18, fontWeight: "500", color: "#64748b", paddingHorizontal: 4 }}>−</Text>
+                          </TouchableOpacity>
+                          <TextInput
+                            style={{ width: 44, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingVertical: 6, paddingHorizontal: 4, fontSize: 14, fontWeight: "500", textAlign: "center" }}
+                            keyboardType="number-pad"
+                            value={s.time_seconds !== undefined ? String(s.time_seconds) : ""}
+                            onChangeText={(v) => handleUpdateField(s.id, "time_seconds", v)}
+                            placeholder="—"
+                            placeholderTextColor="#cbd5e1"
+                          />
+                          <TouchableOpacity onPress={() => handleIncrementField(s, "time_seconds", 5)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+                            <Text style={{ fontSize: 18, fontWeight: "500", color: "#64748b", paddingHorizontal: 4 }}>+</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
 
-              <View style={{ flex: 1 }} />
+                      <View style={{ flex: 1 }} />
 
-              {/* Delete */}
-              <TouchableOpacity onPress={() => handleDeleteSet(s.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="trash-outline" size={14} color="#ef4444" />
-              </TouchableOpacity>
+                      {/* Per-set PR trophy */}
+                      {s.weight != null && s.reps != null && prByReps[s.reps] != null && s.weight >= prByReps[s.reps]! && (
+                        <Ionicons name="trophy" size={13} color="#d97706" />
+                      )}
 
-              {/* Complete */}
-              <TouchableOpacity
-                onPress={() => handleToggleComplete(s.id, s.is_complete)}
-                style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: s.is_complete ? "#6366f1" : "#cbd5e1", backgroundColor: s.is_complete ? "#6366f1" : "transparent", alignItems: "center", justifyContent: "center" }}
-              >
-                {s.is_complete && <Ionicons name="checkmark" size={14} color="white" />}
-              </TouchableOpacity>
-            </View>
-          ))
+                      {/* Comment */}
+                      <TouchableOpacity
+                        onPress={() => setCommentingSetId(commentingSetId === s.id ? null : s.id)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons name={s.comment ? "chatbubble" : "chatbubble-outline"} size={14} color={s.comment ? "#6366f1" : "#cbd5e1"} />
+                      </TouchableOpacity>
+
+                      {/* Delete */}
+                      <TouchableOpacity onPress={() => handleDeleteSet(s.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Ionicons name="trash-outline" size={14} color="#ef4444" />
+                      </TouchableOpacity>
+
+                      {/* Complete */}
+                      <TouchableOpacity
+                        onPress={() => handleToggleComplete(s.id, s.is_complete)}
+                        style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: s.is_complete ? "#6366f1" : "#cbd5e1", backgroundColor: s.is_complete ? "#6366f1" : "transparent", alignItems: "center", justifyContent: "center" }}
+                      >
+                        {s.is_complete && <Ionicons name="checkmark" size={14} color="white" />}
+                      </TouchableOpacity>
+
+                      {/* Drag handle */}
+                      <TouchableOpacity onLongPress={drag} delayLongPress={150} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Ionicons name="reorder-two-outline" size={18} color="#cbd5e1" />
+                      </TouchableOpacity>
+                    </View>
+                    {(() => {
+                      if (!showWeight || !showReps || !s.weight || !s.reps || s.reps >= 37) return null;
+                      const orm = calculate1RM(s.weight, s.reps);
+                      return (
+                        <Text style={{ fontSize: 10, color: "#94a3b8", paddingLeft: 36, marginTop: -2 }}>
+                          ~1RM {orm % 1 === 0 ? orm : orm.toFixed(1)} {weightUnit}
+                        </Text>
+                      );
+                    })()}
+                    {commentingSetId === s.id && (
+                      <TextInput
+                        style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, fontSize: 13, color: "#0f172a", backgroundColor: "#fafafa" }}
+                        placeholder="Nota sobre esta serie…"
+                        placeholderTextColor="#94a3b8"
+                        value={s.comment ?? ""}
+                        onChangeText={(v) => handleUpdateField(s.id, "comment", v)}
+                        multiline
+                        autoFocus
+                      />
+                    )}
+                  </View>
+                </ScaleDecorator>
+              );
+            }}
+          />
         )}
 
         {/* Add set */}
@@ -329,7 +797,104 @@ export default function TrainingScreen() {
           {saving ? <ActivityIndicator size="small" color="#6366f1" /> : <Ionicons name="add-circle-outline" size={18} color="#6366f1" />}
           <Text style={{ fontSize: 14, fontWeight: "500", color: "#6366f1" }}>{saving ? "Añadiendo…" : "Añadir serie"}</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </NestableScrollContainer>
+
+      {/* Rename group modal */}
+      <Modal visible={showRenameGroup} animationType="fade" transparent onRequestClose={() => setShowRenameGroup(false)}>
+        <View style={{ flex: 1, backgroundColor: "#00000060", justifyContent: "center", paddingHorizontal: 32 }}>
+          <View style={{ backgroundColor: "#fff", borderRadius: 16, padding: 20, gap: 16 }}>
+            <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>Nombre del superset</Text>
+            <TextInput
+              style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15 }}
+              value={renameGroupText}
+              onChangeText={setRenameGroupText}
+              placeholder="Ej. Pecho + Tríceps"
+              placeholderTextColor="#cbd5e1"
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={() => {
+                if (workoutExercise?.group_id) {
+                  renameGroup(workoutExercise.group_id, renameGroupText);
+                  void repo.updateGroupName(workoutExercise.group_id, renameGroupText);
+                }
+                setShowRenameGroup(false);
+              }}
+            />
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <TouchableOpacity onPress={() => setShowRenameGroup(false)} style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: "#e2e8f0", alignItems: "center" }}>
+                <Text style={{ fontSize: 14, color: "#64748b" }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  if (workoutExercise?.group_id) {
+                    renameGroup(workoutExercise.group_id, renameGroupText);
+                    void repo.updateGroupName(workoutExercise.group_id, renameGroupText);
+                  }
+                  setShowRenameGroup(false);
+                }}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: "#6366f1", alignItems: "center" }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: "600", color: "#fff" }}>Guardar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add exercise modal */}
+      <Modal visible={showAddExercise} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowAddExercise(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderColor: "#f1f5f9", gap: 12 }}>
+            <View style={{ flex: 1, flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, paddingHorizontal: 12, gap: 8, backgroundColor: "#f8fafc" }}>
+              <Ionicons name="search" size={16} color="#94a3b8" />
+              <TextInput
+                style={{ flex: 1, paddingVertical: 10, fontSize: 14 }}
+                placeholder="Buscar ejercicio…"
+                value={addSearch}
+                onChangeText={setAddSearch}
+                autoFocus
+                clearButtonMode="while-editing"
+              />
+            </View>
+            <TouchableOpacity onPress={() => setShowAddExercise(false)}>
+              <Ionicons name="close" size={24} color="#64748b" />
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={exercises.filter((e) => {
+              const inWorkout = workoutExercises.some((we) => we.exercise_id === e.id);
+              const matchesSearch = e.name.toLowerCase().includes(addSearch.toLowerCase());
+              return !inWorkout && matchesSearch;
+            })}
+            keyExtractor={(e) => e.id}
+            contentContainerStyle={{ padding: 16, gap: 8 }}
+            keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={
+              <View style={{ paddingVertical: 40, alignItems: "center", gap: 8 }}>
+                <Ionicons name="barbell-outline" size={32} color="#cbd5e1" />
+                <Text style={{ fontSize: 14, color: "#94a3b8" }}>
+                  {addSearch ? "Sin resultados" : "Todos los ejercicios ya están en el workout"}
+                </Text>
+              </View>
+            }
+            renderItem={({ item: ex }) => (
+              <TouchableOpacity
+                onPress={() => {
+                  setShowAddExercise(false);
+                  router.replace(`/workout/${ex.id}` as never);
+                }}
+                style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: "#f1f5f9", backgroundColor: "#fff", gap: 12 }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: "500", color: "#0f172a" }}>{ex.name}</Text>
+                  <Text style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{ex.type.replace(/_/g, " ").toLowerCase()}</Text>
+                </View>
+                <Ionicons name="add-circle-outline" size={20} color="#6366f1" />
+              </TouchableOpacity>
+            )}
+          />
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { SafeAreaView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -50,6 +50,9 @@ export default function RoutineDetailScreen() {
   const [loggingDayId, setLoggingDayId] = useState<string | null>(null);
 
   // Predefined sets modal
+  const [selectLogDayId, setSelectLogDayId] = useState<string | null>(null);
+  const [selectedExerciseIds, setSelectedExerciseIds] = useState<string[]>([]);
+
   const [psRdeId, setPsRdeId] = useState<string | null>(null);
   const [psExerciseId, setPsExerciseId] = useState<string>("");
   const [psLocalSets, setPsLocalSets] = useState<LocalPS[]>([]);
@@ -57,9 +60,9 @@ export default function RoutineDetailScreen() {
   const [psSaving, setPsSaving] = useState(false);
   const psLoadingForRef = useRef<string | null>(null);
 
-  const routineRepo = createRoutineRepository(supabase);
-  const exRepo = createExerciseRepository(supabase);
-  const workoutRepo = createWorkoutRepository(supabase);
+  const routineRepo = useMemo(() => createRoutineRepository(supabase), []);
+  const exRepo = useMemo(() => createExerciseRepository(supabase), []);
+  const workoutRepo = useMemo(() => createWorkoutRepository(supabase), []);
 
   const routine = routines.find((r) => r.id === routineId);
   const days = (routineDays[routineId ?? ""] ?? []).slice().sort((a, b) => a.order_index - b.order_index);
@@ -74,13 +77,14 @@ export default function RoutineDetailScreen() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) setUserId(session.user.id);
 
+      const hasCache = exercises.length > 0;
       const [rRes, catRes, exRes] = await Promise.all([
         routineRepo.getRoutines(),
-        exRepo.getCategories(),
-        exRepo.getExercises(),
+        hasCache ? Promise.resolve({ data: null }) : exRepo.getCategories(),
+        hasCache ? Promise.resolve({ data: null }) : exRepo.getExercises(),
       ]);
       if (rRes.data) loadRoutines(rRes.data.map((r) => ({ id: r.id, name: r.name, notes: r.notes ?? undefined })));
-      if (catRes.data && exRes.data) {
+      if (!hasCache && catRes.data && exRes.data) {
         loadExercises(catRes.data, exRes.data.map((ex) => ({
           id: ex.id, name: ex.name,
           category_id: ex.category_id ?? "",
@@ -268,8 +272,15 @@ export default function RoutineDetailScreen() {
 
   // ─── Log day ────────────────────────────────────────────────────────────────
 
-  async function handleLogDay(dayId: string) {
+  function openSelectLog(dayId: string) {
     const dayExs = (routineDayExercises[dayId] ?? []).slice().sort((a, b) => a.order_index - b.order_index);
+    setSelectedExerciseIds(dayExs.map((rde) => rde.exercise_id));
+    setSelectLogDayId(dayId);
+  }
+
+  async function handleLogDay(dayId: string, selectedIds: string[]) {
+    const allDayExs = (routineDayExercises[dayId] ?? []).slice().sort((a, b) => a.order_index - b.order_index);
+    const dayExs = allDayExs.filter((rde) => selectedIds.includes(rde.exercise_id));
     if (dayExs.length === 0) {
       Alert.alert("Sin ejercicios", "Añade ejercicios al día antes de registrar.");
       return;
@@ -322,13 +333,27 @@ export default function RoutineDetailScreen() {
             id: newSet.id, workout_exercise_id: newSet.workout_exercise_id,
             weight: newSet.weight ?? undefined, reps: newSet.reps ?? undefined,
             distance: newSet.distance ?? undefined, time_seconds: newSet.time_seconds ?? undefined,
-            is_complete: newSet.is_complete, comment: newSet.comment ?? undefined,
+            is_complete: newSet.is_complete, is_warmup: newSet.is_warmup ?? false, comment: newSet.comment ?? undefined,
             order_index: newSet.order_index,
           });
         }
       }
 
       setsMap[we.id] = createdSets;
+
+      // Auto-update predefined sets with the values actually applied
+      if ((pSets ?? []).length > 0 && createdSets.length > 0) {
+        const updatedPs = createdSets.map((cs, pi) => ({
+          weight: cs.weight, reps: cs.reps,
+          distance: cs.distance, time_seconds: cs.time_seconds,
+          order_index: pi,
+        }));
+        void routineRepo.savePredefinedSets(rde.id, updatedPs, userId).then(() => {
+          savePredefinedSetsStore(rde.id, updatedPs.map((s, pi) => ({
+            id: `local-${pi}`, routine_day_exercise_id: rde.id, ...s, order_index: pi,
+          })));
+        });
+      }
     }
 
     loadWorkout(
@@ -436,7 +461,7 @@ export default function RoutineDetailScreen() {
             )}
             {!editMode && (
               <TouchableOpacity
-                onPress={() => handleLogDay(day.id)}
+                onPress={() => openSelectLog(day.id)}
                 disabled={isLoggingThis}
                 style={{ backgroundColor: "#6366f1", borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, opacity: isLoggingThis ? 0.6 : 1, flexDirection: "row", alignItems: "center", gap: 4 }}
               >
@@ -667,6 +692,68 @@ export default function RoutineDetailScreen() {
             </ScrollView>
           </SafeAreaView>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Select exercises modal */}
+      <Modal visible={selectLogDayId !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSelectLogDayId(null)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
+            <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: "#0f172a" }}>Seleccionar ejercicios</Text>
+            <TouchableOpacity onPress={() => setSelectLogDayId(null)}>
+              <Ionicons name="close" size={22} color="#64748b" />
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 8 }}>
+            {(routineDayExercises[selectLogDayId ?? ""] ?? [])
+              .slice()
+              .sort((a, b) => a.order_index - b.order_index)
+              .map((rde) => {
+                const ex = exerciseMap[rde.exercise_id];
+                const isSelected = selectedExerciseIds.includes(rde.exercise_id);
+                return (
+                  <TouchableOpacity
+                    key={rde.id}
+                    onPress={() => setSelectedExerciseIds((prev) =>
+                      isSelected ? prev.filter((id) => id !== rde.exercise_id) : [...prev, rde.exercise_id]
+                    )}
+                    style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: isSelected ? "#6366f1" : "#f1f5f9", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, gap: 12, backgroundColor: isSelected ? "#6366f108" : "#fff" }}
+                  >
+                    <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: isSelected ? "#6366f1" : "#cbd5e1", backgroundColor: isSelected ? "#6366f1" : "transparent", alignItems: "center", justifyContent: "center" }}>
+                      {isSelected && <Ionicons name="checkmark" size={13} color="#fff" />}
+                    </View>
+                    <Text style={{ flex: 1, fontSize: 14, color: "#0f172a" }}>{ex?.name ?? rde.exercise_id}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+          </ScrollView>
+          <View style={{ padding: 16, borderTopWidth: 1, borderColor: "#f1f5f9", flexDirection: "row", gap: 10 }}>
+            <TouchableOpacity
+              onPress={() => {
+                const allIds = (routineDayExercises[selectLogDayId ?? ""] ?? []).map((rde) => rde.exercise_id);
+                setSelectedExerciseIds(selectedExerciseIds.length === allIds.length ? [] : allIds);
+              }}
+              style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, paddingVertical: 13, alignItems: "center" }}
+            >
+              <Text style={{ fontSize: 14, color: "#64748b" }}>
+                {selectedExerciseIds.length === (routineDayExercises[selectLogDayId ?? ""] ?? []).length ? "Deseleccionar todo" : "Seleccionar todo"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                if (selectedExerciseIds.length === 0) return;
+                const dayId = selectLogDayId!;
+                setSelectLogDayId(null);
+                handleLogDay(dayId, selectedExerciseIds);
+              }}
+              disabled={selectedExerciseIds.length === 0}
+              style={{ flex: 1, backgroundColor: selectedExerciseIds.length === 0 ? "#e2e8f0" : "#6366f1", borderRadius: 12, paddingVertical: 13, alignItems: "center" }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: "600", color: selectedExerciseIds.length === 0 ? "#94a3b8" : "#fff" }}>
+                Registrar {selectedExerciseIds.length} ejercicio{selectedExerciseIds.length !== 1 ? "s" : ""}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
