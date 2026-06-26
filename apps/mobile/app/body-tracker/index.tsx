@@ -9,6 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { createBodyTrackerRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import LineChart, { type ChartDataPoint } from "../../components/LineChart";
+import DateInput from "../../components/DateInput";
 
 interface Measurement {
   id: string;
@@ -488,15 +489,8 @@ export default function BodyTrackerScreen() {
                 />
               </View>
               <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Fecha (AAAA-MM-DD)</Text>
-                <TextInput
-                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 }}
-                  placeholder="2025-06-25"
-                  placeholderTextColor="#94a3b8"
-                  value={logDate}
-                  onChangeText={setLogDate}
-                  keyboardType="numbers-and-punctuation"
-                />
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Fecha</Text>
+                <DateInput value={logDate} onChange={setLogDate} placeholder="Hoy" clearable />
               </View>
               <View style={{ gap: 6 }}>
                 <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Comentario (opcional)</Text>

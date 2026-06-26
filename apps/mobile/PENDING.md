@@ -54,11 +54,10 @@
 - **Requiere DB migration**: No (columnas ya existen)
 - **Descripción**: Al crear/editar una medida corporal no hay selector de "objetivo: INCREASE/DECREASE" ni campo para el valor objetivo. `goal_type` se usa en el gráfico (para saber si "mejor" = mínimo o máximo) pero el usuario no puede configurarlo desde la app. El formulario en `setMeasureModal` está incompleto
 
-### Date picker nativo
-- **Impacto**: Medio
-- **Esfuerzo**: 2-3h
-- **Requiere DB migration**: No
-- **Descripción**: Tres pantallas usan inputs de texto libre para fechas (move workout modal, body tracker log entry, goals target_date). `@react-native-community/datetimepicker` o el picker de Expo. Mejora UX significativamente en Android
+### ~~Date picker nativo~~ ✅ RESUELTO
+- `DateInput` component en `components/DateInput.tsx` con `@react-native-community/datetimepicker`
+- Reemplazados los 3 TextInput de texto libre: move workout modal, body tracker log entry, goals target_date
+- Muestra fecha formateada en español, icono de calendario, botón clear opcional
 
 ### ~~Filtros avanzados en historial de ejercicio~~ ✅ RESUELTO
 - Toggle "Ocultar calentamientos" en la cabecera del tab Historial (activo por defecto)
@@ -111,7 +110,7 @@
 ### Siguiente (features de impacto real)
 5. ~~Configurar `goal_type`/`goal_value` en body tracker~~ ✅
 6. ~~Detección automática de goals logrados~~ ✅
-7. Date picker nativo (requiere instalar `@react-native-community/datetimepicker` y rebuild APK)
+7. ~~Date picker nativo~~ ✅
 
 ### Backlog
 8. Notificaciones rest timer (requiere rebuild APK)

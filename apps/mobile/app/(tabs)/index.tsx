@@ -6,6 +6,7 @@ import { useWorkoutStore, useExerciseStore, formatWorkoutDate, todayISO, Exercis
 import { createWorkoutRepository, createExerciseRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import { useSyncStatus } from "../../contexts/SyncContext";
+import DateInput from "../../components/DateInput";
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -183,7 +184,7 @@ export default function HomeScreen() {
   }
 
   async function handleMoveWorkout() {
-    if (!activeWorkout?.id || !moveDate.match(/^\d{4}-\d{2}-\d{2}$/)) return;
+    if (!activeWorkout?.id || !moveDate) return;
     await repo.updateWorkout(activeWorkout.id, { comment: activeWorkout.comment });
     await supabase.from("workouts").update({ date: moveDate }).eq("id", activeWorkout.id);
     setShowMoveModal(false);
@@ -503,16 +504,8 @@ export default function HomeScreen() {
           <View style={{ backgroundColor: "#fff", borderRadius: 16, padding: 20, gap: 16 }}>
             <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>Mover entrenamiento</Text>
             <View style={{ gap: 6 }}>
-              <Text style={{ fontSize: 12, color: "#64748b" }}>Nueva fecha (AAAA-MM-DD)</Text>
-              <TextInput
-                style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 16 }}
-                value={moveDate}
-                onChangeText={setMoveDate}
-                placeholder="2025-06-25"
-                placeholderTextColor="#cbd5e1"
-                keyboardType="numbers-and-punctuation"
-                autoFocus
-              />
+              <Text style={{ fontSize: 12, color: "#64748b" }}>Nueva fecha</Text>
+              <DateInput value={moveDate} onChange={setMoveDate} />
             </View>
             <View style={{ flexDirection: "row", gap: 10 }}>
               <TouchableOpacity onPress={() => setShowMoveModal(false)} style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: "#e2e8f0", alignItems: "center" }}>
@@ -520,10 +513,10 @@ export default function HomeScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleMoveWorkout}
-                disabled={!moveDate.match(/^\d{4}-\d{2}-\d{2}$/)}
-                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: moveDate.match(/^\d{4}-\d{2}-\d{2}$/) ? "#6366f1" : "#e2e8f0", alignItems: "center" }}
+                disabled={!moveDate}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: moveDate ? "#6366f1" : "#e2e8f0", alignItems: "center" }}
               >
-                <Text style={{ fontSize: 14, fontWeight: "600", color: moveDate.match(/^\d{4}-\d{2}-\d{2}$/) ? "#fff" : "#94a3b8" }}>Mover</Text>
+                <Text style={{ fontSize: 14, fontWeight: "600", color: moveDate ? "#fff" : "#94a3b8" }}>Mover</Text>
               </TouchableOpacity>
             </View>
           </View>

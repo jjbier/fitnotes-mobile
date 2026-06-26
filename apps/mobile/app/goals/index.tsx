@@ -9,6 +9,7 @@ import { useExerciseStore, useProgressStore, calculate1RM, ExerciseType } from "
 import { createGoalsRepository, createExerciseRepository, createProgressRepository, type ExerciseGoalRow } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import type { Exercise } from "@fitnotes/core";
+import DateInput from "../../components/DateInput";
 
 export default function GoalsScreen() {
   const navigation = useNavigation();
@@ -373,13 +374,7 @@ export default function GoalsScreen() {
               {/* Date */}
               <View style={{ gap: 6 }}>
                 <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Fecha límite (opcional)</Text>
-                <TextInput
-                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14 }}
-                  placeholder="AAAA-MM-DD"
-                  placeholderTextColor="#cbd5e1"
-                  value={targetDate}
-                  onChangeText={setTargetDate}
-                />
+                <DateInput value={targetDate} onChange={setTargetDate} placeholder="Sin fecha límite" clearable />
               </View>
 
               {/* Notes */}
