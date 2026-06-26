@@ -75,11 +75,13 @@
 - `getWorkoutsWithSummary(10)` en workoutRepository: 3 queries planas → ejercicios y volumen por workout
 - Home screen muestra "X ejercicios · Yk kg" debajo de cada fecha en actividad reciente
 
-### Búsqueda global
-- **Impacto**: Bajo
-- **Esfuerzo**: 3-4h
-- **Requiere DB migration**: No
-- **Descripción**: No hay búsqueda que cruce ejercicios + fechas + historial. Útil para "¿cuándo fue la última vez que hice sentadilla?" pero FitNotes classic tampoco lo tenía
+### ~~Búsqueda global~~ ✅ RESUELTO
+- Pantalla `/search/index.tsx` con FlatList de ejercicios + historial
+- `getLastWorkoutByExercises(ids[])` en workoutRepository: fecha, maxPeso, maxReps, setCount
+- Resultados ordenados por última sesión (más reciente primero)
+- Muestra: nombre, categoría, tipo, última fecha, series, peso/reps
+- Tap → navega a exercise-history del ejercicio
+- Accesible desde icono 🕐 en el header del tab Ejercicios
 
 ### Tema oscuro
 - **Impacto**: Bajo

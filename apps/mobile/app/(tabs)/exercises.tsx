@@ -368,7 +368,7 @@ export default function ExercisesScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-      {/* Search + manage categories */}
+      {/* Search + global search + manage categories */}
       <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8, flexDirection: "row", alignItems: "center", gap: 8 }}>
         <View style={{ flex: 1, flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#e2e8f0", backgroundColor: "#f8fafc", borderRadius: 12, paddingHorizontal: 12, gap: 8 }}>
           <Ionicons name="search" size={16} color="#64748b" />
@@ -380,6 +380,14 @@ export default function ExercisesScreen() {
             clearButtonMode="while-editing"
           />
         </View>
+        <TouchableOpacity
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onPress={() => router.push("/search" as any)}
+          style={{ padding: 8 }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="time-outline" size={20} color="#6366f1" />
+        </TouchableOpacity>
         {categories.length > 0 && (
           <TouchableOpacity onPress={() => setShowCatModal(true)} style={{ padding: 8 }}>
             <Ionicons name="settings-outline" size={20} color="#64748b" />
