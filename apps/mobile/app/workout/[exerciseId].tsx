@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { SafeAreaView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, FlatList } from "react-native";
+import { SafeAreaView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, FlatList, Platform } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as Notifications from "expo-notifications";
 import { useKeepAwake } from "expo-keep-awake";
 import DraggableFlatList, { ScaleDecorator, NestableScrollContainer, NestableDraggableFlatList, type RenderItemParams } from "react-native-draggable-flatlist";
 import { useWorkoutStore, useExerciseStore, ExerciseType, calculate1RM } from "@fitnotes/core";
@@ -82,6 +83,7 @@ export default function TrainingScreen() {
   const [timerRemaining, setTimerRemaining] = useState(90);
   const [timerRunning, setTimerRunning] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const notifIdRef = useRef<string | null>(null);
 
   const repo = useMemo(() => createWorkoutRepository(supabase), []);
   const progressRepo = useMemo(() => createProgressRepository(supabase), []);
@@ -156,6 +158,49 @@ export default function TrainingScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workoutExercise?.id, activeWorkout?.id]);
 
+  // Configure notification handler and request permissions once
+  useEffect(() => {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+    if (Platform.OS === "android") {
+      void Notifications.setNotificationChannelAsync("rest-timer", {
+        name: "Descanso entre series",
+        importance: Notifications.AndroidImportance.HIGH,
+        sound: "default",
+        vibrationPattern: [0, 250, 250, 250],
+      });
+    }
+    void Notifications.requestPermissionsAsync();
+  }, []);
+
+  async function scheduleRestNotification(seconds: number) {
+    await cancelRestNotification();
+    const id = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "¡Descanso terminado!",
+        body: "Es hora de tu siguiente serie 💪",
+        sound: "default",
+        ...(Platform.OS === "android" ? { channelId: "rest-timer" } : {}),
+      },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds, repeats: false },
+    });
+    notifIdRef.current = id;
+  }
+
+  async function cancelRestNotification() {
+    if (notifIdRef.current) {
+      await Notifications.cancelScheduledNotificationAsync(notifIdRef.current);
+      notifIdRef.current = null;
+    }
+  }
+
   useEffect(() => {
     if (timerRunning) {
       intervalRef.current = setInterval(() => {
@@ -163,6 +208,7 @@ export default function TrainingScreen() {
           if (prev <= 1) {
             clearInterval(intervalRef.current!);
             setTimerRunning(false);
+            void cancelRestNotification();
             void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             return 0;
           }
@@ -173,20 +219,29 @@ export default function TrainingScreen() {
       if (intervalRef.current) clearInterval(intervalRef.current);
     }
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timerRunning]);
 
   function handleTimerToggle() {
     if (timerRemaining === 0) {
       setTimerRemaining(timerDuration);
       setTimerRunning(true);
+      void scheduleRestNotification(timerDuration);
+    } else if (timerRunning) {
+      // Pause
+      setTimerRunning(false);
+      void cancelRestNotification();
     } else {
-      setTimerRunning((v) => !v);
+      // Resume — reschedule for remaining time
+      setTimerRunning(true);
+      void scheduleRestNotification(timerRemaining);
     }
   }
 
   function handleTimerReset() {
     setTimerRunning(false);
     setTimerRemaining(timerDuration);
+    void cancelRestNotification();
   }
 
   function handleChangeDuration(delta: number) {
@@ -234,6 +289,7 @@ export default function TrainingScreen() {
     // Auto-start rest timer after logging a set
     setTimerRemaining(timerDuration);
     setTimerRunning(true);
+    void scheduleRestNotification(timerDuration);
   }
 
   async function handleIncrementField(s: FitSet, field: "weight" | "reps" | "distance" | "time_seconds", delta: number) {
@@ -280,6 +336,7 @@ export default function TrainingScreen() {
     if (nowComplete) {
       setTimerRemaining(timerDuration);
       setTimerRunning(true);
+      void scheduleRestNotification(timerDuration);
     }
 
     // Auto-select next incomplete set

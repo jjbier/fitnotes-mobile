@@ -32,11 +32,13 @@
 
 ## Gaps por área
 
-### Notificaciones — rest timer en background
-- **Impacto**: Alto
-- **Esfuerzo**: 3-4h
-- **Requiere DB migration**: No
-- **Descripción**: El rest timer para cuando la app se minimiza. Requiere `expo-notifications` + reconstruir APK (`expo install expo-notifications` y configurar en `app.json`). Actualmente solo haptics al finalizar, solo si app está en primer plano
+### ~~Notificaciones — rest timer en background~~ ✅ RESUELTO
+- `expo-notifications ~0.29.14` instalado, plugin configurado en `app.json`
+- Canal Android "rest-timer" con prioridad HIGH y vibración
+- Al iniciar/reanudar timer: `scheduleNotificationAsync` con trigger TIME_INTERVAL
+- Al pausar/resetear/finalizar: `cancelScheduledNotificationAsync`
+- Auto-start al guardar serie también programa la notificación
+- Permisos solicitados al entrar al workout screen
 
 ### ~~Importar/restaurar datos~~ ✅ RESUELTO
 - `importFromCSV(rows, userId)` en workoutRepository: parseo, dedup por fecha, crea ejercicios faltantes
@@ -113,6 +115,6 @@
 7. ~~Date picker nativo~~ ✅
 
 ### Backlog
-8. Notificaciones rest timer (requiere rebuild APK)
+8. ~~Notificaciones rest timer~~ ✅
 9. ~~Estadísticas de uso en rutinas~~ ✅ (última sesión + conteo en tarjeta de rutina)
 10. Importar/restaurar datos
