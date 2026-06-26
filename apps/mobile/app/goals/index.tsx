@@ -24,6 +24,7 @@ export default function GoalsScreen() {
   const [goals, setGoals] = useState<ExerciseGoalRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState("");
+  const [bestSets, setBestSets] = useState<Record<string, { maxReps: number; maxDistance: number; maxTime: number }>>({});
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
@@ -76,6 +77,26 @@ export default function GoalsScreen() {
         }
       }
       setGoals(goalsData);
+
+      // For exercises with goals but no PR (e.g. REPS_ONLY), fetch best sets directly
+      if (prRes.data) {
+        const exIdsWithPr = new Set(prRes.data.map((r) => r.exercise_id));
+        const exIdsWithoutPr = goalsData
+          .map((g) => g.exercise_id)
+          .filter((id) => !exIdsWithPr.has(id));
+        if (exIdsWithoutPr.length > 0) {
+          const bs = await progressRepo.getBestSetsByExercise(exIdsWithoutPr);
+          setBestSets(bs);
+          // Merge into prsByExercise for autoCheckAchievements
+          for (const [exId, s] of Object.entries(bs)) {
+            if (s.maxReps > 0) {
+              if (!prsByExercise[exId]) prsByExercise[exId] = [];
+              prsByExercise[exId]!.push({ weight: 0, reps: s.maxReps });
+            }
+          }
+        }
+      }
+
       setLoading(false);
       if (goalsData.length > 0) void autoCheckAchievements(goalsData, prsByExercise);
     }
@@ -148,9 +169,16 @@ export default function GoalsScreen() {
 
   function getCurrentBest(exId: string): { weight: number; reps: number; orm: number } | null {
     const prs = personalRecords[exId];
-    if (!prs || prs.length === 0) return null;
-    const best = prs.reduce((top, r) => calculate1RM(r.weight, r.reps) > calculate1RM(top.weight, top.reps) ? r : top, prs[0]!);
-    return { weight: best.weight, reps: best.reps, orm: calculate1RM(best.weight, best.reps) };
+    if (prs && prs.length > 0) {
+      const best = prs.reduce((top, r) => calculate1RM(r.weight, r.reps) > calculate1RM(top.weight, top.reps) ? r : top, prs[0]!);
+      return { weight: best.weight, reps: best.reps, orm: calculate1RM(best.weight, best.reps) };
+    }
+    // Fallback for reps-only / no-weight exercises that lack PR entries
+    const bs = bestSets[exId];
+    if (bs && (bs.maxReps > 0 || bs.maxDistance > 0 || bs.maxTime > 0)) {
+      return { weight: 0, reps: bs.maxReps, orm: 0 };
+    }
+    return null;
   }
 
   async function autoCheckAchievements(
@@ -245,12 +273,12 @@ export default function GoalsScreen() {
                         <View style={{ flexDirection: "row", gap: 10, marginTop: 4 }}>
                           {goal.target_weight != null && (
                             <Text style={{ fontSize: 12, color: "#64748b" }}>
-                              Peso: {best ? `${best.weight}` : "—"} / <Text style={{ fontWeight: "700", color: "#6366f1" }}>{goal.target_weight} kg</Text>
+                              Peso: {best && best.weight > 0 ? `${best.weight}` : "—"} / <Text style={{ fontWeight: "700", color: "#6366f1" }}>{goal.target_weight} kg</Text>
                             </Text>
                           )}
                           {goal.target_reps != null && (
                             <Text style={{ fontSize: 12, color: "#64748b" }}>
-                              Reps: {best ? `${best.reps}` : "—"} / <Text style={{ fontWeight: "700", color: "#6366f1" }}>{goal.target_reps}</Text>
+                              Reps: {best && best.reps > 0 ? `${best.reps}` : "—"} / <Text style={{ fontWeight: "700", color: "#6366f1" }}>{goal.target_reps}</Text>
                             </Text>
                           )}
                         </View>

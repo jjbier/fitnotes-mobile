@@ -17,10 +17,10 @@
 ### ~~Bug 3: Body tracker — primer gráfico no carga automáticamente~~ ✅ YA ESTABA RESUELTO
 - El tab bar ya cargaba el primer gráfico al cambiar a "chart" si no había selección
 
-### Bug 4: Goals — progreso solo funciona para objetivos de peso
-- **Archivo**: `app/goals/index.tsx` (líneas 188-198)
-- El código maneja `target_weight` y `target_reps` correctamente con `??`. El problema real es que los PRs de ejercicios sin peso (reps-only) no se detectan porque el trigger SQL ignora exercises sin peso
-- **Severidad**: Baja
+### ~~Bug 4: Goals — progreso solo funciona para objetivos de peso~~ ✅ RESUELTO
+- `getBestSetsByExercise()` añadido a progressRepository: query `workout_exercises.sets` para ejercicios sin PR
+- Goals carga best sets para ejercicios sin PR y los usa en `getCurrentBest()` y `autoCheckAchievements()`
+- Display muestra "—" cuando best.weight=0 (ejercicios reps-only)
 
 ### ~~Bug 5: Calendar — sin navegación a workout para edición~~ ✅ YA ESTABA RESUELTO
 - El panel del día ya tenía botón "Ver →" que navega a `/(tabs)` con `date` param
