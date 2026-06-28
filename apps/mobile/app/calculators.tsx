@@ -19,6 +19,7 @@ import {
   calculateSetWeight,
   calculatePlates,
 } from "@fitnotes/core";
+import { useTheme } from "../lib/theme";
 
 type Tab = "1rm" | "set" | "plates" | "bmi";
 

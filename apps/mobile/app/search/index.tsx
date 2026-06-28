@@ -8,6 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useExerciseStore, ExerciseType } from "@fitnotes/core";
 import { createWorkoutRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
+import { useTheme } from "../../lib/theme";
 
 type LastWorkout = { date: string; maxWeight: number; maxReps: number; setCount: number };
 
@@ -41,6 +42,7 @@ function daysAgo(iso: string) {
 }
 
 export default function SearchScreen() {
+  const colors = useTheme();
   const router = useRouter();
   const exercises = useExerciseStore((s) => s.exercises);
   const categories = useExerciseStore((s) => s.categories);
@@ -85,19 +87,19 @@ export default function SearchScreen() {
   }, [filtered, lastWorkouts]);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
-      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#f1f5f9", gap: 10 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.borderLight, gap: 10 }}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="arrow-back" size={22} color="#0f172a" />
+          <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
-        <View style={{ flex: 1, flexDirection: "row", alignItems: "center", backgroundColor: "#f8fafc", borderRadius: 10, paddingHorizontal: 12, gap: 8 }}>
-          <Ionicons name="search" size={16} color="#94a3b8" />
+        <View style={{ flex: 1, flexDirection: "row", alignItems: "center", backgroundColor: colors.inputBg, borderRadius: 10, paddingHorizontal: 12, gap: 8 }}>
+          <Ionicons name="search" size={16} color={colors.textMuted} />
           <TextInput
             ref={inputRef}
-            style={{ flex: 1, fontSize: 15, paddingVertical: 9, color: "#0f172a" }}
+            style={{ flex: 1, fontSize: 15, paddingVertical: 9, color: colors.text }}
             placeholder="Buscar ejercicio…"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={colors.textMuted}
             value={query}
             onChangeText={setQuery}
             returnKeyType="search"
@@ -106,7 +108,7 @@ export default function SearchScreen() {
           />
           {query.length > 0 && (
             <TouchableOpacity onPress={() => setQuery("")}>
-              <Ionicons name="close-circle" size={16} color="#94a3b8" />
+              <Ionicons name="close-circle" size={16} color={colors.textMuted} />
             </TouchableOpacity>
           )}
         </View>
@@ -114,7 +116,7 @@ export default function SearchScreen() {
 
       {loading ? (
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <ActivityIndicator color="#6366f1" />
+          <ActivityIndicator color={colors.primary} />
         </View>
       ) : (
         <FlatList
@@ -124,15 +126,15 @@ export default function SearchScreen() {
           contentContainerStyle={{ paddingBottom: 40 }}
           ListEmptyComponent={
             <View style={{ padding: 40, alignItems: "center", gap: 8 }}>
-              <Ionicons name="search-outline" size={36} color="#cbd5e1" />
-              <Text style={{ fontSize: 14, color: "#94a3b8", textAlign: "center" }}>
+              <Ionicons name="search-outline" size={36} color={colors.textDisabled} />
+              <Text style={{ fontSize: 14, color: colors.textMuted, textAlign: "center" }}>
                 {query ? `Sin resultados para "${query}"` : "Sin ejercicios"}
               </Text>
             </View>
           }
           ListHeaderComponent={
             sorted.length > 0 ? (
-              <Text style={{ fontSize: 12, color: "#94a3b8", paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 }}>
+              <Text style={{ fontSize: 12, color: colors.textMuted, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 }}>
                 {sorted.length} ejercicio{sorted.length !== 1 ? "s" : ""}
               </Text>
             ) : null
@@ -144,34 +146,34 @@ export default function SearchScreen() {
               <TouchableOpacity
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 onPress={() => router.push(`/exercise-history/${ex.id}` as any)}
-                style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#f8fafc", gap: 12 }}
+                style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.backgroundAlt, gap: 12 }}
               >
                 {/* Left: name + meta */}
                 <View style={{ flex: 1, gap: 3 }}>
-                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }} numberOfLines={1}>{ex.name}</Text>
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: colors.text }} numberOfLines={1}>{ex.name}</Text>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    {cat && <Text style={{ fontSize: 11, color: "#64748b" }}>{cat}</Text>}
-                    {cat && <Text style={{ fontSize: 11, color: "#e2e8f0" }}>·</Text>}
-                    <Text style={{ fontSize: 11, color: "#94a3b8" }}>{TYPE_LABELS[ex.type] ?? ex.type}</Text>
+                    {cat && <Text style={{ fontSize: 11, color: colors.textSecondary }}>{cat}</Text>}
+                    {cat && <Text style={{ fontSize: 11, color: colors.border }}>·</Text>}
+                    <Text style={{ fontSize: 11, color: colors.textMuted }}>{TYPE_LABELS[ex.type] ?? ex.type}</Text>
                   </View>
                   {lw ? (
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
-                      <Ionicons name="time-outline" size={11} color="#6366f1" />
-                      <Text style={{ fontSize: 11, color: "#6366f1" }}>{daysAgo(lw.date)} · {formatDate(lw.date)}</Text>
+                      <Ionicons name="time-outline" size={11} color={colors.primary} />
+                      <Text style={{ fontSize: 11, color: colors.primary }}>{daysAgo(lw.date)} · {formatDate(lw.date)}</Text>
                       {lw.setCount > 0 && (
                         <>
-                          <Text style={{ fontSize: 11, color: "#e2e8f0" }}>·</Text>
-                          <Text style={{ fontSize: 11, color: "#64748b" }}>{lw.setCount} serie{lw.setCount !== 1 ? "s" : ""}</Text>
-                          {lw.maxWeight > 0 && <Text style={{ fontSize: 11, color: "#64748b" }}>· {lw.maxWeight}kg</Text>}
-                          {lw.maxWeight === 0 && lw.maxReps > 0 && <Text style={{ fontSize: 11, color: "#64748b" }}>· {lw.maxReps} reps</Text>}
+                          <Text style={{ fontSize: 11, color: colors.border }}>·</Text>
+                          <Text style={{ fontSize: 11, color: colors.textSecondary }}>{lw.setCount} serie{lw.setCount !== 1 ? "s" : ""}</Text>
+                          {lw.maxWeight > 0 && <Text style={{ fontSize: 11, color: colors.textSecondary }}>· {lw.maxWeight}kg</Text>}
+                          {lw.maxWeight === 0 && lw.maxReps > 0 && <Text style={{ fontSize: 11, color: colors.textSecondary }}>· {lw.maxReps} reps</Text>}
                         </>
                       )}
                     </View>
                   ) : (
-                    <Text style={{ fontSize: 11, color: "#cbd5e1", marginTop: 2 }}>Sin registros</Text>
+                    <Text style={{ fontSize: 11, color: colors.textDisabled, marginTop: 2 }}>Sin registros</Text>
                   )}
                 </View>
-                <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
+                <Ionicons name="chevron-forward" size={16} color={colors.textDisabled} />
               </TouchableOpacity>
             );
           }}

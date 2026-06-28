@@ -10,8 +10,10 @@ import { createGoalsRepository, createExerciseRepository, createProgressReposito
 import { supabase } from "../../lib/supabase";
 import type { Exercise } from "@fitnotes/core";
 import DateInput from "../../components/DateInput";
+import { useTheme } from "../../lib/theme";
 
 export default function GoalsScreen() {
+  const colors = useTheme();
   const navigation = useNavigation();
   const router = useRouter();
 
