@@ -509,7 +509,7 @@ export default function TrainingScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
       {/* Header */}
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => router.back()} accessibilityLabel="Cerrar">
           <Ionicons name="close" size={24} color="#0f172a" />
         </TouchableOpacity>
         <View style={{ alignItems: "center" }}>
@@ -517,10 +517,10 @@ export default function TrainingScreen() {
           <Text style={{ fontSize: 11, color: "#94a3b8" }}>{exerciseType.replace(/_/g, " ").toLowerCase()}</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-          <TouchableOpacity onPress={() => router.push("/calculators" as never)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <TouchableOpacity onPress={() => router.push("/calculators" as never)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Calculadoras">
             <Ionicons name="calculator-outline" size={20} color="#64748b" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleRemoveExercise} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <TouchableOpacity onPress={handleRemoveExercise} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Eliminar ejercicio">
             <Ionicons name="trash-outline" size={20} color="#ef4444" />
           </TouchableOpacity>
         </View>
@@ -616,13 +616,13 @@ export default function TrainingScreen() {
       {/* Rest Timer */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#f8fafc", gap: 8, backgroundColor: timerActive ? "#f0f0ff" : timerFinished ? "#f0fff4" : "#fafafa" }}>
         <Ionicons name="timer-outline" size={16} color={timerActive ? "#6366f1" : timerFinished ? "#22c55e" : "#94a3b8"} />
-        <TouchableOpacity onPress={() => handleChangeDuration(-15)} disabled={timerRunning} style={{ padding: 4, opacity: timerRunning ? 0.4 : 1 }}>
+        <TouchableOpacity onPress={() => handleChangeDuration(-15)} disabled={timerRunning} style={{ padding: 4, opacity: timerRunning ? 0.4 : 1 }} accessibilityLabel="Restar 15 segundos">
           <Ionicons name="remove-circle-outline" size={20} color="#64748b" />
         </TouchableOpacity>
         <Text style={{ fontSize: 18, fontWeight: "700", color: timerActive ? "#6366f1" : timerFinished ? "#22c55e" : "#0f172a", minWidth: 52, textAlign: "center" }}>
           {formatTime(timerRemaining)}
         </Text>
-        <TouchableOpacity onPress={() => handleChangeDuration(15)} disabled={timerRunning} style={{ padding: 4, opacity: timerRunning ? 0.4 : 1 }}>
+        <TouchableOpacity onPress={() => handleChangeDuration(15)} disabled={timerRunning} style={{ padding: 4, opacity: timerRunning ? 0.4 : 1 }} accessibilityLabel="Añadir 15 segundos">
           <Ionicons name="add-circle-outline" size={20} color="#64748b" />
         </TouchableOpacity>
         <TouchableOpacity
@@ -634,7 +634,7 @@ export default function TrainingScreen() {
             {timerActive ? "Pausar" : timerFinished ? "Reiniciar" : "Iniciar"}
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={handleTimerReset} style={{ padding: 4 }}>
+        <TouchableOpacity onPress={handleTimerReset} style={{ padding: 4 }} accessibilityLabel="Reiniciar timer">
           <Ionicons name="refresh-outline" size={18} color="#94a3b8" />
         </TouchableOpacity>
       </View>
@@ -857,12 +857,13 @@ export default function TrainingScreen() {
                       <TouchableOpacity
                         onPress={() => setCommentingSetId(commentingSetId === s.id ? null : s.id)}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityLabel={s.comment ? "Editar comentario" : "Añadir comentario"}
                       >
                         <Ionicons name={s.comment ? "chatbubble" : "chatbubble-outline"} size={14} color={s.comment ? "#6366f1" : "#cbd5e1"} />
                       </TouchableOpacity>
 
                       {/* Delete */}
-                      <TouchableOpacity onPress={() => handleDeleteSet(s.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <TouchableOpacity onPress={() => handleDeleteSet(s.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Eliminar serie">
                         <Ionicons name="trash-outline" size={14} color="#ef4444" />
                       </TouchableOpacity>
 
@@ -870,12 +871,13 @@ export default function TrainingScreen() {
                       <TouchableOpacity
                         onPress={() => handleToggleComplete(s.id, s.is_complete)}
                         style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: s.is_complete ? "#6366f1" : "#cbd5e1", backgroundColor: s.is_complete ? "#6366f1" : "transparent", alignItems: "center", justifyContent: "center" }}
+                        accessibilityLabel={s.is_complete ? "Desmarcar serie" : "Marcar serie completa"}
                       >
                         {s.is_complete && <Ionicons name="checkmark" size={14} color="white" />}
                       </TouchableOpacity>
 
                       {/* Drag handle */}
-                      <TouchableOpacity onLongPress={drag} delayLongPress={150} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <TouchableOpacity onLongPress={drag} delayLongPress={150} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Reordenar serie">
                         <Ionicons name="reorder-two-outline" size={18} color="#cbd5e1" />
                       </TouchableOpacity>
                     </View>

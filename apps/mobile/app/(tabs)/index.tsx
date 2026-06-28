@@ -396,7 +396,7 @@ export default function HomeScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Date nav header */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 8 }}>
-        <TouchableOpacity onPress={() => handleNavigateDate(-1)} style={{ padding: 6 }}>
+        <TouchableOpacity onPress={() => handleNavigateDate(-1)} style={{ padding: 6 }} accessibilityLabel="Día anterior">
           <Ionicons name="chevron-back" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
@@ -407,7 +407,7 @@ export default function HomeScreen() {
             <Text style={{ fontSize: 13, color: colors.textMuted }}>{formatWorkoutDate(today)}</Text>
           )}
         </View>
-        <TouchableOpacity onPress={() => handleNavigateDate(1)} disabled={currentDate >= today} style={{ padding: 6, opacity: currentDate >= today ? 0.4 : 1 }}>
+        <TouchableOpacity onPress={() => handleNavigateDate(1)} disabled={currentDate >= today} style={{ padding: 6, opacity: currentDate >= today ? 0.4 : 1 }} accessibilityLabel="Día siguiente">
           <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
         {syncStatus === "syncing" ? (
@@ -486,6 +486,7 @@ export default function HomeScreen() {
                     <TouchableOpacity
                       onPress={timerState === "running" ? handlePauseTimer : handleStartTimer}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel={timerState === "running" ? "Pausar temporizador" : "Iniciar temporizador"}
                     >
                       <Ionicons
                         name={timerState === "running" ? "pause-circle" : "play-circle"}
@@ -554,6 +555,7 @@ export default function HomeScreen() {
                         onPress={() => handleRemoveExercise(we.id, exName)}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                         style={{ padding: 8 }}
+                        accessibilityLabel="Eliminar ejercicio"
                       >
                         <Ionicons name="trash-outline" size={16} color="#ef4444" />
                       </TouchableOpacity>
@@ -627,6 +629,7 @@ export default function HomeScreen() {
                       onPress={() => handleDeleteWorkout(w.id, w.date)}
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       style={{ padding: 8 }}
+                      accessibilityLabel="Eliminar entrenamiento"
                     >
                       <Ionicons name="trash-outline" size={14} color="#ef4444" />
                     </TouchableOpacity>
@@ -642,7 +645,7 @@ export default function HomeScreen() {
         <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
           <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
             <Text style={{ flex: 1, fontSize: 16, fontWeight: "700", color: "#0f172a" }}>Elige una rutina</Text>
-            <TouchableOpacity onPress={() => setShowStartModal(false)}>
+            <TouchableOpacity onPress={() => setShowStartModal(false)} accessibilityLabel="Cerrar">
               <Ionicons name="close" size={22} color="#64748b" />
             </TouchableOpacity>
           </View>
@@ -721,7 +724,7 @@ export default function HomeScreen() {
         <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
           <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
             <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: "#0f172a" }}>Copiar ejercicios de…</Text>
-            <TouchableOpacity onPress={() => setShowCopyModal(false)}>
+            <TouchableOpacity onPress={() => setShowCopyModal(false)} accessibilityLabel="Cerrar">
               <Ionicons name="close" size={22} color="#64748b" />
             </TouchableOpacity>
           </View>
