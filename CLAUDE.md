@@ -53,8 +53,9 @@ fitnotes-app/
 - **NativeWind v4**: `withNativeWind` en metro.config.js + `jsxImportSource: "nativewind"` en babel. NO `nativewind/babel` plugin
 - **Metro TS resolver**: mapea `.js` → `.ts` para workspace packages con `verbatimModuleSyntax`
 - **pnpm hoisting**: `.npmrc` `public-hoist-pattern[]=@babel/runtime*` — necesario para `assembleRelease`
-- **Supersets**: `group_id` en `routine_day_exercises` — tap icono 🔗 agrupa con siguiente ejercicio, tap morado disuelve
+- **Supersets**: `group_id` en `routine_day_exercises` — tap icono 🔗 agrupa con siguiente ejercicio, tap morado abre Alert (renombrar/disolver)
 - **Predefined sets race condition fix**: `useRef` para trackear qué ejercicio está cargando — descartar respuesta si el usuario cambió de ejercicio
+- **Dark mode mobile**: `useTheme()` de `apps/mobile/lib/theme.ts` — sigue esquema del sistema via `useColorScheme()`
 
 ---
 
@@ -62,19 +63,27 @@ fitnotes-app/
 
 ### `packages/core` ✅
 - Tipos: `Exercise`, `ExerciseType` (10 valores), `Workout`, `Set`, `WorkoutExercise`, `PersonalRecord`, `Routine`, `RoutineDay`, `RoutineDayExercise`, `PredefinedSet`, `BodyMeasurement`, `BodyMeasurementEntry`
+- `RoutineDayExercise` tiene `group_id?: string` y `group_name?: string`
+- `WorkoutExercise` tiene `group_id?: string` y `group_name?: string`
 - Stores: `useWorkoutStore`, `useExerciseStore`, `useProgressStore`, `useRoutineStore`
 - Utils: `calculate1RM`, `estimateRepMax`, `calculateVolume`, `calculatePace`, `calculateSpeed`, `roundToNearest`, `calculateSetWeight`, `calculatePlates`, `formatWorkoutDate`, `getWeekRange`, `groupWorkoutsByMonth`
 - **144 tests Vitest**
 
 ### `packages/database` ✅
-- Repositorios: `exercise`, `routine`, `workout`, `progress`, `bodyTracker`, `calendar`
-- `routineRepository` incluye: `copyRoutine`, `updateRoutine`, `updateDayExercise`, `reorderDays`, `reorderExercises`, `getPredefinedSets`, `savePredefinedSets`
+- Repositorios: `exercise`, `routine`, `workout`, `progress`, `bodyTracker`, `calendar`, `goals`
+- `routineRepository` incluye: `copyRoutine`, `updateRoutine`, `updateDayExercise`, `updateDayGroupName`, `reorderDays`, `reorderExercises`, `getPredefinedSets`, `savePredefinedSets`
+- `workoutRepository.addExercise` acepta `group_id` y `group_name`
+- Migraciones aplicadas en Supabase: 001–005 (incluye `group_name` en `routine_day_exercises`)
 - `SyncEngine` — push/pull/sync
 
 ### `apps/web` ✅ — todas las rutas conectadas a Supabase
 `/dashboard`, `/exercise`, `/exercise/[id]`, `/progress`, `/calendar`, `/routines`, `/routines/[id]`, `/body-tracker`, `/tools`, `/settings` (incl. export CSV + delete account)
 
+**Web loading/error boundaries** (`loading.tsx` + `error.tsx`) en todas las rutas incluyendo sub-rutas: `exercise/[id]`, `exercise/history/[exerciseId]`, `routines/[id]`, `workout/[date]`.
+
 ### `apps/mobile` ✅ — APK release funcionando en dispositivo Android
+
+**Dark mode**: todas las pantallas usan `useTheme()` y siguen el esquema del sistema (light/dark). Tab bar, status bar y modales también adaptan colores.
 
 **Tabs:**
 | Tab | Contenido |
@@ -88,19 +97,29 @@ fitnotes-app/
 
 **Rutas no-tab:**
 - `workout/[exerciseId]` — sets CRUD completo, todos los ExerciseTypes, RestTimer haptics
-- `routines/[id]` — días + ejercicios, edit mode, drag & drop days+ejercicios, predefined sets, supersets, log routine day → workout real
+- `routines/[id]` — días + ejercicios, edit mode, drag & drop days+ejercicios, predefined sets, supersets con nombres personalizables, log routine day → workout real
 - `calculators` — 1RM, Set%, Plate calculators (accesible desde Configuración)
 - `body-tracker` — CRUD medidas + entradas
 - `exercises/[categoryId]`
+- `search/` — búsqueda global de ejercicios con historial
+- `goals/` — objetivos por ejercicio
+- `exercise-history/[exerciseId]` — historial completo + gráfico
 
 **Rutinas — características completas:**
 - Crear/editar nombre+notas/copiar/eliminar vía menú ⋮
 - Días con drag & drop reordenar
 - Ejercicios por día con drag & drop reordenar
 - Predefined sets por ejercicio (modal, campos vacíos = copian del historial)
-- Supersets: icono 🔗 en edit mode — agrupa con siguiente (group_id), barra morada en lectura
-- Log routine day → crea workout real con predefined sets aplicados
+- **Supersets con nombres personalizables**: icono 🔗 → agrupa (group_id); tap en morado → Alert: "Renombrar grupo" | "Quitar del grupo" | "Cancelar"
+- Log routine day → crea workout real con predefined sets y group_name propagado
 - `?create=1` param abre modal de nueva rutina automáticamente
+
+**Config por ejercicio** (migración 003):
+- `weight_increment` — usado en botones +/− del workout
+- `default_rest_seconds` — inicializa el RestTimer al abrir el ejercicio
+- `default_chart` — `"weight" | "volume" | "reps"` (migración 004)
+
+**Accessibility**: `accessibilityLabel` en todos los botones de icono (exercises, index, workout).
 
 ### Android APK ✅
 ```bash
@@ -116,6 +135,7 @@ cd apps/mobile/android && ./gradlew assembleRelease --no-daemon
 - `packages/ui` vacío
 - SyncEngine pull no actualiza stores de ejercicios/rutinas (solo today workout via `refetchSignal`)
 - `routines/index.tsx` es código muerto — el tab usa `(tabs)/tools.tsx` que duplica esa UI
+- Phase 7.6 (CI/CD: GitHub Actions, EAS build, Vercel config, README) — no iniciado
 
 ---
 

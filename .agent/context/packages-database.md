@@ -1,6 +1,6 @@
 # packages/database — @fitnotes/database
 
-_Last updated: 2026-06-23_
+_Last updated: 2026-06-28_
 
 ## Cliente Supabase (`src/supabase/client.ts`)
 
@@ -15,17 +15,21 @@ createServerClient(cookieStore)    // Server Components / Route Handlers
 
 | Repositorio | Métodos destacados |
 |---|---|
-| `workoutRepository` | getWorkoutByDate, createWorkout, addExercise, getSets, createSet, updateSet, deleteSet |
+| `workoutRepository` | getWorkoutByDate, createWorkout, addExercise(+group_id+group_name), getSets, createSet, updateSet, deleteSet |
 | `exerciseRepository` | getCategories, getExercises, createExercise, toggleFavorite |
-| `routineRepository` | copyRoutine (deep), updateRoutine, updateDayExercise, reorderDays, reorderExercises, savePredefinedSets |
+| `routineRepository` | copyRoutine (deep), updateRoutine, updateDayExercise, **updateDayGroupName**, reorderDays, reorderExercises, savePredefinedSets |
 | `progressRepository` | getAllPersonalRecords, getChartData |
 | `bodyTrackerRepository` | getMeasurements, addEntry, deleteEntry, getAllEntries |
 | `calendarRepository` | getWorkoutsForMonth, getWorkoutSummary |
+| `goalsRepository` | getGoals, createGoal, updateGoal, deleteGoal, markAchieved |
 
-## Migraciones (`src/supabase/migrations/`)
+## Migraciones aplicadas en Supabase (`src/supabase/migrations/`)
 
-- `001_initial_schema.sql` — tablas, RLS, triggers (updated_at + personal_records)
+- `001_initial_schema.sql` — tablas base, RLS, triggers (updated_at + personal_records)
 - `002_delete_user_fn.sql` — función RPC `delete_user()` SECURITY DEFINER
+- `003_exercise_config_and_group_name.sql` — `exercises.weight_increment`, `default_rest_seconds`; `routine_day_exercises.group_id`; `workout_exercises.group_id`, `group_name`
+- `004_default_chart.sql` — `exercises.default_chart TEXT` ("weight"|"volume"|"reps")
+- `005_routine_day_exercise_group_name.sql` — `routine_day_exercises.group_name TEXT`
 
 ## SyncEngine (`src/sync/syncEngine.ts`)
 
@@ -35,4 +39,14 @@ getPendingCount(): number
 ```
 
 - Mobile singleton: `lib/sync.ts` → `export const syncEngine = new SyncEngine(supabase)`
-- Pull solo actualiza workout de hoy via `refetchSignal` — NO actualiza stores de ejercicios/rutinas
+- Pull solo actualiza workout de hoy via `refetchSignal` — **NO actualiza stores de ejercicios/rutinas**
+
+## Applying migrations (sin CLI instalado)
+
+Usar Management API con PAT (guardado en memory):
+```bash
+curl -X POST "https://api.supabase.com/v1/projects/fbhjiwtriqrxibqwsyqj/database/query" \
+  -H "Authorization: Bearer $SUPABASE_PAT" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "ALTER TABLE ..."}'
+```

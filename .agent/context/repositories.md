@@ -1,6 +1,6 @@
 # Repositories — @fitnotes/database
 
-_Last updated: 2026-06-23_
+_Last updated: 2026-06-28_
 
 Todos exportados desde `packages/database/src/index.ts`. Todos usan `SupabaseClient<Database>`.
 
@@ -13,8 +13,8 @@ createWorkout(data, userId)
 updateWorkout(id, data)
 deleteWorkout(id)
 getWorkoutExercises(workoutId)
-addExercise(data, userId)      // → devuelve workout_exercise con UUID real
-removeExercise(id)             // por workout_exercise.id
+addExercise(data, userId)      // data: { workout_id, exercise_id, order_index, group_id?, group_name? }
+removeExercise(id)
 reorderExercises(updates)
 getSets(workoutExerciseId)
 createSet(data, userId)
@@ -27,9 +27,11 @@ deleteSet(id)
 ```ts
 getCategories()
 createCategory(data, userId)
+updateCategory(id, data)
+deleteCategory(id)
 getExercises(categoryId?)
 createExercise(data, userId)
-updateExercise(id, data)
+updateExercise(id, data)       // incluye weight_increment, default_rest_seconds, default_chart
 deleteExercise(id)
 toggleFavorite(id, isFavorite)
 ```
@@ -39,7 +41,7 @@ toggleFavorite(id, isFavorite)
 ```ts
 getRoutines()
 createRoutine(data, userId)
-updateRoutine(id, data)                          // editar nombre/notas
+updateRoutine(id, data)
 deleteRoutine(id)
 copyRoutine(sourceId, newName, userId)           // deep copy: días + ejercicios + predefined sets
 getDays(routineId)
@@ -49,11 +51,13 @@ deleteDay(id)
 reorderDays(updates)                             // [{ id, order_index }]
 getDayExercises(dayId)
 addExercise(data, userId)
-updateDayExercise(id, data)                      // { group_id?: string | null } — supersets
+updateDayExercise(id, data)                      // { group_id?: string|null, group_name?: string|null }
+updateDayGroupName(groupId, name)                // actualiza group_name en TODOS los miembros del grupo
 removeExercise(id)
-reorderExercises(updates)                        // [{ id, order_index }]
+reorderExercises(updates)
 getPredefinedSets(routineDayExerciseId)
 savePredefinedSets(rdExerciseId, sets, userId)   // delete+insert — reemplaza completo
+getRoutineStats(routineIds)                      // { lastUsed, sessionCount } por rutina
 ```
 
 ## progressRepository
@@ -83,4 +87,14 @@ deleteEntry(id)
 getWorkoutsForMonth(year, month)
 getWorkoutSummary(date)
 getWorkoutHistory(limit?)
+```
+
+## goalsRepository
+
+```ts
+getGoals(exerciseId?)
+createGoal(data, userId)
+updateGoal(id, data)
+deleteGoal(id)
+markAchieved(id, achievedAt)
 ```
