@@ -238,6 +238,53 @@ export function createRoutineRepository(client: Client) {
       if (rows.length === 0) return client.from("predefined_sets").select().eq("id", "none");
       return client.from("predefined_sets").insert(rows).select();
     },
+
+    async getRoutineStats(routineIds: string[]): Promise<{
+      data: { routineId: string; lastUsed: string | null; sessionCount: number }[];
+    }> {
+      if (routineIds.length === 0) return { data: [] };
+
+      const [daysRes, weRes] = await Promise.all([
+        client.from("routine_days").select("id, routine_id").in("routine_id", routineIds),
+        client.from("workout_exercises").select("exercise_id, workout_id"),
+      ]);
+
+      const dayToRoutine = new Map((daysRes.data ?? []).map((d) => [d.id, d.routine_id]));
+      const dayIds = [...dayToRoutine.keys()];
+      if (dayIds.length === 0) return { data: routineIds.map((id) => ({ routineId: id, lastUsed: null, sessionCount: 0 })) };
+
+      const [rdeRes, wRes] = await Promise.all([
+        client.from("routine_day_exercises").select("routine_day_id, exercise_id").in("routine_day_id", dayIds),
+        client.from("workouts").select("id, date"),
+      ]);
+
+      const routineExercises = new Map<string, Set<string>>();
+      for (const rde of rdeRes.data ?? []) {
+        const routineId = dayToRoutine.get(rde.routine_day_id);
+        if (!routineId) continue;
+        if (!routineExercises.has(routineId)) routineExercises.set(routineId, new Set());
+        routineExercises.get(routineId)!.add(rde.exercise_id);
+      }
+
+      const workoutDate = new Map((wRes.data ?? []).map((w) => [w.id, w.date]));
+
+      const data = routineIds.map((routineId) => {
+        const exIds = routineExercises.get(routineId);
+        if (!exIds || exIds.size === 0) return { routineId, lastUsed: null, sessionCount: 0 };
+        const workoutIds = new Set<string>();
+        let lastUsed: string | null = null;
+        for (const we of weRes.data ?? []) {
+          if (exIds.has(we.exercise_id)) {
+            workoutIds.add(we.workout_id);
+            const date = workoutDate.get(we.workout_id);
+            if (date && (!lastUsed || date > lastUsed)) lastUsed = date;
+          }
+        }
+        return { routineId, lastUsed, sessionCount: workoutIds.size };
+      });
+
+      return { data };
+    },
   };
 }
 

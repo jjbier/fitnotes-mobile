@@ -122,6 +122,7 @@ export function createExerciseRepository(client: Client) {
           distance?: number;
           time_seconds?: number;
           is_complete: boolean;
+          is_warmup: boolean;
           comment?: string;
           order_index: number;
         }[];
@@ -141,7 +142,7 @@ export function createExerciseRepository(client: Client) {
       const [wRes, sRes] = await Promise.all([
         client.from("workouts").select("id, date, comment").in("id", workoutIds),
         client.from("sets")
-          .select("id, workout_exercise_id, weight, reps, distance, time_seconds, is_complete, comment, order_index")
+          .select("id, workout_exercise_id, weight, reps, distance, time_seconds, is_complete, is_warmup, comment, order_index")
           .in("workout_exercise_id", weIds),
       ]);
       if (wRes.error) return { data: null, error: wRes.error };
@@ -154,7 +155,7 @@ export function createExerciseRepository(client: Client) {
         setsByWE.get(s.workout_exercise_id)!.push(s);
       }
 
-      const built: { workout_id: string; date: string; comment?: string; sets: { id: string; weight?: number; reps?: number; distance?: number; time_seconds?: number; is_complete: boolean; comment?: string; order_index: number }[] }[] = [];
+      const built: { workout_id: string; date: string; comment?: string; sets: { id: string; weight?: number; reps?: number; distance?: number; time_seconds?: number; is_complete: boolean; is_warmup: boolean; comment?: string; order_index: number }[] }[] = [];
       for (const we of weRes.data) {
         const workout = workoutMap.get(we.workout_id);
         if (!workout) continue;
@@ -167,6 +168,7 @@ export function createExerciseRepository(client: Client) {
             distance: s.distance ?? undefined,
             time_seconds: s.time_seconds ?? undefined,
             is_complete: s.is_complete,
+            is_warmup: s.is_warmup,
             comment: s.comment ?? undefined,
             order_index: s.order_index,
           }));

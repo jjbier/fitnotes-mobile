@@ -31,6 +31,13 @@ export function createCalendarRepository(client: Client) {
         .order("date", { ascending: false })
         .limit(limit);
     },
+
+    getWorkoutDatesForExercise(exerciseId: string) {
+      return client
+        .from("workout_exercises")
+        .select("workouts!inner(date)")
+        .eq("exercise_id", exerciseId);
+    },
   };
 }
 

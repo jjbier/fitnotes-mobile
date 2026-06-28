@@ -81,6 +81,7 @@ describe("calculateVolume", () => {
     weight,
     reps,
     is_complete,
+    is_warmup: false,
     order_index: 0,
   });
 
@@ -110,7 +111,7 @@ describe("calculateVolume", () => {
   });
 
   it("treats undefined weight/reps as 0", () => {
-    const s: Set = { id: "x", workout_exercise_id: "we", is_complete: true, order_index: 0 };
+    const s: Set = { id: "x", workout_exercise_id: "we", is_complete: true, is_warmup: false, order_index: 0 };
     expect(calculateVolume([s])).toBe(0);
   });
 });

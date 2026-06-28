@@ -14,3 +14,5 @@ export { createBodyTrackerRepository } from "./repositories/bodyTrackerRepositor
 export type { BodyTrackerRepository } from "./repositories/bodyTrackerRepository.js";
 export { createCalendarRepository } from "./repositories/calendarRepository.js";
 export type { CalendarRepository } from "./repositories/calendarRepository.js";
+export { createGoalsRepository } from "./repositories/goalsRepository.js";
+export type { GoalsRepository, ExerciseGoalRow } from "./repositories/goalsRepository.js";

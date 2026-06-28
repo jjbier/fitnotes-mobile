@@ -6,7 +6,7 @@ const WORKOUT: Workout = { id: "w1", date: "2024-06-01" };
 const WE: WorkoutExercise = { id: "we1", workout_id: "w1", exercise_id: "ex1", order_index: 0 };
 const SETS: Record<string, Set[]> = {
   we1: [
-    { id: "s1", workout_exercise_id: "we1", weight: 100, reps: 5, is_complete: false, order_index: 0 },
+    { id: "s1", workout_exercise_id: "we1", weight: 100, reps: 5, is_complete: false, is_warmup: false, order_index: 0 },
   ],
 };
 
@@ -139,7 +139,7 @@ describe("markSetComplete", () => {
 
   it("marks a set as incomplete", () => {
     const completeSets: Record<string, Set[]> = {
-      we1: [{ id: "s1", workout_exercise_id: "we1", is_complete: true, order_index: 0 }],
+      we1: [{ id: "s1", workout_exercise_id: "we1", is_complete: true, is_warmup: false, order_index: 0 }],
     };
     useWorkoutStore.getState().loadWorkout(WORKOUT, [WE], completeSets);
     useWorkoutStore.getState().markSetComplete("we1", "s1", false);

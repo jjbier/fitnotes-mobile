@@ -37,6 +37,9 @@ export interface Exercise {
   notes?: string;
   is_favorite: boolean;
   created_at: string;
+  weight_increment?: number;
+  default_rest_seconds?: number;
+  default_chart?: "weight" | "volume" | "reps";
 }
 
 export interface Workout {
@@ -54,6 +57,7 @@ export interface WorkoutExercise {
   exercise_id: string;
   order_index: number;
   group_id?: string;
+  group_name?: string;
 }
 
 export interface Set {
@@ -64,6 +68,7 @@ export interface Set {
   distance?: number;
   time_seconds?: number;
   is_complete: boolean;
+  is_warmup: boolean;
   comment?: string;
   order_index: number;
 }
@@ -105,6 +110,17 @@ export interface PredefinedSet {
   distance?: number;
   time_seconds?: number;
   order_index: number;
+}
+
+export interface ExerciseGoal {
+  id: string;
+  exercise_id: string;
+  target_weight?: number;
+  target_reps?: number;
+  target_date?: string;
+  notes?: string;
+  achieved_at?: string;
+  created_at: string;
 }
 
 export interface BodyMeasurement {

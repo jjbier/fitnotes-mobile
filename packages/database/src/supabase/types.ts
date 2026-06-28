@@ -122,6 +122,8 @@ export type Database = {
         Row: {
           category_id: string | null
           created_at: string
+          default_chart: string | null
+          default_rest_seconds: number | null
           id: string
           is_favorite: boolean
           name: string
@@ -129,11 +131,14 @@ export type Database = {
           type: Database["public"]["Enums"]["exercise_type"]
           updated_at: string
           user_id: string
+          weight_increment: number | null
           weight_unit: string
         }
         Insert: {
           category_id?: string | null
           created_at?: string
+          default_chart?: string | null
+          default_rest_seconds?: number | null
           id?: string
           is_favorite?: boolean
           name: string
@@ -141,11 +146,14 @@ export type Database = {
           type?: Database["public"]["Enums"]["exercise_type"]
           updated_at?: string
           user_id: string
+          weight_increment?: number | null
           weight_unit?: string
         }
         Update: {
           category_id?: string | null
           created_at?: string
+          default_chart?: string | null
+          default_rest_seconds?: number | null
           id?: string
           is_favorite?: boolean
           name?: string
@@ -153,6 +161,7 @@ export type Database = {
           type?: Database["public"]["Enums"]["exercise_type"]
           updated_at?: string
           user_id?: string
+          weight_increment?: number | null
           weight_unit?: string
         }
         Relationships: [
@@ -358,6 +367,7 @@ export type Database = {
           distance: number | null
           id: string
           is_complete: boolean
+          is_warmup: boolean
           order_index: number
           reps: number | null
           time_seconds: number | null
@@ -372,6 +382,7 @@ export type Database = {
           distance?: number | null
           id?: string
           is_complete?: boolean
+          is_warmup?: boolean
           order_index?: number
           reps?: number | null
           time_seconds?: number | null
@@ -386,6 +397,7 @@ export type Database = {
           distance?: number | null
           id?: string
           is_complete?: boolean
+          is_warmup?: boolean
           order_index?: number
           reps?: number | null
           time_seconds?: number | null
@@ -409,6 +421,7 @@ export type Database = {
           created_at: string
           exercise_id: string
           group_id: string | null
+          group_name: string | null
           id: string
           order_index: number
           updated_at: string
@@ -419,6 +432,7 @@ export type Database = {
           created_at?: string
           exercise_id: string
           group_id?: string | null
+          group_name?: string | null
           id?: string
           order_index?: number
           updated_at?: string
@@ -429,6 +443,7 @@ export type Database = {
           created_at?: string
           exercise_id?: string
           group_id?: string | null
+          group_name?: string | null
           id?: string
           order_index?: number
           updated_at?: string
