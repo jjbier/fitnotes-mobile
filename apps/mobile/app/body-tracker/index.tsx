@@ -10,6 +10,7 @@ import { createBodyTrackerRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import LineChart, { type ChartDataPoint } from "../../components/LineChart";
 import DateInput from "../../components/DateInput";
+import { useTheme } from "../../lib/theme";
 
 interface Measurement {
   id: string;
@@ -32,6 +33,7 @@ const PRESET_UNITS = ["kg", "lbs", "cm", "in", "%"];
 
 export default function BodyTrackerScreen() {
   const router = useRouter();
+  const theme = useTheme();
   const { width } = useWindowDimensions();
   const [tab, setTab] = useState<"track" | "history" | "chart">("track");
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
@@ -225,20 +227,20 @@ export default function BodyTrackerScreen() {
   const measurementUnit = (id: string) => measurements.find((m) => m.id === id)?.unit ?? "";
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       {/* Header */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 12 }}>
         <TouchableOpacity onPress={() => router.back()} style={{ padding: 4 }}>
-          <Ionicons name="arrow-back" size={22} color="#0f172a" />
+          <Ionicons name="arrow-back" size={22} color={theme.text} />
         </TouchableOpacity>
-        <Text style={{ flex: 1, fontSize: 20, fontWeight: "700", color: "#0f172a" }}>Medidas corporales</Text>
+        <Text style={{ flex: 1, fontSize: 20, fontWeight: "700", color: theme.text }}>Medidas corporales</Text>
         <TouchableOpacity onPress={openNewMeasurement} style={{ padding: 4 }}>
-          <Ionicons name="add-circle-outline" size={26} color="#6366f1" />
+          <Ionicons name="add-circle-outline" size={26} color={theme.primary} />
         </TouchableOpacity>
       </View>
 
       {/* Tab bar */}
-      <View style={{ flexDirection: "row", marginHorizontal: 16, marginBottom: 12, borderRadius: 10, borderWidth: 1, borderColor: "#e2e8f0", overflow: "hidden" }}>
+      <View style={{ flexDirection: "row", marginHorizontal: 16, marginBottom: 12, borderRadius: 10, borderWidth: 1, borderColor: theme.border, overflow: "hidden" }}>
         {([["track", "Registrar"], ["history", "Historial"], ["chart", "Gráfico"]] as const).map(([t, label]) => (
           <TouchableOpacity
             key={t}
@@ -249,31 +251,31 @@ export default function BodyTrackerScreen() {
                 void loadChart(enabledMeasurements[0]!.id);
               }
             }}
-            style={{ flex: 1, paddingVertical: 10, alignItems: "center", backgroundColor: tab === t ? "#6366f1" : "transparent" }}
+            style={{ flex: 1, paddingVertical: 10, alignItems: "center", backgroundColor: tab === t ? theme.primary : "transparent" }}
           >
-            <Text style={{ fontSize: 13, fontWeight: "600", color: tab === t ? "#fff" : "#64748b" }}>{label}</Text>
+            <Text style={{ fontSize: 13, fontWeight: "600", color: tab === t ? "white" : theme.textSecondary }}>{label}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
       {isLoading ? (
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <ActivityIndicator color="#6366f1" />
+          <ActivityIndicator color={theme.primary} />
         </View>
       ) : tab === "track" ? (
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 80, gap: 10 }}>
           {enabledMeasurements.length === 0 && disabledMeasurements.length === 0 ? (
             <View style={{ paddingVertical: 60, alignItems: "center", gap: 14 }}>
-              <Ionicons name="body-outline" size={52} color="#cbd5e1" />
-              <Text style={{ fontSize: 15, fontWeight: "600", color: "#64748b" }}>Sin medidas activas</Text>
-              <Text style={{ fontSize: 13, color: "#94a3b8", textAlign: "center", paddingHorizontal: 24 }}>
+              <Ionicons name="body-outline" size={52} color={theme.textDisabled} />
+              <Text style={{ fontSize: 15, fontWeight: "600", color: theme.textSecondary }}>Sin medidas activas</Text>
+              <Text style={{ fontSize: 13, color: theme.textMuted, textAlign: "center", paddingHorizontal: 24 }}>
                 Añade medidas como peso corporal, % de grasa, cintura…
               </Text>
               <TouchableOpacity
                 onPress={openNewMeasurement}
-                style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingHorizontal: 24, paddingVertical: 10 }}
+                style={{ backgroundColor: theme.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 10 }}
               >
-                <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Añadir primera medida</Text>
+                <Text style={{ color: "white", fontSize: 14, fontWeight: "600" }}>Añadir primera medida</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -281,31 +283,31 @@ export default function BodyTrackerScreen() {
               {enabledMeasurements.map((m) => {
                 const latest = latestEntries[m.id];
                 return (
-                  <View key={m.id} style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 16, padding: 16, gap: 4 }}>
+                  <View key={m.id} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 16, padding: 16, gap: 4 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
-                        <Text style={{ fontSize: 15, fontWeight: "600", color: "#0f172a" }}>{m.name}</Text>
-                        <View style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 }}>
-                          <Text style={{ fontSize: 11, color: "#94a3b8" }}>{m.unit}</Text>
+                        <Text style={{ fontSize: 15, fontWeight: "600", color: theme.text }}>{m.name}</Text>
+                        <View style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 }}>
+                          <Text style={{ fontSize: 11, color: theme.textMuted }}>{m.unit}</Text>
                         </View>
                       </View>
                       <View style={{ flexDirection: "row", gap: 12 }}>
                         <TouchableOpacity onPress={() => openEditMeasurement(m)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                          <Ionicons name="pencil-outline" size={17} color="#94a3b8" />
+                          <Ionicons name="pencil-outline" size={17} color={theme.textMuted} />
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => handleToggleEnabled(m)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                          <Ionicons name="eye-outline" size={17} color="#94a3b8" />
+                          <Ionicons name="eye-outline" size={17} color={theme.textMuted} />
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => handleDeleteMeasurement(m)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                          <Ionicons name="trash-outline" size={17} color="#94a3b8" />
+                          <Ionicons name="trash-outline" size={17} color={theme.textMuted} />
                         </TouchableOpacity>
                       </View>
                     </View>
 
-                    <Text style={{ fontSize: 34, fontWeight: "700", color: "#0f172a", marginTop: 4 }}>
+                    <Text style={{ fontSize: 34, fontWeight: "700", color: theme.text, marginTop: 4 }}>
                       {latest ? latest.value : "—"}
                     </Text>
-                    <Text style={{ fontSize: 12, color: "#94a3b8" }}>
+                    <Text style={{ fontSize: 12, color: theme.textMuted }}>
                       {latest
                         ? new Date(latest.recorded_at).toLocaleDateString("es-ES")
                         : "Sin registros aún"}
@@ -316,8 +318,8 @@ export default function BodyTrackerScreen() {
                       const delta = latest.value - prev.value;
                       const sign = delta >= 0 ? "+" : "";
                       const color = m.goal_type === "DECREASE"
-                        ? (delta <= 0 ? "#22c55e" : "#ef4444")
-                        : (delta >= 0 ? "#22c55e" : "#ef4444");
+                        ? (delta <= 0 ? theme.success : theme.danger)
+                        : (delta >= 0 ? theme.success : theme.danger);
                       return (
                         <Text style={{ fontSize: 13, fontWeight: "600", color }}>
                           {sign}{delta % 1 === 0 ? delta : delta.toFixed(1)} {m.unit} vs anterior
@@ -327,9 +329,9 @@ export default function BodyTrackerScreen() {
 
                     <TouchableOpacity
                       onPress={() => openLogModal(m.id)}
-                      style={{ marginTop: 8, borderWidth: 1.5, borderColor: "#6366f1", borderRadius: 10, paddingVertical: 8, alignItems: "center" }}
+                      style={{ marginTop: 8, borderWidth: 1.5, borderColor: theme.primary, borderRadius: 10, paddingVertical: 8, alignItems: "center" }}
                     >
-                      <Text style={{ color: "#6366f1", fontSize: 13, fontWeight: "600" }}>+ Registrar valor</Text>
+                      <Text style={{ color: theme.primary, fontSize: 13, fontWeight: "600" }}>+ Registrar valor</Text>
                     </TouchableOpacity>
                   </View>
                 );
@@ -337,23 +339,23 @@ export default function BodyTrackerScreen() {
 
               {disabledMeasurements.length > 0 && (
                 <View style={{ marginTop: 8, gap: 8 }}>
-                  <Text style={{ fontSize: 12, fontWeight: "500", color: "#94a3b8", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  <Text style={{ fontSize: 12, fontWeight: "500", color: theme.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>
                     Desactivadas
                   </Text>
                   {disabledMeasurements.map((m) => (
                     <View
                       key={m.id}
-                      style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, gap: 10 }}
+                      style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: theme.borderLight, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, gap: 10 }}
                     >
-                      <Text style={{ flex: 1, fontSize: 14, color: "#94a3b8" }}>{m.name}</Text>
+                      <Text style={{ flex: 1, fontSize: 14, color: theme.textMuted }}>{m.name}</Text>
                       <TouchableOpacity
                         onPress={() => handleToggleEnabled(m)}
-                        style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}
+                        style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}
                       >
-                        <Text style={{ fontSize: 12, color: "#64748b" }}>Activar</Text>
+                        <Text style={{ fontSize: 12, color: theme.textSecondary }}>Activar</Text>
                       </TouchableOpacity>
                       <TouchableOpacity onPress={() => handleDeleteMeasurement(m)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                        <Ionicons name="trash-outline" size={16} color="#cbd5e1" />
+                        <Ionicons name="trash-outline" size={16} color={theme.textDisabled} />
                       </TouchableOpacity>
                     </View>
                   ))}
@@ -367,29 +369,29 @@ export default function BodyTrackerScreen() {
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, gap: 6 }}>
           {historyEntries.length === 0 ? (
             <View style={{ paddingVertical: 60, alignItems: "center", gap: 10 }}>
-              <Ionicons name="time-outline" size={44} color="#cbd5e1" />
-              <Text style={{ fontSize: 14, color: "#94a3b8" }}>Sin registros aún</Text>
+              <Ionicons name="time-outline" size={44} color={theme.textDisabled} />
+              <Text style={{ fontSize: 14, color: theme.textMuted }}>Sin registros aún</Text>
             </View>
           ) : (
             historyEntries.map((entry) => (
               <View
                 key={entry.id}
-                style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, gap: 10 }}
+                style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: theme.borderLight, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, gap: 10 }}
               >
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: "500", color: "#0f172a" }}>
+                  <Text style={{ fontSize: 14, fontWeight: "500", color: theme.text }}>
                     {measurementName(entry.measurement_id)}
                   </Text>
-                  <Text style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
+                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>
                     {new Date(entry.recorded_at).toLocaleDateString("es-ES")}
                     {entry.comment ? ` · ${entry.comment}` : ""}
                   </Text>
                 </View>
-                <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>
+                <Text style={{ fontSize: 16, fontWeight: "600", color: theme.text }}>
                   {entry.value} {measurementUnit(entry.measurement_id)}
                 </Text>
                 <TouchableOpacity onPress={() => handleDeleteEntry(entry.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Ionicons name="trash-outline" size={16} color="#cbd5e1" />
+                  <Ionicons name="trash-outline" size={16} color={theme.textDisabled} />
                 </TouchableOpacity>
               </View>
             ))
@@ -404,19 +406,19 @@ export default function BodyTrackerScreen() {
               <TouchableOpacity
                 key={m.id}
                 onPress={() => void loadChart(m.id)}
-                style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5, borderColor: chartMeasurementId === m.id ? "#6366f1" : "#e2e8f0", backgroundColor: chartMeasurementId === m.id ? "#6366f1" : "transparent" }}
+                style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5, borderColor: chartMeasurementId === m.id ? theme.primary : theme.border, backgroundColor: chartMeasurementId === m.id ? theme.primary : "transparent" }}
               >
-                <Text style={{ fontSize: 13, fontWeight: "600", color: chartMeasurementId === m.id ? "#fff" : "#64748b" }}>{m.name}</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: chartMeasurementId === m.id ? "white" : theme.textSecondary }}>{m.name}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
 
           {chartLoading ? (
-            <ActivityIndicator color="#6366f1" style={{ marginTop: 32 }} />
+            <ActivityIndicator color={theme.primary} style={{ marginTop: 32 }} />
           ) : chartEntries.length === 0 ? (
             <View style={{ paddingVertical: 60, alignItems: "center", gap: 10 }}>
-              <Ionicons name="trending-up-outline" size={44} color="#cbd5e1" />
-              <Text style={{ fontSize: 14, color: "#94a3b8" }}>Sin datos para esta medida</Text>
+              <Ionicons name="trending-up-outline" size={44} color={theme.textDisabled} />
+              <Text style={{ fontSize: 14, color: theme.textMuted }}>Sin datos para esta medida</Text>
             </View>
           ) : (() => {
             const selectedM = measurements.find((m) => m.id === chartMeasurementId);
@@ -433,12 +435,12 @@ export default function BodyTrackerScreen() {
 
             return (
               <>
-                <View style={{ backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: "#f1f5f9", padding: 16 }}>
+                <View style={{ backgroundColor: theme.surfaceCard, borderRadius: 16, borderWidth: 1, borderColor: theme.borderLight, padding: 16 }}>
                   <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 8 }}>
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#0f172a" }}>{selectedM?.name}</Text>
-                    <Text style={{ fontSize: 11, color: "#94a3b8" }}>{selectedM?.unit}</Text>
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: theme.text }}>{selectedM?.name}</Text>
+                    <Text style={{ fontSize: 11, color: theme.textMuted }}>{selectedM?.unit}</Text>
                   </View>
-                  <LineChart data={chartData} width={width - 64} height={200} color="#6366f1" />
+                  <LineChart data={chartData} width={width - 64} height={200} color={theme.primary} />
                 </View>
 
                 <View style={{ flexDirection: "row", gap: 12 }}>
@@ -447,14 +449,14 @@ export default function BodyTrackerScreen() {
                     { label: "Actual", value: `${latest}` },
                     { label: "Progresión", value: `${trend >= 0 ? "+" : ""}${trend.toFixed(1)}%`, positive: trendPositive },
                   ].map((stat) => (
-                    <View key={stat.label} style={{ flex: 1, backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: "#f1f5f9", padding: 12, alignItems: "center", gap: 4 }}>
-                      <Text style={{ fontSize: 10, fontWeight: "600", color: "#94a3b8", textTransform: "uppercase" }}>{stat.label}</Text>
-                      <Text style={{ fontSize: 14, fontWeight: "700", color: "positive" in stat && stat.positive === false ? "#ef4444" : "#0f172a" }}>{stat.value}</Text>
+                    <View key={stat.label} style={{ flex: 1, backgroundColor: theme.surfaceCard, borderRadius: 12, borderWidth: 1, borderColor: theme.borderLight, padding: 12, alignItems: "center", gap: 4 }}>
+                      <Text style={{ fontSize: 10, fontWeight: "600", color: theme.textMuted, textTransform: "uppercase" }}>{stat.label}</Text>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: "positive" in stat && stat.positive === false ? theme.danger : theme.text }}>{stat.value}</Text>
                     </View>
                   ))}
                 </View>
 
-                <Text style={{ fontSize: 11, color: "#94a3b8", textAlign: "center" }}>{chartEntries.length} registros</Text>
+                <Text style={{ fontSize: 11, color: theme.textMuted, textAlign: "center" }}>{chartEntries.length} registros</Text>
               </>
             );
           })()}
@@ -464,24 +466,24 @@ export default function BodyTrackerScreen() {
       {/* Log Entry Modal */}
       <Modal visible={logModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setLogModal(false)}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
-              <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>
+          <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: theme.borderLight }}>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>
                 Registrar {measurements.find((m) => m.id === logMeasurementId)?.name}
               </Text>
               <TouchableOpacity onPress={() => setLogModal(false)}>
-                <Ionicons name="close" size={24} color="#64748b" />
+                <Ionicons name="close" size={24} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
             <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} keyboardShouldPersistTaps="handled">
               <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textLabel }}>
                   Valor ({measurements.find((m) => m.id === logMeasurementId)?.unit ?? ""})
                 </Text>
                 <TextInput
-                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 22, fontWeight: "600", color: "#0f172a" }}
+                  style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 22, fontWeight: "600", color: theme.text }}
                   placeholder="0.0"
-                  placeholderTextColor="#cbd5e1"
+                  placeholderTextColor={theme.textDisabled}
                   value={logValue}
                   onChangeText={setLogValue}
                   keyboardType="decimal-pad"
@@ -489,15 +491,15 @@ export default function BodyTrackerScreen() {
                 />
               </View>
               <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Fecha</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textLabel }}>Fecha</Text>
                 <DateInput value={logDate} onChange={setLogDate} placeholder="Hoy" clearable />
               </View>
               <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Comentario (opcional)</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textLabel }}>Comentario (opcional)</Text>
                 <TextInput
-                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 }}
+                  style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: theme.text }}
                   placeholder="ej. En ayunas"
-                  placeholderTextColor="#94a3b8"
+                  placeholderTextColor={theme.textMuted}
                   value={logComment}
                   onChangeText={setLogComment}
                 />
@@ -505,9 +507,9 @@ export default function BodyTrackerScreen() {
               <TouchableOpacity
                 onPress={handleLogEntry}
                 disabled={logSaving || !logValue}
-                style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: logSaving || !logValue ? 0.5 : 1, marginTop: 8 }}
+                style={{ backgroundColor: theme.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: logSaving || !logValue ? 0.5 : 1, marginTop: 8 }}
               >
-                <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>
+                <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>
                   {logSaving ? "Guardando…" : "Guardar"}
                 </Text>
               </TouchableOpacity>
@@ -519,28 +521,29 @@ export default function BodyTrackerScreen() {
       {/* Create / Edit Measurement Modal */}
       <Modal visible={measureModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setMeasureModal(false)}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
-              <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>
+          <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: theme.borderLight }}>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>
                 {editMeasurement ? "Editar medida" : "Nueva medida"}
               </Text>
               <TouchableOpacity onPress={() => setMeasureModal(false)}>
-                <Ionicons name="close" size={24} color="#64748b" />
+                <Ionicons name="close" size={24} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
             <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} keyboardShouldPersistTaps="handled">
               <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Nombre</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textLabel }}>Nombre</Text>
                 <TextInput
-                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 }}
+                  style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: theme.text }}
                   placeholder="ej. Peso corporal"
+                  placeholderTextColor={theme.textMuted}
                   value={measureName}
                   onChangeText={setMeasureName}
                   autoFocus
                 />
               </View>
               <View style={{ gap: 8 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Unidad</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textLabel }}>Unidad</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {PRESET_UNITS.map((u) => (
                     <TouchableOpacity
@@ -549,36 +552,36 @@ export default function BodyTrackerScreen() {
                       style={{
                         borderRadius: 10,
                         borderWidth: 1.5,
-                        borderColor: measureUnit === u ? "#6366f1" : "#e2e8f0",
-                        backgroundColor: measureUnit === u ? "#6366f1" : "transparent",
+                        borderColor: measureUnit === u ? theme.primary : theme.border,
+                        backgroundColor: measureUnit === u ? theme.primary : "transparent",
                         paddingHorizontal: 18,
                         paddingVertical: 8,
                       }}
                     >
-                      <Text style={{ fontSize: 14, fontWeight: "500", color: measureUnit === u ? "#fff" : "#374151" }}>{u}</Text>
+                      <Text style={{ fontSize: 14, fontWeight: "500", color: measureUnit === u ? "white" : theme.textLabel }}>{u}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
                 <TextInput
-                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14 }}
+                  style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: theme.text }}
                   placeholder="o escribe una unidad personalizada"
-                  placeholderTextColor="#94a3b8"
+                  placeholderTextColor={theme.textMuted}
                   value={measureUnit}
                   onChangeText={setMeasureUnit}
                 />
               </View>
               {/* Goal type */}
               <View style={{ gap: 8 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Objetivo (tendencia deseada)</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textLabel }}>Objetivo (tendencia deseada)</Text>
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   {(["INCREASE", "DECREASE"] as const).map((t) => (
                     <TouchableOpacity
                       key={t}
                       onPress={() => setMeasureGoalType(t)}
-                      style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 10, borderWidth: 1.5, borderColor: measureGoalType === t ? "#6366f1" : "#e2e8f0", backgroundColor: measureGoalType === t ? "#6366f1" : "transparent", paddingVertical: 10 }}
+                      style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 10, borderWidth: 1.5, borderColor: measureGoalType === t ? theme.primary : theme.border, backgroundColor: measureGoalType === t ? theme.primary : "transparent", paddingVertical: 10 }}
                     >
                       <Text style={{ fontSize: 16 }}>{t === "INCREASE" ? "↑" : "↓"}</Text>
-                      <Text style={{ fontSize: 13, fontWeight: "600", color: measureGoalType === t ? "#fff" : "#64748b" }}>
+                      <Text style={{ fontSize: 13, fontWeight: "600", color: measureGoalType === t ? "white" : theme.textSecondary }}>
                         {t === "INCREASE" ? "Aumentar" : "Disminuir"}
                       </Text>
                     </TouchableOpacity>
@@ -588,11 +591,11 @@ export default function BodyTrackerScreen() {
 
               {/* Goal value */}
               <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Valor objetivo (opcional)</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textLabel }}>Valor objetivo (opcional)</Text>
                 <TextInput
-                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14 }}
+                  style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: theme.text }}
                   placeholder={`ej. ${measureGoalType === "DECREASE" ? "70" : "80"}`}
-                  placeholderTextColor="#94a3b8"
+                  placeholderTextColor={theme.textMuted}
                   keyboardType="decimal-pad"
                   value={measureGoalValue}
                   onChangeText={setMeasureGoalValue}
@@ -603,7 +606,7 @@ export default function BodyTrackerScreen() {
                 onPress={handleSaveMeasurement}
                 disabled={measureSaving || !measureName.trim() || !measureUnit.trim()}
                 style={{
-                  backgroundColor: "#6366f1",
+                  backgroundColor: theme.primary,
                   borderRadius: 12,
                   paddingVertical: 14,
                   alignItems: "center",
@@ -611,7 +614,7 @@ export default function BodyTrackerScreen() {
                   marginTop: 8,
                 }}
               >
-                <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>
+                <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>
                   {measureSaving ? "Guardando…" : editMeasurement ? "Guardar cambios" : "Crear medida"}
                 </Text>
               </TouchableOpacity>

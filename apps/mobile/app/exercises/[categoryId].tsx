@@ -9,6 +9,7 @@ import { useExerciseStore, useWorkoutStore, filterExercises, ExerciseType } from
 import { createExerciseRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import type { Exercise } from "@fitnotes/core";
+import { useTheme } from "../../lib/theme";
 
 const TYPE_OPTIONS: { value: ExerciseType; label: string }[] = [
   { value: ExerciseType.WEIGHT_REPS, label: "Peso × Reps" },
@@ -45,6 +46,7 @@ export default function ExerciseCategoryScreen() {
   const { categoryId } = useLocalSearchParams<{ categoryId: string }>();
   const navigation = useNavigation();
   const router = useRouter();
+  const theme = useTheme();
 
   const categories = useExerciseStore((s) => s.categories);
   const exercises = useExerciseStore((s) => s.exercises);
@@ -272,14 +274,15 @@ export default function ExerciseCategoryScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       {/* Search + add */}
       <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, flexDirection: "row", gap: 8 }}>
-        <View style={{ flex: 1, flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#e2e8f0", backgroundColor: "#f8fafc", borderRadius: 12, paddingHorizontal: 12, gap: 8 }}>
-          <Ionicons name="search" size={16} color="#64748b" />
+        <View style={{ flex: 1, flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: theme.border, backgroundColor: theme.inputBg, borderRadius: 12, paddingHorizontal: 12, gap: 8 }}>
+          <Ionicons name="search" size={16} color={theme.textSecondary} />
           <TextInput
-            style={{ flex: 1, paddingVertical: 10, fontSize: 14 }}
+            style={{ flex: 1, paddingVertical: 10, fontSize: 14, color: theme.text }}
             placeholder="Buscar…"
+            placeholderTextColor={theme.textMuted}
             value={search}
             onChangeText={setSearch}
             clearButtonMode="while-editing"
@@ -288,7 +291,7 @@ export default function ExerciseCategoryScreen() {
         {!isFavorites && (
           <TouchableOpacity
             onPress={openAddModal}
-            style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: "#6366f1", alignItems: "center", justifyContent: "center" }}
+            style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: theme.primary, alignItems: "center", justifyContent: "center" }}
           >
             <Ionicons name="add" size={22} color="white" />
           </TouchableOpacity>
@@ -298,13 +301,13 @@ export default function ExerciseCategoryScreen() {
       {/* List */}
       {isLoading ? (
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <ActivityIndicator color="#6366f1" />
+          <ActivityIndicator color={theme.primary} />
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, gap: 8 }}>
           {sorted.length === 0 ? (
             <View style={{ paddingVertical: 40, alignItems: "center" }}>
-              <Text style={{ color: "#94a3b8", fontSize: 14 }}>
+              <Text style={{ color: theme.textMuted, fontSize: 14 }}>
                 {search ? `Sin ejercicios que coincidan con "${search}"` : "Sin ejercicios aún. Toca + para añadir uno."}
               </Text>
             </View>
@@ -321,24 +324,24 @@ export default function ExerciseCategoryScreen() {
                     ? router.push(`/workout/${ex.id}` as never)
                     : router.push({ pathname: "/exercise-history/[exerciseId]", params: { exerciseId: ex.id, name: ex.name, type: ex.type, weightUnit: ex.weight_unit } } as never)
                   }
-                  style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 12, backgroundColor: "#fff", paddingHorizontal: 14, paddingVertical: 12, gap: 10, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 }}
+                  style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: theme.borderLight, borderRadius: 12, backgroundColor: theme.surfaceCard, paddingHorizontal: 14, paddingVertical: 12, gap: 10, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 }}
                 >
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 14, fontWeight: "500", color: "#0f172a" }}>{ex.name}</Text>
-                    <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>
+                    <Text style={{ fontSize: 14, fontWeight: "500", color: theme.text }}>{ex.name}</Text>
+                    <Text style={{ fontSize: 12, color: theme.textMuted, marginTop: 2 }}>
                       {ex.type.replace(/_/g, " ").toLowerCase()}
                     </Text>
-                    {statsLine && <Text style={{ fontSize: 11, color: "#cbd5e1", marginTop: 2 }}>{statsLine}</Text>}
+                    {statsLine && <Text style={{ fontSize: 11, color: theme.textDisabled, marginTop: 2 }}>{statsLine}</Text>}
                   </View>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
                     <TouchableOpacity onPress={() => handleToggleFavorite(ex.id, ex.is_favorite)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Ionicons name={ex.is_favorite ? "star" : "star-outline"} size={18} color={ex.is_favorite ? "#6366f1" : "#cbd5e1"} />
+                      <Ionicons name={ex.is_favorite ? "star" : "star-outline"} size={18} color={ex.is_favorite ? theme.primary : theme.textDisabled} />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => openEditModal(ex)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Ionicons name="pencil-outline" size={16} color="#94a3b8" />
+                      <Ionicons name="pencil-outline" size={16} color={theme.textMuted} />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => handleDelete(ex.id, ex.name)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                      <Ionicons name="trash-outline" size={16} color={theme.danger} />
                     </TouchableOpacity>
                   </View>
                 </TouchableOpacity>
@@ -351,29 +354,31 @@ export default function ExerciseCategoryScreen() {
       {/* Add Exercise Modal */}
       <Modal visible={showAddModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowAddModal(false)}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
-              <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>Nuevo ejercicio</Text>
+          <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: theme.borderLight }}>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>Nuevo ejercicio</Text>
               <TouchableOpacity onPress={() => setShowAddModal(false)}>
-                <Ionicons name="close" size={24} color="#64748b" />
+                <Ionicons name="close" size={24} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
             <ScrollView contentContainerStyle={{ padding: 20, gap: 20 }} keyboardShouldPersistTaps="handled">
               <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Nombre</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textLabel }}>Nombre</Text>
                 <TextInput
-                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 }}
+                  style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: theme.text }}
                   placeholder="ej. Press de banca"
+                  placeholderTextColor={theme.textMuted}
                   value={newName}
                   onChangeText={setNewName}
                   autoFocus
                 />
               </View>
               <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Notas</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textLabel }}>Notas</Text>
                 <TextInput
-                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, minHeight: 80, textAlignVertical: "top" }}
+                  style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, minHeight: 80, textAlignVertical: "top", color: theme.text }}
                   placeholder="Forma, equipo, ajustes de máquina…"
+                  placeholderTextColor={theme.textMuted}
                   value={newNotes}
                   onChangeText={setNewNotes}
                   multiline
@@ -381,30 +386,30 @@ export default function ExerciseCategoryScreen() {
                 />
               </View>
               <View style={{ gap: 8 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Tipo</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textLabel }}>Tipo</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {TYPE_OPTIONS.map(({ value, label }) => (
                     <TouchableOpacity
                       key={value}
                       onPress={() => setNewType(value)}
-                      style={{ borderRadius: 10, borderWidth: 1.5, borderColor: newType === value ? "#6366f1" : "#e2e8f0", backgroundColor: newType === value ? "#6366f1" : "transparent", paddingHorizontal: 14, paddingVertical: 8 }}
+                      style={{ borderRadius: 10, borderWidth: 1.5, borderColor: newType === value ? theme.primary : theme.border, backgroundColor: newType === value ? theme.primary : "transparent", paddingHorizontal: 14, paddingVertical: 8 }}
                     >
-                      <Text style={{ fontSize: 13, fontWeight: "500", color: newType === value ? "#fff" : "#374151" }}>{label}</Text>
+                      <Text style={{ fontSize: 13, fontWeight: "500", color: newType === value ? "white" : theme.textLabel }}>{label}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
               </View>
               {WEIGHT_TYPES.includes(newType) && (
                 <View style={{ gap: 8 }}>
-                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Unidad de peso</Text>
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textLabel }}>Unidad de peso</Text>
                   <View style={{ flexDirection: "row", gap: 8 }}>
                     {(["kg", "lb"] as const).map((unit) => (
                       <TouchableOpacity
                         key={unit}
                         onPress={() => setNewWeightUnit(unit)}
-                        style={{ flex: 1, borderRadius: 10, borderWidth: 1.5, borderColor: newWeightUnit === unit ? "#6366f1" : "#e2e8f0", backgroundColor: newWeightUnit === unit ? "#6366f1" : "transparent", paddingVertical: 10, alignItems: "center" }}
+                        style={{ flex: 1, borderRadius: 10, borderWidth: 1.5, borderColor: newWeightUnit === unit ? theme.primary : theme.border, backgroundColor: newWeightUnit === unit ? theme.primary : "transparent", paddingVertical: 10, alignItems: "center" }}
                       >
-                        <Text style={{ fontSize: 14, fontWeight: "600", color: newWeightUnit === unit ? "#fff" : "#374151" }}>{unit}</Text>
+                        <Text style={{ fontSize: 14, fontWeight: "600", color: newWeightUnit === unit ? "white" : theme.textLabel }}>{unit}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -413,9 +418,9 @@ export default function ExerciseCategoryScreen() {
               <TouchableOpacity
                 onPress={() => handleAdd(false)}
                 disabled={addSaving || !newName.trim()}
-                style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: addSaving || !newName.trim() ? 0.6 : 1 }}
+                style={{ backgroundColor: theme.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: addSaving || !newName.trim() ? 0.6 : 1 }}
               >
-                <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>
+                <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>
                   {addSaving ? "Creando…" : "Crear ejercicio"}
                 </Text>
               </TouchableOpacity>
@@ -427,27 +432,28 @@ export default function ExerciseCategoryScreen() {
       {/* Edit Exercise Modal */}
       <Modal visible={editingExercise != null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setEditingExercise(null)}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
-              <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>Editar ejercicio</Text>
+          <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: theme.borderLight }}>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>Editar ejercicio</Text>
               <TouchableOpacity onPress={() => setEditingExercise(null)}>
-                <Ionicons name="close" size={24} color="#64748b" />
+                <Ionicons name="close" size={24} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
             <ScrollView contentContainerStyle={{ padding: 20, gap: 20 }} keyboardShouldPersistTaps="handled">
               <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Nombre</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textLabel }}>Nombre</Text>
                 <TextInput
-                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 }}
+                  style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: theme.text }}
                   value={exName}
                   onChangeText={setExName}
                 />
               </View>
               <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Notas</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textLabel }}>Notas</Text>
                 <TextInput
-                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, minHeight: 80, textAlignVertical: "top" }}
+                  style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, minHeight: 80, textAlignVertical: "top", color: theme.text }}
                   placeholder="Forma, equipo, ajustes…"
+                  placeholderTextColor={theme.textMuted}
                   value={exNotes}
                   onChangeText={setExNotes}
                   multiline
@@ -455,30 +461,30 @@ export default function ExerciseCategoryScreen() {
                 />
               </View>
               <View style={{ gap: 8 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Tipo</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textLabel }}>Tipo</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {TYPE_OPTIONS.map(({ value, label }) => (
                     <TouchableOpacity
                       key={value}
                       onPress={() => setExType(value)}
-                      style={{ borderRadius: 10, borderWidth: 1.5, borderColor: exType === value ? "#6366f1" : "#e2e8f0", backgroundColor: exType === value ? "#6366f1" : "transparent", paddingHorizontal: 14, paddingVertical: 8 }}
+                      style={{ borderRadius: 10, borderWidth: 1.5, borderColor: exType === value ? theme.primary : theme.border, backgroundColor: exType === value ? theme.primary : "transparent", paddingHorizontal: 14, paddingVertical: 8 }}
                     >
-                      <Text style={{ fontSize: 13, fontWeight: "500", color: exType === value ? "#fff" : "#374151" }}>{label}</Text>
+                      <Text style={{ fontSize: 13, fontWeight: "500", color: exType === value ? "white" : theme.textLabel }}>{label}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
               </View>
               {WEIGHT_TYPES.includes(exType) && (
                 <View style={{ gap: 8 }}>
-                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Unidad de peso</Text>
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textLabel }}>Unidad de peso</Text>
                   <View style={{ flexDirection: "row", gap: 8 }}>
                     {(["kg", "lb"] as const).map((unit) => (
                       <TouchableOpacity
                         key={unit}
                         onPress={() => setExWeightUnit(unit)}
-                        style={{ flex: 1, borderRadius: 10, borderWidth: 1.5, borderColor: exWeightUnit === unit ? "#6366f1" : "#e2e8f0", backgroundColor: exWeightUnit === unit ? "#6366f1" : "transparent", paddingVertical: 10, alignItems: "center" }}
+                        style={{ flex: 1, borderRadius: 10, borderWidth: 1.5, borderColor: exWeightUnit === unit ? theme.primary : theme.border, backgroundColor: exWeightUnit === unit ? theme.primary : "transparent", paddingVertical: 10, alignItems: "center" }}
                       >
-                        <Text style={{ fontSize: 14, fontWeight: "600", color: exWeightUnit === unit ? "#fff" : "#374151" }}>{unit}</Text>
+                        <Text style={{ fontSize: 14, fontWeight: "600", color: exWeightUnit === unit ? "white" : theme.textLabel }}>{unit}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -487,9 +493,9 @@ export default function ExerciseCategoryScreen() {
               <TouchableOpacity
                 onPress={() => editingExercise && handleEdit(editingExercise)}
                 disabled={editSaving || !exName.trim()}
-                style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: editSaving || !exName.trim() ? 0.6 : 1 }}
+                style={{ backgroundColor: theme.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: editSaving || !exName.trim() ? 0.6 : 1 }}
               >
-                <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>
+                <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>
                   {editSaving ? "Guardando…" : "Guardar cambios"}
                 </Text>
               </TouchableOpacity>

@@ -2,9 +2,11 @@ import { useState } from "react";
 import { SafeAreaView, ScrollView, Text, View, TextInput, TouchableOpacity, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
+import { useTheme } from "../../lib/theme";
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const theme = useTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -24,15 +26,15 @@ export default function RegisterScreen() {
 
   if (sent) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#fff", justifyContent: "center", alignItems: "center", padding: 24 }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background, justifyContent: "center", alignItems: "center", padding: 24 }}>
         <Text style={{ fontSize: 48 }}>📬</Text>
-        <Text style={{ fontSize: 22, fontWeight: "700", marginTop: 16, color: "#0f172a" }}>Revisa tu correo</Text>
-        <Text style={{ textAlign: "center", color: "#64748b", marginTop: 8 }}>
+        <Text style={{ fontSize: 22, fontWeight: "700", marginTop: 16, color: theme.text }}>Revisa tu correo</Text>
+        <Text style={{ textAlign: "center", color: theme.textSecondary, marginTop: 8 }}>
           Hemos enviado un enlace de confirmación a {email}. Haz clic en él para activar tu cuenta.
         </Text>
         <TouchableOpacity
           onPress={() => router.replace("/(auth)/login")}
-          style={{ marginTop: 24, backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 12, paddingHorizontal: 32 }}
+          style={{ marginTop: 24, backgroundColor: theme.primary, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 32 }}
         >
           <Text style={{ color: "#fff", fontWeight: "600" }}>Ir a iniciar sesión</Text>
         </TouchableOpacity>
@@ -41,15 +43,15 @@ export default function RegisterScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       <ScrollView
         contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingHorizontal: 24, paddingVertical: 48 }}
         keyboardShouldPersistTaps="handled"
       >
         <View style={{ alignItems: "center", marginBottom: 40 }}>
           <Text style={{ fontSize: 40, marginBottom: 8 }}>🏋️</Text>
-          <Text style={{ fontSize: 26, fontWeight: "700", color: "#0f172a" }}>Crear cuenta</Text>
-          <Text style={{ fontSize: 14, color: "#64748b", marginTop: 4 }}>Empieza tu camino fitness</Text>
+          <Text style={{ fontSize: 26, fontWeight: "700", color: theme.text }}>Crear cuenta</Text>
+          <Text style={{ fontSize: 14, color: theme.textSecondary, marginTop: 4 }}>Empieza tu camino fitness</Text>
         </View>
 
         <View style={{ gap: 16 }}>
@@ -59,9 +61,9 @@ export default function RegisterScreen() {
             { label: "Confirmar contraseña", value: confirm, onChange: setConfirm, placeholder: "Repite la contraseña", keyboard: "default" as const, secure: true, complete: "new-password" as const },
           ].map(({ label, value, onChange, placeholder, keyboard, secure, complete }) => (
             <View key={label} style={{ gap: 6 }}>
-              <Text style={{ fontSize: 14, fontWeight: "500", color: "#0f172a" }}>{label}</Text>
+              <Text style={{ fontSize: 14, fontWeight: "500", color: theme.text }}>{label}</Text>
               <TextInput
-                style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, backgroundColor: "#f8fafc", paddingHorizontal: 16, paddingVertical: 12, fontSize: 14 }}
+                style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 12, backgroundColor: theme.inputBg, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, color: theme.text }}
                 value={value}
                 onChangeText={onChange}
                 placeholder={placeholder}
@@ -76,7 +78,7 @@ export default function RegisterScreen() {
           <TouchableOpacity
             onPress={handleSignUp}
             disabled={loading}
-            style={{ marginTop: 8, backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: loading ? 0.6 : 1 }}
+            style={{ marginTop: 8, backgroundColor: theme.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: loading ? 0.6 : 1 }}
           >
             <Text style={{ color: "#fff", fontWeight: "600", fontSize: 15 }}>
               {loading ? "Creando cuenta…" : "Crear cuenta"}
@@ -84,10 +86,10 @@ export default function RegisterScreen() {
           </TouchableOpacity>
         </View>
 
-        <Text style={{ textAlign: "center", fontSize: 14, color: "#64748b", marginTop: 32 }}>
+        <Text style={{ textAlign: "center", fontSize: 14, color: theme.textSecondary, marginTop: 32 }}>
           ¿Ya tienes cuenta?{" "}
           <Text
-            style={{ color: "#6366f1", fontWeight: "500" }}
+            style={{ color: theme.primary, fontWeight: "500" }}
             onPress={() => router.push("/(auth)/login")}
           >
             Iniciar sesión

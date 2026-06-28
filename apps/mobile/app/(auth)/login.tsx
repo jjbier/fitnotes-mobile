@@ -2,9 +2,11 @@ import { useState } from "react";
 import { SafeAreaView, ScrollView, Text, View, TextInput, TouchableOpacity, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
+import { useTheme } from "../../lib/theme";
 
 export default function LoginScreen() {
   const router = useRouter();
+  const theme = useTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -19,22 +21,22 @@ export default function LoginScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       <ScrollView
         contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingHorizontal: 24, paddingVertical: 48 }}
         keyboardShouldPersistTaps="handled"
       >
         <View style={{ alignItems: "center", marginBottom: 40 }}>
           <Text style={{ fontSize: 40, marginBottom: 8 }}>🏋️</Text>
-          <Text style={{ fontSize: 26, fontWeight: "700", color: "#0f172a" }}>FitNotes</Text>
-          <Text style={{ fontSize: 14, color: "#64748b", marginTop: 4 }}>Inicia sesión para continuar</Text>
+          <Text style={{ fontSize: 26, fontWeight: "700", color: theme.text }}>FitNotes</Text>
+          <Text style={{ fontSize: 14, color: theme.textSecondary, marginTop: 4 }}>Inicia sesión para continuar</Text>
         </View>
 
         <View style={{ gap: 16 }}>
           <View style={{ gap: 6 }}>
-            <Text style={{ fontSize: 14, fontWeight: "500", color: "#0f172a" }}>Correo electrónico</Text>
+            <Text style={{ fontSize: 14, fontWeight: "500", color: theme.text }}>Correo electrónico</Text>
             <TextInput
-              style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, backgroundColor: "#f8fafc", paddingHorizontal: 16, paddingVertical: 12, fontSize: 14 }}
+              style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 12, backgroundColor: theme.inputBg, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, color: theme.text }}
               value={email}
               onChangeText={setEmail}
               placeholder="you@example.com"
@@ -45,9 +47,9 @@ export default function LoginScreen() {
           </View>
 
           <View style={{ gap: 6 }}>
-            <Text style={{ fontSize: 14, fontWeight: "500", color: "#0f172a" }}>Contraseña</Text>
+            <Text style={{ fontSize: 14, fontWeight: "500", color: theme.text }}>Contraseña</Text>
             <TextInput
-              style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, backgroundColor: "#f8fafc", paddingHorizontal: 16, paddingVertical: 12, fontSize: 14 }}
+              style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 12, backgroundColor: theme.inputBg, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, color: theme.text }}
               value={password}
               onChangeText={setPassword}
               placeholder="••••••••"
@@ -59,7 +61,7 @@ export default function LoginScreen() {
           <TouchableOpacity
             onPress={handleSignIn}
             disabled={loading}
-            style={{ marginTop: 8, backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: loading ? 0.6 : 1 }}
+            style={{ marginTop: 8, backgroundColor: theme.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: loading ? 0.6 : 1 }}
           >
             <Text style={{ color: "#fff", fontWeight: "600", fontSize: 15 }}>
               {loading ? "Iniciando sesión…" : "Iniciar sesión"}
@@ -67,10 +69,10 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
 
-        <Text style={{ textAlign: "center", fontSize: 14, color: "#64748b", marginTop: 32 }}>
+        <Text style={{ textAlign: "center", fontSize: 14, color: theme.textSecondary, marginTop: 32 }}>
           ¿Sin cuenta?{" "}
           <Text
-            style={{ color: "#6366f1", fontWeight: "500" }}
+            style={{ color: theme.primary, fontWeight: "500" }}
             onPress={() => router.push("/(auth)/register")}
           >
             Créate una

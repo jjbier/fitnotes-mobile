@@ -8,10 +8,12 @@ import { useRoutineStore, useExerciseStore, useWorkoutStore, ExerciseType, today
 import type { PredefinedSet, RoutineDay, RoutineDayExercise } from "@fitnotes/core";
 import { createRoutineRepository, createExerciseRepository, createWorkoutRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
+import { useTheme } from "../../lib/theme";
 
 type LocalPS = { localId: string; weight: string; reps: string; distance: string; time_seconds: string };
 
 export default function RoutineDetailScreen() {
+  const theme = useTheme();
   const { id: routineId } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
   const router = useRouter();
@@ -417,26 +419,26 @@ export default function RoutineDetailScreen() {
           <View>
             {isFirstInGroup && (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 2, paddingLeft: 11 }}>
-                <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: "#6366f1" }} />
-                <Text style={{ fontSize: 10, fontWeight: "600", color: "#6366f1" }}>
+                <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: theme.primary }} />
+                <Text style={{ fontSize: 10, fontWeight: "600", color: theme.primary }}>
                   {rde.group_name ?? "Superset"}
                 </Text>
               </View>
             )}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 2 }}>
-              {rde.group_id && <View style={{ width: 3, height: 28, borderRadius: 2, backgroundColor: "#6366f1" }} />}
+              {rde.group_id && <View style={{ width: 3, height: 28, borderRadius: 2, backgroundColor: theme.primary }} />}
               {editMode && (
                 <TouchableOpacity onLongPress={drag} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
-                  <Ionicons name="menu-outline" size={16} color="#cbd5e1" />
+                  <Ionicons name="menu-outline" size={16} color={theme.textDisabled} />
                 </TouchableOpacity>
               )}
-              <Text style={{ flex: 1, fontSize: 13, color: "#0f172a" }}>{ex?.name ?? rde.exercise_id}</Text>
+              <Text style={{ flex: 1, fontSize: 13, color: theme.text }}>{ex?.name ?? rde.exercise_id}</Text>
               {editMode && (
                 <TouchableOpacity
                   onPress={() => handleToggleSuperset(dayId, rde)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name="link-outline" size={16} color={rde.group_id ? "#6366f1" : "#cbd5e1"} />
+                  <Ionicons name="link-outline" size={16} color={rde.group_id ? theme.primary : theme.textDisabled} />
                 </TouchableOpacity>
               )}
               <TouchableOpacity
@@ -444,12 +446,12 @@ export default function RoutineDetailScreen() {
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
               >
-                <Ionicons name="list-outline" size={14} color={psCount > 0 ? "#6366f1" : "#cbd5e1"} />
-                {psCount > 0 && <Text style={{ fontSize: 11, color: "#6366f1", fontWeight: "600" }}>{psCount}</Text>}
+                <Ionicons name="list-outline" size={14} color={psCount > 0 ? theme.primary : theme.textDisabled} />
+                {psCount > 0 && <Text style={{ fontSize: 11, color: theme.primary, fontWeight: "600" }}>{psCount}</Text>}
               </TouchableOpacity>
               {editMode && (
                 <TouchableOpacity onPress={() => handleRemoveExercise(dayId, rde.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Ionicons name="close-circle" size={16} color="#ef4444" />
+                  <Ionicons name="close-circle" size={16} color={theme.danger} />
                 </TouchableOpacity>
               )}
             </View>
@@ -467,7 +469,7 @@ export default function RoutineDetailScreen() {
                   if (fields.time && ps.time_seconds != null) parts.push(`${ps.time_seconds} s`);
                   else if (fields.time) parts.push("— s");
                   return (
-                    <Text key={pi} style={{ fontSize: 11, color: "#64748b" }}>
+                    <Text key={pi} style={{ fontSize: 11, color: theme.textSecondary }}>
                       {pi + 1}. {parts.join("  ·  ")}
                     </Text>
                   );
@@ -487,26 +489,26 @@ export default function RoutineDetailScreen() {
     const isLoggingThis = loggingDayId === day.id;
     return (
       <ScaleDecorator>
-        <View style={{ borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 16, backgroundColor: "#fff", overflow: "hidden", marginBottom: 12 }}>
+        <View style={{ borderWidth: 1, borderColor: theme.borderLight, borderRadius: 16, backgroundColor: theme.surfaceCard, overflow: "hidden", marginBottom: 12 }}>
           {/* Day header */}
-          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12, backgroundColor: "#f8fafc", gap: 8 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12, backgroundColor: theme.backgroundAlt, gap: 8 }}>
             {editMode && (
               <TouchableOpacity onLongPress={drag} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
-                <Ionicons name="menu-outline" size={18} color="#94a3b8" />
+                <Ionicons name="menu-outline" size={18} color={theme.textMuted} />
               </TouchableOpacity>
             )}
-            <Text style={{ flex: 1, fontSize: 14, fontWeight: "600", color: "#0f172a" }}>{day.name}</Text>
-            <Text style={{ fontSize: 12, color: "#94a3b8" }}>{dayExs.length} ejercicios</Text>
+            <Text style={{ flex: 1, fontSize: 14, fontWeight: "600", color: theme.text }}>{day.name}</Text>
+            <Text style={{ fontSize: 12, color: theme.textMuted }}>{dayExs.length} ejercicios</Text>
             {editMode && (
               <TouchableOpacity onPress={() => handleDeleteDay(day.id, day.name)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="trash-outline" size={14} color="#ef4444" />
+                <Ionicons name="trash-outline" size={14} color={theme.danger} />
               </TouchableOpacity>
             )}
             {!editMode && (
               <TouchableOpacity
                 onPress={() => openSelectLog(day.id)}
                 disabled={isLoggingThis}
-                style={{ backgroundColor: "#6366f1", borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, opacity: isLoggingThis ? 0.6 : 1, flexDirection: "row", alignItems: "center", gap: 4 }}
+                style={{ backgroundColor: theme.primary, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, opacity: isLoggingThis ? 0.6 : 1, flexDirection: "row", alignItems: "center", gap: 4 }}
               >
                 {isLoggingThis && <ActivityIndicator size="small" color="#fff" />}
                 <Text style={{ fontSize: 11, fontWeight: "600", color: "#fff" }}>
@@ -535,24 +537,24 @@ export default function RoutineDetailScreen() {
                     <TouchableOpacity
                       key={ex.id}
                       onPress={() => setSelectedExId(ex.id)}
-                      style={{ borderRadius: 8, borderWidth: 1, borderColor: selectedExId === ex.id ? "#6366f1" : "#e2e8f0", backgroundColor: selectedExId === ex.id ? "#6366f1" : "transparent", paddingHorizontal: 10, paddingVertical: 5 }}
+                      style={{ borderRadius: 8, borderWidth: 1, borderColor: selectedExId === ex.id ? theme.primary : theme.border, backgroundColor: selectedExId === ex.id ? theme.primary : "transparent", paddingHorizontal: 10, paddingVertical: 5 }}
                     >
-                      <Text style={{ fontSize: 12, fontWeight: "500", color: selectedExId === ex.id ? "#fff" : "#0f172a" }}>{ex.name}</Text>
+                      <Text style={{ fontSize: 12, fontWeight: "500", color: selectedExId === ex.id ? "#fff" : theme.text }}>{ex.name}</Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
                 <View style={{ flexDirection: "row", gap: 6 }}>
-                  <TouchableOpacity onPress={() => { setAddingExToDay(null); setSelectedExId(""); }} style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingVertical: 7, alignItems: "center" }}>
-                    <Text style={{ fontSize: 12 }}>Cancelar</Text>
+                  <TouchableOpacity onPress={() => { setAddingExToDay(null); setSelectedExId(""); }} style={{ flex: 1, borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingVertical: 7, alignItems: "center" }}>
+                    <Text style={{ fontSize: 12, color: theme.text }}>Cancelar</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => selectedExId && handleAddExercise(day.id, selectedExId)} style={{ flex: 1, backgroundColor: "#6366f1", borderRadius: 8, paddingVertical: 7, alignItems: "center" }}>
+                  <TouchableOpacity onPress={() => selectedExId && handleAddExercise(day.id, selectedExId)} style={{ flex: 1, backgroundColor: theme.primary, borderRadius: 8, paddingVertical: 7, alignItems: "center" }}>
                     <Text style={{ fontSize: 12, fontWeight: "600", color: "#fff" }}>Añadir</Text>
                   </TouchableOpacity>
                 </View>
               </View>
             ) : editMode ? (
-              <TouchableOpacity onPress={() => { setAddingExToDay(day.id); setSelectedExId(""); }} style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 8, paddingVertical: 8, alignItems: "center", marginTop: 4 }}>
-                <Text style={{ fontSize: 12, color: "#94a3b8" }}>+ Añadir ejercicio</Text>
+              <TouchableOpacity onPress={() => { setAddingExToDay(day.id); setSelectedExId(""); }} style={{ borderWidth: 1, borderColor: theme.border, borderStyle: "dashed", borderRadius: 8, paddingVertical: 8, alignItems: "center", marginTop: 4 }}>
+                <Text style={{ fontSize: 12, color: theme.textMuted }}>+ Añadir ejercicio</Text>
               </TouchableOpacity>
             ) : null}
           </View>
@@ -564,15 +566,15 @@ export default function RoutineDetailScreen() {
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       {/* Edit toggle */}
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, gap: 8 }}>
         {!editMode && (
-          <Text style={{ fontSize: 12, color: "#94a3b8" }}>Pulsa Editar para gestionar días y ejercicios</Text>
+          <Text style={{ fontSize: 12, color: theme.textMuted }}>Pulsa Editar para gestionar días y ejercicios</Text>
         )}
         <TouchableOpacity
           onPress={() => setEditMode((v) => !v)}
-          style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: editMode ? "#6366f1" : "#6366f1" }}
+          style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: theme.primary }}
         >
           <Ionicons name={editMode ? "checkmark" : "create-outline"} size={15} color="#fff" />
           <Text style={{ fontSize: 13, fontWeight: "600", color: "#fff" }}>{editMode ? "Listo" : "Editar"}</Text>
@@ -587,18 +589,18 @@ export default function RoutineDetailScreen() {
         <NestableScrollContainer contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 60 }}>
           {/* Notes */}
           {routine?.notes ? (
-            <Text style={{ fontSize: 13, color: "#64748b", marginBottom: 12 }}>{routine.notes}</Text>
+            <Text style={{ fontSize: 13, color: theme.textSecondary, marginBottom: 12 }}>{routine.notes}</Text>
           ) : null}
 
           {/* Days */}
           {days.length === 0 ? (
-            <View style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 16, padding: 32, alignItems: "center", gap: 12 }}>
-              <Ionicons name="calendar-outline" size={36} color="#94a3b8" />
-              <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>Sin días aún</Text>
-              <Text style={{ fontSize: 12, color: "#94a3b8", textAlign: "center" }}>Pulsa el botón Editar (arriba a la derecha) y luego + Añadir día.</Text>
+            <View style={{ borderWidth: 1, borderColor: theme.border, borderStyle: "dashed", borderRadius: 16, padding: 32, alignItems: "center", gap: 12 }}>
+              <Ionicons name="calendar-outline" size={36} color={theme.textMuted} />
+              <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>Sin días aún</Text>
+              <Text style={{ fontSize: 12, color: theme.textMuted, textAlign: "center" }}>Pulsa el botón Editar (arriba a la derecha) y luego + Añadir día.</Text>
               <TouchableOpacity
                 onPress={() => setEditMode(true)}
-                style={{ backgroundColor: "#6366f1", borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 }}
+                style={{ backgroundColor: theme.primary, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 }}
               >
                 <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>Empezar a editar</Text>
               </TouchableOpacity>
@@ -618,20 +620,21 @@ export default function RoutineDetailScreen() {
             showDayInput ? (
               <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
                 <TextInput
-                  style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14 }}
+                  style={{ flex: 1, borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: theme.text, backgroundColor: theme.inputBg }}
                   placeholder="Nombre del día (ej. Empuje)"
+                  placeholderTextColor={theme.textMuted}
                   value={newDayName}
                   onChangeText={setNewDayName}
                   autoFocus
                   onSubmitEditing={handleAddDay}
                 />
-                <TouchableOpacity onPress={handleAddDay} style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, alignItems: "center", justifyContent: "center" }}>
+                <TouchableOpacity onPress={handleAddDay} style={{ backgroundColor: theme.primary, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, alignItems: "center", justifyContent: "center" }}>
                   <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>Añadir</Text>
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity onPress={() => setShowDayInput(true)} style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 16, paddingVertical: 14, alignItems: "center", marginTop: 4 }}>
-                <Text style={{ fontSize: 13, color: "#94a3b8" }}>+ Añadir día</Text>
+              <TouchableOpacity onPress={() => setShowDayInput(true)} style={{ borderWidth: 1, borderColor: theme.border, borderStyle: "dashed", borderRadius: 16, paddingVertical: 14, alignItems: "center", marginTop: 4 }}>
+                <Text style={{ fontSize: 13, color: theme.textMuted }}>+ Añadir día</Text>
               </TouchableOpacity>
             )
           )}
@@ -641,23 +644,23 @@ export default function RoutineDetailScreen() {
       {/* Predefined Sets Modal */}
       <Modal visible={psRdeId !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setPsRdeId(null)}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-          <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-            <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
-              <Text style={{ flex: 1, fontSize: 16, fontWeight: "700", color: "#0f172a" }}>
+          <SafeAreaView style={{ flex: 1, backgroundColor: theme.surfaceCard }}>
+            <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.borderLight }}>
+              <Text style={{ flex: 1, fontSize: 16, fontWeight: "700", color: theme.text }}>
                 {exerciseMap[psExerciseId]?.name ?? "Series predefinidas"}
               </Text>
               <TouchableOpacity onPress={() => setPsRdeId(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="close" size={22} color="#64748b" />
+                <Ionicons name="close" size={22} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
 
             <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-              <Text style={{ fontSize: 12, color: "#94a3b8" }}>
+              <Text style={{ fontSize: 12, color: theme.textMuted }}>
                 Deja un campo vacío para que copie el valor del último entrenamiento registrado.
               </Text>
 
               {psLoading ? (
-                <ActivityIndicator color="#6366f1" style={{ marginTop: 24 }} />
+                <ActivityIndicator color={theme.primary} style={{ marginTop: 24 }} />
               ) : (
                 <>
                   {psLocalSets.length > 0 && (() => {
@@ -665,11 +668,11 @@ export default function RoutineDetailScreen() {
                     const fields = ex ? getExerciseFields(ex.type) : { weight: false, reps: false, distance: false, time: false };
                     return (
                       <View style={{ flexDirection: "row", gap: 6, paddingHorizontal: 4 }}>
-                        <Text style={{ width: 24, fontSize: 11, color: "#94a3b8" }}>#</Text>
-                        {fields.weight && <Text style={{ flex: 1, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>Peso (kg)</Text>}
-                        {fields.reps && <Text style={{ flex: 1, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>Reps</Text>}
-                        {fields.distance && <Text style={{ flex: 1, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>Dist (m)</Text>}
-                        {fields.time && <Text style={{ flex: 1, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>Tiempo (s)</Text>}
+                        <Text style={{ width: 24, fontSize: 11, color: theme.textMuted }}>#</Text>
+                        {fields.weight && <Text style={{ flex: 1, fontSize: 11, color: theme.textMuted, textAlign: "center" }}>Peso (kg)</Text>}
+                        {fields.reps && <Text style={{ flex: 1, fontSize: 11, color: theme.textMuted, textAlign: "center" }}>Reps</Text>}
+                        {fields.distance && <Text style={{ flex: 1, fontSize: 11, color: theme.textMuted, textAlign: "center" }}>Dist (m)</Text>}
+                        {fields.time && <Text style={{ flex: 1, fontSize: 11, color: theme.textMuted, textAlign: "center" }}>Tiempo (s)</Text>}
                         <View style={{ width: 24 }} />
                       </View>
                     );
@@ -680,37 +683,37 @@ export default function RoutineDetailScreen() {
                     const fields = ex ? getExerciseFields(ex.type) : { weight: false, reps: false, distance: false, time: false };
                     return (
                       <View key={row.localId} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                        <Text style={{ width: 24, fontSize: 13, color: "#94a3b8", textAlign: "center" }}>{idx + 1}</Text>
+                        <Text style={{ width: 24, fontSize: 13, color: theme.textMuted, textAlign: "center" }}>{idx + 1}</Text>
                         {fields.weight && (
                           <TextInput
-                            style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, fontSize: 14, textAlign: "center", color: "#0f172a" }}
-                            placeholder="—" placeholderTextColor="#cbd5e1" keyboardType="decimal-pad"
+                            style={{ flex: 1, borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, fontSize: 14, textAlign: "center", color: theme.text, backgroundColor: theme.inputBg }}
+                            placeholder="—" placeholderTextColor={theme.textDisabled} keyboardType="decimal-pad"
                             value={row.weight} onChangeText={(v) => psUpdateRow(row.localId, "weight", v)}
                           />
                         )}
                         {fields.reps && (
                           <TextInput
-                            style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, fontSize: 14, textAlign: "center", color: "#0f172a" }}
-                            placeholder="—" placeholderTextColor="#cbd5e1" keyboardType="number-pad"
+                            style={{ flex: 1, borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, fontSize: 14, textAlign: "center", color: theme.text, backgroundColor: theme.inputBg }}
+                            placeholder="—" placeholderTextColor={theme.textDisabled} keyboardType="number-pad"
                             value={row.reps} onChangeText={(v) => psUpdateRow(row.localId, "reps", v)}
                           />
                         )}
                         {fields.distance && (
                           <TextInput
-                            style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, fontSize: 14, textAlign: "center", color: "#0f172a" }}
-                            placeholder="—" placeholderTextColor="#cbd5e1" keyboardType="decimal-pad"
+                            style={{ flex: 1, borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, fontSize: 14, textAlign: "center", color: theme.text, backgroundColor: theme.inputBg }}
+                            placeholder="—" placeholderTextColor={theme.textDisabled} keyboardType="decimal-pad"
                             value={row.distance} onChangeText={(v) => psUpdateRow(row.localId, "distance", v)}
                           />
                         )}
                         {fields.time && (
                           <TextInput
-                            style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, fontSize: 14, textAlign: "center", color: "#0f172a" }}
-                            placeholder="—" placeholderTextColor="#cbd5e1" keyboardType="number-pad"
+                            style={{ flex: 1, borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, fontSize: 14, textAlign: "center", color: theme.text, backgroundColor: theme.inputBg }}
+                            placeholder="—" placeholderTextColor={theme.textDisabled} keyboardType="number-pad"
                             value={row.time_seconds} onChangeText={(v) => psUpdateRow(row.localId, "time_seconds", v)}
                           />
                         )}
                         <TouchableOpacity onPress={() => psRemoveRow(row.localId)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ width: 24, alignItems: "center" }}>
-                          <Ionicons name="close-circle" size={18} color="#ef4444" />
+                          <Ionicons name="close-circle" size={18} color={theme.danger} />
                         </TouchableOpacity>
                       </View>
                     );
@@ -718,15 +721,15 @@ export default function RoutineDetailScreen() {
 
                   <TouchableOpacity
                     onPress={psAddRow}
-                    style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 10, paddingVertical: 10, alignItems: "center", marginTop: 4 }}
+                    style={{ borderWidth: 1, borderColor: theme.border, borderStyle: "dashed", borderRadius: 10, paddingVertical: 10, alignItems: "center", marginTop: 4 }}
                   >
-                    <Text style={{ fontSize: 13, color: "#6366f1", fontWeight: "600" }}>+ Añadir serie</Text>
+                    <Text style={{ fontSize: 13, color: theme.primary, fontWeight: "600" }}>+ Añadir serie</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     onPress={handleSavePredefinedSets}
                     disabled={psSaving}
-                    style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: psSaving ? 0.6 : 1, marginTop: 8 }}
+                    style={{ backgroundColor: theme.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: psSaving ? 0.6 : 1, marginTop: 8 }}
                   >
                     <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>{psSaving ? "Guardando…" : "Guardar"}</Text>
                   </TouchableOpacity>
@@ -739,11 +742,11 @@ export default function RoutineDetailScreen() {
 
       {/* Select exercises modal */}
       <Modal visible={selectLogDayId !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSelectLogDayId(null)}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
-            <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: "#0f172a" }}>Seleccionar ejercicios</Text>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.surfaceCard }}>
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: theme.borderLight }}>
+            <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: theme.text }}>Seleccionar ejercicios</Text>
             <TouchableOpacity onPress={() => setSelectLogDayId(null)}>
-              <Ionicons name="close" size={22} color="#64748b" />
+              <Ionicons name="close" size={22} color={theme.textSecondary} />
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={{ padding: 16, gap: 8 }}>
@@ -759,25 +762,25 @@ export default function RoutineDetailScreen() {
                     onPress={() => setSelectedExerciseIds((prev) =>
                       isSelected ? prev.filter((id) => id !== rde.exercise_id) : [...prev, rde.exercise_id]
                     )}
-                    style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: isSelected ? "#6366f1" : "#f1f5f9", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, gap: 12, backgroundColor: isSelected ? "#6366f108" : "#fff" }}
+                    style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: isSelected ? theme.primary : theme.borderLight, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, gap: 12, backgroundColor: isSelected ? theme.primaryLight : theme.surfaceCard }}
                   >
-                    <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: isSelected ? "#6366f1" : "#cbd5e1", backgroundColor: isSelected ? "#6366f1" : "transparent", alignItems: "center", justifyContent: "center" }}>
+                    <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: isSelected ? theme.primary : theme.textDisabled, backgroundColor: isSelected ? theme.primary : "transparent", alignItems: "center", justifyContent: "center" }}>
                       {isSelected && <Ionicons name="checkmark" size={13} color="#fff" />}
                     </View>
-                    <Text style={{ flex: 1, fontSize: 14, color: "#0f172a" }}>{ex?.name ?? rde.exercise_id}</Text>
+                    <Text style={{ flex: 1, fontSize: 14, color: theme.text }}>{ex?.name ?? rde.exercise_id}</Text>
                   </TouchableOpacity>
                 );
               })}
           </ScrollView>
-          <View style={{ padding: 16, borderTopWidth: 1, borderColor: "#f1f5f9", flexDirection: "row", gap: 10 }}>
+          <View style={{ padding: 16, borderTopWidth: 1, borderColor: theme.borderLight, flexDirection: "row", gap: 10 }}>
             <TouchableOpacity
               onPress={() => {
                 const allIds = (routineDayExercises[selectLogDayId ?? ""] ?? []).map((rde) => rde.exercise_id);
                 setSelectedExerciseIds(selectedExerciseIds.length === allIds.length ? [] : allIds);
               }}
-              style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, paddingVertical: 13, alignItems: "center" }}
+              style={{ flex: 1, borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingVertical: 13, alignItems: "center" }}
             >
-              <Text style={{ fontSize: 14, color: "#64748b" }}>
+              <Text style={{ fontSize: 14, color: theme.textSecondary }}>
                 {selectedExerciseIds.length === (routineDayExercises[selectLogDayId ?? ""] ?? []).length ? "Deseleccionar todo" : "Seleccionar todo"}
               </Text>
             </TouchableOpacity>
@@ -789,9 +792,9 @@ export default function RoutineDetailScreen() {
                 handleLogDay(dayId, selectedExerciseIds);
               }}
               disabled={selectedExerciseIds.length === 0}
-              style={{ flex: 1, backgroundColor: selectedExerciseIds.length === 0 ? "#e2e8f0" : "#6366f1", borderRadius: 12, paddingVertical: 13, alignItems: "center" }}
+              style={{ flex: 1, backgroundColor: selectedExerciseIds.length === 0 ? theme.border : theme.primary, borderRadius: 12, paddingVertical: 13, alignItems: "center" }}
             >
-              <Text style={{ fontSize: 14, fontWeight: "600", color: selectedExerciseIds.length === 0 ? "#94a3b8" : "#fff" }}>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: selectedExerciseIds.length === 0 ? theme.textMuted : "#fff" }}>
                 Registrar {selectedExerciseIds.length} ejercicio{selectedExerciseIds.length !== 1 ? "s" : ""}
               </Text>
             </TouchableOpacity>
@@ -801,15 +804,15 @@ export default function RoutineDetailScreen() {
 
       {/* Rename superset group modal */}
       <Modal visible={showRenameGroup} animationType="fade" transparent onRequestClose={() => setShowRenameGroup(false)}>
-        <View style={{ flex: 1, backgroundColor: "#00000060", justifyContent: "center", paddingHorizontal: 32 }}>
-          <View style={{ backgroundColor: "#fff", borderRadius: 16, padding: 20, gap: 16 }}>
-            <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>Nombre del superset</Text>
+        <View style={{ flex: 1, backgroundColor: theme.overlay, justifyContent: "center", paddingHorizontal: 32 }}>
+          <View style={{ backgroundColor: theme.surfaceCard, borderRadius: 16, padding: 20, gap: 16 }}>
+            <Text style={{ fontSize: 16, fontWeight: "600", color: theme.text }}>Nombre del superset</Text>
             <TextInput
-              style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15 }}
+              style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, color: theme.text, backgroundColor: theme.inputBg }}
               value={renameGroupText}
               onChangeText={setRenameGroupText}
               placeholder="Ej. Pecho + Tríceps"
-              placeholderTextColor="#cbd5e1"
+              placeholderTextColor={theme.textDisabled}
               autoFocus
               returnKeyType="done"
               onSubmitEditing={() => {
@@ -818,15 +821,15 @@ export default function RoutineDetailScreen() {
               }}
             />
             <View style={{ flexDirection: "row", gap: 10 }}>
-              <TouchableOpacity onPress={() => setShowRenameGroup(false)} style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: "#e2e8f0", alignItems: "center" }}>
-                <Text style={{ fontSize: 14, color: "#64748b" }}>Cancelar</Text>
+              <TouchableOpacity onPress={() => setShowRenameGroup(false)} style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: theme.border, alignItems: "center" }}>
+                <Text style={{ fontSize: 14, color: theme.textSecondary }}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => {
                   if (renamingGroup) void handleRenameGroup(renamingGroup.dayId, renamingGroup.groupId, renameGroupText);
                   setShowRenameGroup(false);
                 }}
-                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: "#6366f1", alignItems: "center" }}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: theme.primary, alignItems: "center" }}
               >
                 <Text style={{ fontSize: 14, fontWeight: "600", color: "#fff" }}>Guardar</Text>
               </TouchableOpacity>

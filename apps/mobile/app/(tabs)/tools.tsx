@@ -5,8 +5,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRoutineStore } from "@fitnotes/core";
 import { createRoutineRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
+import { useTheme } from "../../lib/theme";
 
 export default function RoutinesScreen() {
+  const theme = useTheme();
   const router = useRouter();
   const { create } = useLocalSearchParams<{ create?: string }>();
   const routines = useRoutineStore((s) => s.routines);
@@ -106,20 +108,20 @@ export default function RoutinesScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       {isLoading ? (
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <ActivityIndicator color="#6366f1" />
+          <ActivityIndicator color={theme.primary} />
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100, gap: 10 }}>
-          <Text style={{ fontSize: 22, fontWeight: "700", color: "#0f172a", marginBottom: 4 }}>Rutinas</Text>
+          <Text style={{ fontSize: 22, fontWeight: "700", color: theme.text, marginBottom: 4 }}>Rutinas</Text>
 
           {routines.length === 0 ? (
-            <View style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 16, padding: 32, alignItems: "center", gap: 8 }}>
-              <Ionicons name="clipboard-outline" size={36} color="#94a3b8" />
-              <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>Sin rutinas aún</Text>
-              <Text style={{ fontSize: 12, color: "#94a3b8", textAlign: "center" }}>
+            <View style={{ borderWidth: 1, borderColor: theme.border, borderStyle: "dashed", borderRadius: 16, padding: 32, alignItems: "center", gap: 8 }}>
+              <Ionicons name="clipboard-outline" size={36} color={theme.textMuted} />
+              <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>Sin rutinas aún</Text>
+              <Text style={{ fontSize: 12, color: theme.textMuted, textAlign: "center" }}>
                 Pulsa el botón + para crear tu primera rutina.
               </Text>
             </View>
@@ -128,11 +130,11 @@ export default function RoutinesScreen() {
               <TouchableOpacity
                 key={r.id}
                 onPress={() => router.push(`/routines/${r.id}`)}
-                style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 16, backgroundColor: "#fff", paddingHorizontal: 16, paddingVertical: 14, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, elevation: 1, gap: 12 }}
+                style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: theme.borderLight, borderRadius: 16, backgroundColor: theme.surfaceCard, paddingHorizontal: 16, paddingVertical: 14, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, elevation: 1, gap: 12 }}
               >
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>{r.name}</Text>
-                  {r.notes ? <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }} numberOfLines={1}>{r.notes}</Text> : null}
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>{r.name}</Text>
+                  {r.notes ? <Text style={{ fontSize: 12, color: theme.textMuted, marginTop: 2 }} numberOfLines={1}>{r.notes}</Text> : null}
                   {(() => {
                     const s = routineStats[r.id];
                     if (!s) return null;
@@ -143,16 +145,16 @@ export default function RoutinesScreen() {
                       parts.push(days === 0 ? "hoy" : days === 1 ? "ayer" : `hace ${days} días`);
                     }
                     if (parts.length === 0) return null;
-                    return <Text style={{ fontSize: 11, color: "#6366f1", marginTop: 3 }}>{parts.join(" · ")}</Text>;
+                    return <Text style={{ fontSize: 11, color: theme.primary, marginTop: 3 }}>{parts.join(" · ")}</Text>;
                   })()}
                 </View>
                 <TouchableOpacity
                   onPress={() => openMenu(r.id, r.name, r.notes ?? "")}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 4 }}
                 >
-                  <Ionicons name="ellipsis-vertical" size={18} color="#94a3b8" />
+                  <Ionicons name="ellipsis-vertical" size={18} color={theme.textMuted} />
                 </TouchableOpacity>
-                <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
+                <Ionicons name="chevron-forward" size={16} color={theme.textDisabled} />
               </TouchableOpacity>
             ))
           )}
@@ -162,39 +164,41 @@ export default function RoutinesScreen() {
       {/* FAB */}
       <TouchableOpacity
         onPress={() => setShowCreate(true)}
-        style={{ position: "absolute", bottom: 32, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: "#6366f1", alignItems: "center", justifyContent: "center", shadowColor: "#6366f1", shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 }}
+        style={{ position: "absolute", bottom: 32, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: theme.primary, alignItems: "center", justifyContent: "center", shadowColor: theme.primary, shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 }}
       >
         <Ionicons name="add" size={28} color="white" />
       </TouchableOpacity>
 
       {/* Edit modal */}
       <Modal visible={editSource !== null} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setEditSource(null)}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
           <View style={{ padding: 20, gap: 16 }}>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>Editar rutina</Text>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>Editar rutina</Text>
             <TextInput
-              style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 }}
+              style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: theme.text, backgroundColor: theme.inputBg }}
               placeholder="Nombre de la rutina"
+              placeholderTextColor={theme.textMuted}
               value={editName}
               onChangeText={setEditName}
               autoFocus
               selectTextOnFocus
             />
             <TextInput
-              style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, height: 80, textAlignVertical: "top" }}
+              style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, height: 80, textAlignVertical: "top", color: theme.text, backgroundColor: theme.inputBg }}
               placeholder="Notas (opcional)"
+              placeholderTextColor={theme.textMuted}
               value={editNotes}
               onChangeText={setEditNotes}
               multiline
             />
             <View style={{ flexDirection: "row", gap: 8 }}>
-              <TouchableOpacity onPress={() => setEditSource(null)} style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, paddingVertical: 12, alignItems: "center" }}>
-                <Text style={{ fontSize: 14, fontWeight: "500" }}>Cancelar</Text>
+              <TouchableOpacity onPress={() => setEditSource(null)} style={{ flex: 1, borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingVertical: 12, alignItems: "center" }}>
+                <Text style={{ fontSize: 14, fontWeight: "500", color: theme.text }}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleEdit}
                 disabled={editSaving || !editName.trim()}
-                style={{ flex: 1, backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 12, alignItems: "center", opacity: editSaving || !editName.trim() ? 0.6 : 1 }}
+                style={{ flex: 1, backgroundColor: theme.primary, borderRadius: 12, paddingVertical: 12, alignItems: "center", opacity: editSaving || !editName.trim() ? 0.6 : 1 }}
               >
                 {editSaving
                   ? <ActivityIndicator size="small" color="#fff" />
@@ -208,26 +212,27 @@ export default function RoutinesScreen() {
 
       {/* Copy modal */}
       <Modal visible={copySource !== null} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setCopySource(null)}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
           <View style={{ padding: 20, gap: 16 }}>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>Copiar rutina</Text>
-            <Text style={{ fontSize: 13, color: "#64748b" }}>Se copiarán todos los días, ejercicios y series predefinidas.</Text>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>Copiar rutina</Text>
+            <Text style={{ fontSize: 13, color: theme.textSecondary }}>Se copiarán todos los días, ejercicios y series predefinidas.</Text>
             <TextInput
-              style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 }}
+              style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: theme.text, backgroundColor: theme.inputBg }}
               placeholder="Nombre de la nueva rutina"
+              placeholderTextColor={theme.textMuted}
               value={copyName}
               onChangeText={setCopyName}
               autoFocus
               selectTextOnFocus
             />
             <View style={{ flexDirection: "row", gap: 8 }}>
-              <TouchableOpacity onPress={() => setCopySource(null)} style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, paddingVertical: 12, alignItems: "center" }}>
-                <Text style={{ fontSize: 14, fontWeight: "500" }}>Cancelar</Text>
+              <TouchableOpacity onPress={() => setCopySource(null)} style={{ flex: 1, borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingVertical: 12, alignItems: "center" }}>
+                <Text style={{ fontSize: 14, fontWeight: "500", color: theme.text }}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleCopy}
                 disabled={copying || !copyName.trim()}
-                style={{ flex: 1, backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 12, alignItems: "center", opacity: copying || !copyName.trim() ? 0.6 : 1 }}
+                style={{ flex: 1, backgroundColor: theme.primary, borderRadius: 12, paddingVertical: 12, alignItems: "center", opacity: copying || !copyName.trim() ? 0.6 : 1 }}
               >
                 {copying
                   ? <ActivityIndicator size="small" color="#fff" />
@@ -241,28 +246,30 @@ export default function RoutinesScreen() {
 
       {/* Create modal */}
       <Modal visible={showCreate} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setShowCreate(false)}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
           <View style={{ padding: 20, gap: 16 }}>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>Nueva rutina</Text>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>Nueva rutina</Text>
             <TextInput
-              style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 }}
+              style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: theme.text, backgroundColor: theme.inputBg }}
               placeholder="Nombre de la rutina"
+              placeholderTextColor={theme.textMuted}
               value={newName}
               onChangeText={setNewName}
               autoFocus
             />
             <TextInput
-              style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, height: 80, textAlignVertical: "top" }}
+              style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, height: 80, textAlignVertical: "top", color: theme.text, backgroundColor: theme.inputBg }}
               placeholder="Notas (opcional)"
+              placeholderTextColor={theme.textMuted}
               value={newNotes}
               onChangeText={setNewNotes}
               multiline
             />
             <View style={{ flexDirection: "row", gap: 8 }}>
-              <TouchableOpacity onPress={() => setShowCreate(false)} style={{ flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, paddingVertical: 12, alignItems: "center" }}>
-                <Text style={{ fontSize: 14, fontWeight: "500" }}>Cancelar</Text>
+              <TouchableOpacity onPress={() => setShowCreate(false)} style={{ flex: 1, borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingVertical: 12, alignItems: "center" }}>
+                <Text style={{ fontSize: 14, fontWeight: "500", color: theme.text }}>Cancelar</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleCreate} style={{ flex: 1, backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 12, alignItems: "center" }}>
+              <TouchableOpacity onPress={handleCreate} style={{ flex: 1, backgroundColor: theme.primary, borderRadius: 12, paddingVertical: 12, alignItems: "center" }}>
                 <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Crear</Text>
               </TouchableOpacity>
             </View>
