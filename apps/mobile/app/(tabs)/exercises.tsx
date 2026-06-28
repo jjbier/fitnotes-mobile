@@ -9,10 +9,11 @@ import { Ionicons } from "@expo/vector-icons";
 import DraggableFlatList, { ScaleDecorator } from "react-native-draggable-flatlist";
 import type { RenderItemParams } from "react-native-draggable-flatlist";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { useExerciseStore, filterExercises, ExerciseType } from "@fitnotes/core";
+import { useExerciseStore, useWorkoutStore, filterExercises, ExerciseType } from "@fitnotes/core";
 import { createExerciseRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import type { Category, Exercise } from "@fitnotes/core";
+import { useTheme } from "../../lib/theme";
 
 const TYPE_OPTIONS: { value: ExerciseType; label: string }[] = [
   { value: ExerciseType.WEIGHT_REPS, label: "Peso × Reps" },
@@ -36,6 +37,7 @@ const PRESET_COLORS = [
 const WEIGHT_TYPES = [ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHT_ONLY, ExerciseType.WEIGHT_DISTANCE, ExerciseType.WEIGHT_TIME];
 
 export default function ExercisesScreen() {
+  const colors = useTheme();
   const router = useRouter();
   const categories = useExerciseStore((s) => s.categories);
   const exercises = useExerciseStore((s) => s.exercises);
@@ -50,6 +52,7 @@ export default function ExercisesScreen() {
   const reorderCategories = useExerciseStore((s) => s.reorderCategories);
   const toggleFavorite = useExerciseStore((s) => s.toggleFavorite);
   const setLoading = useExerciseStore((s) => s.setLoading);
+  const activeWorkoutId = useWorkoutStore((s) => s.activeWorkout?.id);
 
   const [search, setSearch] = useState("");
   const [showFabMenu, setShowFabMenu] = useState(false);
@@ -367,11 +370,11 @@ export default function ExercisesScreen() {
   const filteredAll = filterExercises(exercises, search);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Search + global search + manage categories */}
       <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8, flexDirection: "row", alignItems: "center", gap: 8 }}>
-        <View style={{ flex: 1, flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#e2e8f0", backgroundColor: "#f8fafc", borderRadius: 12, paddingHorizontal: 12, gap: 8 }}>
-          <Ionicons name="search" size={16} color="#64748b" />
+        <View style={{ flex: 1, flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.inputBg, borderRadius: 12, paddingHorizontal: 12, gap: 8 }}>
+          <Ionicons name="search" size={16} color={colors.textSecondary} />
           <TextInput
             style={{ flex: 1, paddingVertical: 12, fontSize: 14 }}
             placeholder="Buscar ejercicios…"
@@ -386,11 +389,11 @@ export default function ExercisesScreen() {
           style={{ padding: 8 }}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Ionicons name="time-outline" size={20} color="#6366f1" />
+          <Ionicons name="time-outline" size={20} color={colors.primary} />
         </TouchableOpacity>
         {categories.length > 0 && (
           <TouchableOpacity onPress={() => setShowCatModal(true)} style={{ padding: 8 }}>
-            <Ionicons name="settings-outline" size={20} color="#64748b" />
+            <Ionicons name="settings-outline" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
         )}
       </View>
@@ -398,14 +401,14 @@ export default function ExercisesScreen() {
       {/* Categories or Search results */}
       {isLoading ? (
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <ActivityIndicator color="#6366f1" />
+          <ActivityIndicator color={colors.primary} />
         </View>
       ) : search ? (
         /* Flat list when searching */
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100, gap: 8 }}>
           {filteredAll.length === 0 ? (
             <View style={{ paddingVertical: 40, alignItems: "center" }}>
-              <Text style={{ color: "#94a3b8", fontSize: 14 }}>Sin ejercicios que coincidan con "{search}"</Text>
+              <Text style={{ color: colors.textMuted, fontSize: 14 }}>Sin ejercicios que coincidan con "{search}"</Text>
             </View>
           ) : (
             filteredAll.map((ex) => (
@@ -414,7 +417,10 @@ export default function ExercisesScreen() {
                 ex={ex}
                 categories={categories}
                 stats={exerciseStats[ex.id]}
-                onPress={() => router.push({ pathname: "/exercise-history/[exerciseId]", params: { exerciseId: ex.id, name: ex.name, type: ex.type, weightUnit: ex.weight_unit } } as never)}
+                onPress={() => activeWorkoutId
+                  ? router.push(`/workout/${ex.id}` as never)
+                  : router.push({ pathname: "/exercise-history/[exerciseId]", params: { exerciseId: ex.id, name: ex.name, type: ex.type, weightUnit: ex.weight_unit } } as never)
+                }
                 onEdit={() => openEditModal(ex)}
                 onDelete={() => handleDeleteExercise(ex.id, ex.name)}
                 onToggleFavorite={() => handleToggleFavorite(ex.id, ex.is_favorite)}
@@ -427,9 +433,9 @@ export default function ExercisesScreen() {
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100, gap: 8, paddingTop: 4 }}>
           {categories.length === 0 ? (
             <View style={{ paddingVertical: 40, alignItems: "center", gap: 12 }}>
-              <Text style={{ color: "#94a3b8", fontSize: 14 }}>Sin categorías aún</Text>
-              <TouchableOpacity onPress={openCreateModal} style={{ backgroundColor: "#6366f1", borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 }}>
-                <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Crear primer ejercicio</Text>
+              <Text style={{ color: colors.textMuted, fontSize: 14 }}>Sin categorías aún</Text>
+              <TouchableOpacity onPress={openCreateModal} style={{ backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 }}>
+                <Text style={{ color: colors.background, fontSize: 14, fontWeight: "600" }}>Crear primer ejercicio</Text>
               </TouchableOpacity>
             </View>
           ) : (

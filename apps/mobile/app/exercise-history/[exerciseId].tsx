@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTheme } from "../../lib/theme";
 import {
   SafeAreaView, Text, View, TouchableOpacity,
   ActivityIndicator, FlatList, useWindowDimensions, ScrollView,
@@ -72,6 +73,7 @@ const ALL_METRICS: { key: Metric; label: string; types: ExerciseType[] | "all" }
 ];
 
 export default function ExerciseHistoryScreen() {
+  const colors = useTheme();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { exerciseId, name, type, weightUnit } = useLocalSearchParams<{
@@ -102,6 +104,13 @@ export default function ExerciseHistoryScreen() {
   const [editTime, setEditTime] = useState("");
   const [editComment, setEditComment] = useState("");
   const [editSaving, setEditSaving] = useState(false);
+
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedSetIds, setSelectedSetIds] = useState<Set<string>>(new Set());
+  const [bulkEditVisible, setBulkEditVisible] = useState(false);
+  const [bulkWeight, setBulkWeight] = useState("");
+  const [bulkReps, setBulkReps] = useState("");
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   const exerciseType = (type ?? ExerciseType.WEIGHT_REPS) as ExerciseType;
   const unit = weightUnit ?? "kg";
@@ -176,6 +185,68 @@ export default function ExerciseHistoryScreen() {
     ]);
   }
 
+  function enterSelectMode(id: string) {
+    setSelectMode(true);
+    setSelectedSetIds(new Set([id]));
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false);
+    setSelectedSetIds(new Set());
+  }
+
+  function toggleSetSelection(id: string) {
+    setSelectedSetIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleBulkDelete() {
+    Alert.alert(`¿Eliminar ${selectedSetIds.size} ${selectedSetIds.size === 1 ? "serie" : "series"}?`, undefined, [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Eliminar",
+        style: "destructive",
+        onPress: async () => {
+          const toDelete = new Set(selectedSetIds);
+          for (const id of toDelete) {
+            await workoutRepo.deleteSet(id);
+          }
+          setSessions((prev) =>
+            prev.map((s) => ({ ...s, sets: s.sets.filter((set) => !toDelete.has(set.id)) }))
+          );
+          exitSelectMode();
+        },
+      },
+    ]);
+  }
+
+  async function handleBulkEdit() {
+    if (!bulkWeight && !bulkReps) return;
+    setBulkSaving(true);
+    const patch: Partial<SetRow> = {};
+    if (bulkWeight) patch.weight = parseFloat(bulkWeight);
+    if (bulkReps) patch.reps = parseInt(bulkReps, 10);
+    const ids = new Set(selectedSetIds);
+    for (const id of ids) {
+      await workoutRepo.updateSet(id, patch);
+    }
+    setSessions((prev) =>
+      prev.map((s) => ({
+        ...s,
+        sets: s.sets.map((set) => ids.has(set.id) ? { ...set, ...patch } : set),
+      }))
+    );
+    setBulkSaving(false);
+    setBulkEditVisible(false);
+    setBulkWeight("");
+    setBulkReps("");
+    exitSelectMode();
+  }
+
   const availableMetrics = ALL_METRICS.filter((m) =>
     m.types === "all" || m.types.includes(exerciseType)
   );
@@ -202,15 +273,15 @@ export default function ExerciseHistoryScreen() {
     : "s";
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#f8fafc" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.backgroundAlt }}>
       {/* Header */}
-      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, backgroundColor: "#fff", borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
+      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.background, borderBottomWidth: 1, borderColor: colors.borderLight }}>
         <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
-          <Ionicons name="arrow-back" size={24} color="#0f172a" />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }} numberOfLines={1}>{name ?? "Historial"}</Text>
-          <Text style={{ fontSize: 12, color: "#94a3b8" }}>
+          <Text style={{ fontSize: 16, fontWeight: "600", color: colors.text }} numberOfLines={1}>{name ?? "Historial"}</Text>
+          <Text style={{ fontSize: 12, color: colors.textMuted }}>
             {loading ? "Cargando…" : `${sessions.length} ${sessions.length === 1 ? "sesión" : "sesiones"}`}
           </Text>
         </View>
@@ -261,7 +332,7 @@ export default function ExerciseHistoryScreen() {
           <FlatList
             data={sessions}
             keyExtractor={(s) => s.workout_id}
-            contentContainerStyle={{ padding: 16, gap: 12 }}
+            contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: selectMode ? 88 : 16 }}
             renderItem={({ item: session }) => {
               const visibleSets = hideWarmup ? session.sets.filter((s) => !s.is_warmup) : session.sets;
               if (visibleSets.length === 0 && hideWarmup) return null;
@@ -290,17 +361,25 @@ export default function ExerciseHistoryScreen() {
                     visibleSets.map((set, idx) => (
                       <TouchableOpacity
                         key={set.id}
-                        onPress={() => openEditSet(sessions.indexOf(session), idx, set)}
-                        style={{ flexDirection: "row", alignItems: "center", paddingVertical: 7, borderBottomWidth: idx < session.sets.length - 1 ? 1 : 0, borderColor: "#f8fafc" }}
+                        onPress={() => selectMode ? toggleSetSelection(set.id) : openEditSet(sessions.indexOf(session), idx, set)}
+                        onLongPress={() => !selectMode && enterSelectMode(set.id)}
+                        delayLongPress={400}
+                        style={{ flexDirection: "row", alignItems: "center", paddingVertical: 7, borderBottomWidth: idx < session.sets.length - 1 ? 1 : 0, borderColor: "#f8fafc", backgroundColor: selectMode && selectedSetIds.has(set.id) ? "#6366f108" : "transparent", borderRadius: 6 }}
                       >
-                        <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: set.is_warmup ? "#fef3c7" : set.is_complete ? "#6366f115" : "#f1f5f9", alignItems: "center", justifyContent: "center", marginRight: 12 }}>
-                          <Text style={{ fontSize: 11, fontWeight: "600", color: set.is_warmup ? "#d97706" : set.is_complete ? "#6366f1" : "#94a3b8" }}>{set.is_warmup ? "W" : idx + 1}</Text>
-                        </View>
+                        {selectMode ? (
+                          <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: selectedSetIds.has(set.id) ? "#6366f1" : "#cbd5e1", backgroundColor: selectedSetIds.has(set.id) ? "#6366f1" : "transparent", alignItems: "center", justifyContent: "center", marginRight: 10 }}>
+                            {selectedSetIds.has(set.id) && <Ionicons name="checkmark" size={12} color="#fff" />}
+                          </View>
+                        ) : (
+                          <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: set.is_warmup ? "#fef3c7" : set.is_complete ? "#6366f115" : "#f1f5f9", alignItems: "center", justifyContent: "center", marginRight: 12 }}>
+                            <Text style={{ fontSize: 11, fontWeight: "600", color: set.is_warmup ? "#d97706" : set.is_complete ? "#6366f1" : "#94a3b8" }}>{set.is_warmup ? "W" : idx + 1}</Text>
+                          </View>
+                        )}
                         <Text style={{ fontSize: 14, color: "#0f172a", flex: 1 }}>{formatSet(set, exerciseType, unit)}</Text>
-                        {set.comment ? (
+                        {!selectMode && set.comment ? (
                           <Text style={{ fontSize: 11, color: "#94a3b8", maxWidth: 100 }} numberOfLines={1}>{set.comment}</Text>
                         ) : null}
-                        <Ionicons name="pencil-outline" size={13} color="#cbd5e1" style={{ marginLeft: 6 }} />
+                        {!selectMode && <Ionicons name="pencil-outline" size={13} color="#cbd5e1" style={{ marginLeft: 6 }} />}
                       </TouchableOpacity>
                     ))
                   )}
@@ -436,6 +515,79 @@ export default function ExerciseHistoryScreen() {
           </ScrollView>
         )
       )}
+      {/* Multi-select action bar */}
+      {selectMode && tab === "history" && (
+        <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "#fff", borderTopWidth: 1, borderColor: "#e2e8f0", paddingHorizontal: 16, paddingVertical: 12, paddingBottom: 20, flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Text style={{ flex: 1, fontSize: 13, fontWeight: "600", color: "#0f172a" }}>{selectedSetIds.size} {selectedSetIds.size === 1 ? "serie" : "series"}</Text>
+          <TouchableOpacity
+            onPress={() => { setBulkWeight(""); setBulkReps(""); setBulkEditVisible(true); }}
+            disabled={selectedSetIds.size === 0}
+            style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, backgroundColor: "#6366f1", opacity: selectedSetIds.size === 0 ? 0.4 : 1 }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: "600", color: "#fff" }}>Editar</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleBulkDelete}
+            disabled={selectedSetIds.size === 0}
+            style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, backgroundColor: "#fee2e2", opacity: selectedSetIds.size === 0 ? 0.4 : 1 }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: "600", color: "#ef4444" }}>Eliminar</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={exitSelectMode} style={{ padding: 6 }}>
+            <Ionicons name="close" size={20} color="#64748b" />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Bulk edit modal */}
+      <Modal visible={bulkEditVisible} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setBulkEditVisible(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
+            <TouchableOpacity onPress={() => setBulkEditVisible(false)} style={{ marginRight: 12 }}>
+              <Ionicons name="close" size={22} color="#64748b" />
+            </TouchableOpacity>
+            <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: "#0f172a" }}>
+              Editar {selectedSetIds.size} {selectedSetIds.size === 1 ? "serie" : "series"}
+            </Text>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
+            <Text style={{ fontSize: 13, color: "#64748b" }}>Los campos vacíos no se modifican.</Text>
+            <View style={{ gap: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748b" }}>{unit.toUpperCase()}</Text>
+              <TextInput
+                style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 }}
+                keyboardType="decimal-pad"
+                value={bulkWeight}
+                onChangeText={setBulkWeight}
+                placeholder="Sin cambios"
+                placeholderTextColor="#cbd5e1"
+              />
+            </View>
+            <View style={{ gap: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748b" }}>REPS</Text>
+              <TextInput
+                style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 }}
+                keyboardType="number-pad"
+                value={bulkReps}
+                onChangeText={setBulkReps}
+                placeholder="Sin cambios"
+                placeholderTextColor="#cbd5e1"
+              />
+            </View>
+            <TouchableOpacity
+              onPress={handleBulkEdit}
+              disabled={bulkSaving || (!bulkWeight && !bulkReps)}
+              style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", marginTop: 8, opacity: !bulkWeight && !bulkReps ? 0.5 : 1 }}
+            >
+              {bulkSaving
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={{ fontSize: 15, fontWeight: "600", color: "#fff" }}>Aplicar cambios</Text>
+              }
+            </TouchableOpacity>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
       {/* Edit set modal */}
       <Modal visible={editSet !== null} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setEditSet(null)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>

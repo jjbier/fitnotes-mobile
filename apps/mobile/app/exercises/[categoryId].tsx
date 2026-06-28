@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useExerciseStore, filterExercises, ExerciseType } from "@fitnotes/core";
+import { useExerciseStore, useWorkoutStore, filterExercises, ExerciseType } from "@fitnotes/core";
 import { createExerciseRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import type { Exercise } from "@fitnotes/core";
@@ -55,6 +55,7 @@ export default function ExerciseCategoryScreen() {
   const deleteExercise = useExerciseStore((s) => s.deleteExercise);
   const toggleFavorite = useExerciseStore((s) => s.toggleFavorite);
   const setLoading = useExerciseStore((s) => s.setLoading);
+  const activeWorkoutId = useWorkoutStore((s) => s.activeWorkout?.id);
 
   const [search, setSearch] = useState("");
   const [userId, setUserId] = useState("");
@@ -316,7 +317,10 @@ export default function ExerciseCategoryScreen() {
               return (
                 <TouchableOpacity
                   key={ex.id}
-                  onPress={() => router.push({ pathname: "/exercise-history/[exerciseId]", params: { exerciseId: ex.id, name: ex.name, type: ex.type, weightUnit: ex.weight_unit } } as never)}
+                  onPress={() => activeWorkoutId
+                    ? router.push(`/workout/${ex.id}` as never)
+                    : router.push({ pathname: "/exercise-history/[exerciseId]", params: { exerciseId: ex.id, name: ex.name, type: ex.type, weightUnit: ex.weight_unit } } as never)
+                  }
                   style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 12, backgroundColor: "#fff", paddingHorizontal: 14, paddingVertical: 12, gap: 10, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 }}
                 >
                   <View style={{ flex: 1 }}>

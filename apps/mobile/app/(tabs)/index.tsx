@@ -3,12 +3,14 @@ import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicat
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useWorkoutStore, useExerciseStore, formatWorkoutDate, todayISO, ExerciseType } from "@fitnotes/core";
-import { createWorkoutRepository, createExerciseRepository } from "@fitnotes/database";
+import { createWorkoutRepository, createExerciseRepository, createRoutineRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import { useSyncStatus } from "../../contexts/SyncContext";
 import DateInput from "../../components/DateInput";
+import { useTheme } from "../../lib/theme";
 
 export default function HomeScreen() {
+  const colors = useTheme();
   const router = useRouter();
   const today = todayISO();
 
@@ -26,6 +28,7 @@ export default function HomeScreen() {
   const finishWorkout = useWorkoutStore((s) => s.finishWorkout);
   const setLoading = useWorkoutStore((s) => s.setLoading);
   const setWorkoutComment = useWorkoutStore((s) => s.setWorkoutComment);
+  const setWorkoutStartTime = useWorkoutStore((s) => s.setWorkoutStartTime);
 
   const exercises = useExerciseStore((s) => s.exercises);
   const loadExercises = useExerciseStore((s) => s.loadExercises);
@@ -33,8 +36,15 @@ export default function HomeScreen() {
   const [userId, setUserId] = useState("");
   const [currentDate, setCurrentDate] = useState(today);
   const [workoutComment, setWorkoutCommentLocal] = useState("");
-  const [workoutDuration, setWorkoutDuration] = useState(0);
+  const [timerDisplay, setTimerDisplay] = useState(0);
+  const [timerState, setTimerState] = useState<"idle" | "running" | "paused">("idle");
+  const timerElapsedRef = useRef(0);
+  const timerSegmentStartRef = useRef<number | null>(null);
   const durationRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [showStartModal, setShowStartModal] = useState(false);
+  const [startRoutines, setStartRoutines] = useState<{ id: string; name: string; notes?: string | null }[]>([]);
+  const [startModalLoading, setStartModalLoading] = useState(false);
+  const [loggingRoutineId, setLoggingRoutineId] = useState<string | null>(null);
   const [showCopyModal, setShowCopyModal] = useState(false);
   const [copyLoading, setCopyLoading] = useState(false);
   const [showMoveModal, setShowMoveModal] = useState(false);
@@ -46,6 +56,7 @@ export default function HomeScreen() {
 
   const repo = useMemo(() => createWorkoutRepository(supabase), []);
   const exRepo = useMemo(() => createExerciseRepository(supabase), []);
+  const routineRepo = useMemo(() => createRoutineRepository(supabase), []);
 
   const loadWorkoutForDate = useCallback(async (date: string) => {
     const { data: workout } = await repo.getWorkoutByDate(date);
@@ -118,23 +129,125 @@ export default function HomeScreen() {
     setWorkoutCommentLocal(activeWorkout?.comment ?? "");
   }, [activeWorkout?.id]);
 
-  // Live workout duration counter
+  // Reset timer when workout changes
   useEffect(() => {
     if (durationRef.current) clearInterval(durationRef.current);
-    if (!activeWorkout?.start_time || activeWorkout.end_time) { setWorkoutDuration(0); return; }
-    const startMs = new Date(activeWorkout.start_time).getTime();
-    const tick = () => setWorkoutDuration(Math.floor((Date.now() - startMs) / 1000));
+    setTimerDisplay(0);
+    setTimerState("idle");
+    timerElapsedRef.current = 0;
+    timerSegmentStartRef.current = null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeWorkout?.id]);
+
+  // Tick every second when running
+  useEffect(() => {
+    if (durationRef.current) clearInterval(durationRef.current);
+    if (timerState !== "running") return;
+    const tick = () => {
+      const segmentMs = timerSegmentStartRef.current !== null ? Date.now() - timerSegmentStartRef.current : 0;
+      setTimerDisplay(timerElapsedRef.current + Math.floor(segmentMs / 1000));
+    };
     tick();
     durationRef.current = setInterval(tick, 1000);
     return () => { if (durationRef.current) clearInterval(durationRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeWorkout?.id, activeWorkout?.start_time]);
+  }, [timerState]);
 
-  async function handleStartWorkout() {
-    const { data, error } = await repo.createWorkout({ date: currentDate, start_time: new Date().toISOString() }, userId);
-    if (error || !data) { Alert.alert("Error", error?.message ?? "Ha ocurrido un error"); return; }
-    startWorkout(currentDate);
-    loadWorkout({ id: data.id, date: data.date, start_time: data.start_time ?? undefined }, [], {});
+  async function handleStartTimer() {
+    if (!activeWorkout?.id) return;
+    timerSegmentStartRef.current = Date.now();
+    setTimerState("running");
+    if (!activeWorkout.start_time) {
+      const startTime = new Date().toISOString();
+      await repo.updateWorkout(activeWorkout.id, { start_time: startTime });
+      setWorkoutStartTime(startTime);
+    }
+  }
+
+  function handlePauseTimer() {
+    if (timerSegmentStartRef.current !== null) {
+      timerElapsedRef.current += Math.floor((Date.now() - timerSegmentStartRef.current) / 1000);
+      timerSegmentStartRef.current = null;
+    }
+    if (durationRef.current) clearInterval(durationRef.current);
+    setTimerDisplay(timerElapsedRef.current);
+    setTimerState("paused");
+  }
+
+  async function openStartModal() {
+    setShowStartModal(true);
+    setStartModalLoading(true);
+    const { data } = await routineRepo.getRoutines();
+    setStartRoutines(data ?? []);
+    setStartModalLoading(false);
+  }
+
+  async function handleLogRoutine(routineId: string) {
+    setLoggingRoutineId(routineId);
+    const { data: days } = await routineRepo.getDays(routineId);
+    const allDayExercises: { id: string; exercise_id: string; routine_day_id: string; order_index: number }[] = [];
+    for (const day of days ?? []) {
+      const { data: dayExs } = await routineRepo.getDayExercises(day.id);
+      for (const rde of dayExs ?? []) {
+        if (!allDayExercises.some((e) => e.exercise_id === rde.exercise_id)) {
+          allDayExercises.push(rde);
+        }
+      }
+    }
+    if (allDayExercises.length === 0) {
+      Alert.alert("Sin ejercicios", "Esta rutina no tiene ejercicios. Añádelos en el editor de rutinas.");
+      setLoggingRoutineId(null);
+      return;
+    }
+    const { data: workout, error: wError } = await repo.createWorkout(
+      { date: currentDate }, userId
+    );
+    if (wError || !workout) {
+      Alert.alert("Error", wError?.message ?? "No se pudo crear el entrenamiento");
+      setLoggingRoutineId(null);
+      return;
+    }
+    const workoutExercisesCreated: Parameters<typeof loadWorkout>[1] = [];
+    const setsMap: Parameters<typeof loadWorkout>[2] = {};
+    for (let i = 0; i < allDayExercises.length; i++) {
+      const rde = allDayExercises[i]!;
+      const { data: we } = await repo.addExercise(
+        { workout_id: workout.id, exercise_id: rde.exercise_id, order_index: i }, userId
+      );
+      if (!we) continue;
+      workoutExercisesCreated.push({
+        id: we.id, workout_id: we.workout_id, exercise_id: we.exercise_id,
+        order_index: we.order_index, group_id: we.group_id ?? undefined,
+      });
+      const { data: pSets } = await routineRepo.getPredefinedSets(rde.id);
+      const createdSets: Parameters<typeof loadWorkout>[2][string] = [];
+      for (const ps of pSets ?? []) {
+        const { data: newSet } = await repo.createSet({
+          workout_exercise_id: we.id,
+          weight: ps.weight ?? undefined, reps: ps.reps ?? undefined,
+          distance: ps.distance ?? undefined, time_seconds: ps.time_seconds ?? undefined,
+          order_index: ps.order_index,
+        }, userId);
+        if (newSet) {
+          createdSets.push({
+            id: newSet.id, workout_exercise_id: newSet.workout_exercise_id,
+            weight: newSet.weight ?? undefined, reps: newSet.reps ?? undefined,
+            distance: newSet.distance ?? undefined, time_seconds: newSet.time_seconds ?? undefined,
+            is_complete: newSet.is_complete, is_warmup: newSet.is_warmup ?? false,
+            comment: newSet.comment ?? undefined, order_index: newSet.order_index,
+          });
+        }
+      }
+      setsMap[we.id] = createdSets;
+    }
+    loadWorkout(
+      { id: workout.id, date: workout.date },
+      workoutExercisesCreated,
+      setsMap
+    );
+    loadWorkouts([{ id: workout.id, date: workout.date }]);
+    setLoggingRoutineId(null);
+    setShowStartModal(false);
   }
 
   async function handleFinish() {
@@ -142,14 +255,22 @@ export default function HomeScreen() {
     Alert.alert("¿Finalizar entrenamiento?", "¿Estás seguro?", [
       { text: "Cancelar", style: "cancel" },
       { text: "Finalizar", onPress: async () => {
+        // Snapshot elapsed time before stopping
+        if (timerSegmentStartRef.current !== null) {
+          timerElapsedRef.current += Math.floor((Date.now() - timerSegmentStartRef.current) / 1000);
+          timerSegmentStartRef.current = null;
+        }
+        if (durationRef.current) clearInterval(durationRef.current);
+        setTimerState("idle");
+        const dur = timerElapsedRef.current;
+
         const endTime = new Date().toISOString();
-        await repo.updateWorkout(activeWorkout.id, { end_time: endTime });
+        await repo.updateWorkout(activeWorkout.id, { end_time: endTime, duration_minutes: Math.round(dur / 60) });
 
         // Compute summary before clearing store (warmup sets excluded from volume)
         const allSets = Object.values(sets).flat();
         const totalSets = allSets.filter((s) => s.is_complete && !s.is_warmup).length;
         const totalVolume = allSets.filter((s) => !s.is_warmup).reduce((acc, s) => acc + (s.weight && s.reps ? s.weight * s.reps : 0), 0);
-        const dur = activeWorkout.start_time ? Math.floor((new Date(endTime).getTime() - new Date(activeWorkout.start_time).getTime()) / 1000) : 0;
         setSummaryStats({ duration: dur, exercises: workoutExercises.length, sets: totalSets, volume: totalVolume });
         setShowSummary(true);
 
@@ -211,7 +332,7 @@ export default function HomeScreen() {
     setShowCopyModal(false);
     let workoutId = activeWorkout?.id;
     if (!workoutId) {
-      const { data, error } = await repo.createWorkout({ date: currentDate, start_time: new Date().toISOString() }, userId);
+      const { data, error } = await repo.createWorkout({ date: currentDate }, userId);
       if (error || !data) { Alert.alert("Error", error?.message ?? "No se pudo crear el entrenamiento"); setCopyLoading(false); return; }
       workoutId = data.id;
     }
@@ -272,30 +393,30 @@ export default function HomeScreen() {
   const WEEK_LABELS = ["L", "M", "X", "J", "V", "S", "D"];
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Date nav header */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 8 }}>
         <TouchableOpacity onPress={() => handleNavigateDate(-1)} style={{ padding: 6 }}>
-          <Ionicons name="chevron-back" size={20} color="#64748b" />
+          <Ionicons name="chevron-back" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 20, fontWeight: "700", color: "#0f172a" }}>
+          <Text style={{ fontSize: 20, fontWeight: "700", color: colors.text }}>
             {currentDate === today ? "Hoy" : formatWorkoutDate(currentDate)}
           </Text>
           {currentDate === today && (
-            <Text style={{ fontSize: 13, color: "#94a3b8" }}>{formatWorkoutDate(today)}</Text>
+            <Text style={{ fontSize: 13, color: colors.textMuted }}>{formatWorkoutDate(today)}</Text>
           )}
         </View>
         <TouchableOpacity onPress={() => handleNavigateDate(1)} disabled={currentDate >= today} style={{ padding: 6, opacity: currentDate >= today ? 0.4 : 1 }}>
-          <Ionicons name="chevron-forward" size={20} color="#64748b" />
+          <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
         {syncStatus === "syncing" ? (
-          <ActivityIndicator size="small" color="#6366f1" style={{ marginLeft: 4 }} />
+          <ActivityIndicator size="small" color={colors.primary} style={{ marginLeft: 4 }} />
         ) : syncStatus === "error" ? (
-          <Ionicons name="cloud-offline-outline" size={18} color="#ef4444" />
+          <Ionicons name="cloud-offline-outline" size={18} color={colors.danger} />
         ) : pendingCount > 0 ? (
-          <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: "#f97316", alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ fontSize: 10, fontWeight: "700", color: "#fff" }}>{pendingCount}</Text>
+          <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: colors.warning, alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ fontSize: 10, fontWeight: "700", color: colors.background }}>{pendingCount}</Text>
           </View>
         ) : null}
       </View>
@@ -309,23 +430,23 @@ export default function HomeScreen() {
               onPress={() => { setCurrentDate(wd.dateStr); void loadWorkoutForDate(wd.dateStr); }}
               style={{ flex: 1, alignItems: "center", gap: 4 }}
             >
-              <Text style={{ fontSize: 10, fontWeight: "600", color: wd.isToday ? "#6366f1" : "#94a3b8" }}>{WEEK_LABELS[i]}</Text>
+              <Text style={{ fontSize: 10, fontWeight: "600", color: wd.isToday ? colors.primary : colors.textMuted }}>{WEEK_LABELS[i]}</Text>
               <View style={{
                 width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center",
-                backgroundColor: wd.dateStr === currentDate ? "#6366f1" : wd.has ? "#6366f115" : "transparent",
+                backgroundColor: wd.dateStr === currentDate ? colors.primary : wd.has ? colors.primaryLight : "transparent",
                 borderWidth: wd.isToday && wd.dateStr !== currentDate ? 1.5 : 0,
-                borderColor: "#6366f1",
+                borderColor: colors.primary,
               }}>
                 {wd.has && !wd.isFuture
-                  ? <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: wd.dateStr === currentDate ? "#fff" : "#6366f1" }} />
+                  ? <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: wd.dateStr === currentDate ? colors.background : colors.primary }} />
                   : null}
               </View>
             </TouchableOpacity>
           ))}
           {streak > 0 && (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "#fff7ed", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4, marginLeft: 8 }}>
-              <Ionicons name="flame" size={13} color="#f97316" />
-              <Text style={{ fontSize: 12, fontWeight: "700", color: "#f97316" }}>{streak}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: colors.streakBg, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4, marginLeft: 8 }}>
+              <Ionicons name="flame" size={13} color={colors.streakText} />
+              <Text style={{ fontSize: 12, fontWeight: "700", color: colors.streakText }}>{streak}</Text>
             </View>
           )}
         </View>
@@ -333,40 +454,53 @@ export default function HomeScreen() {
 
       {isLoading ? (
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <ActivityIndicator color="#6366f1" />
+          <ActivityIndicator color={colors.primary} />
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 60, gap: 12 }}>
           {!activeWorkout || !activeWorkout.id ? (
             /* No workout */
-            <View style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 20, padding: 40, alignItems: "center", gap: 12, marginTop: 8 }}>
-              <Ionicons name="barbell-outline" size={40} color="#94a3b8" />
-              <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>Sin entrenamiento aún</Text>
-              <Text style={{ fontSize: 13, color: "#94a3b8", textAlign: "center" }}>
+            <View style={{ borderWidth: 1, borderColor: colors.border, borderStyle: "dashed", borderRadius: 20, padding: 40, alignItems: "center", gap: 12, marginTop: 8 }}>
+              <Ionicons name="barbell-outline" size={40} color={colors.textMuted} />
+              <Text style={{ fontSize: 16, fontWeight: "600", color: colors.text }}>Sin entrenamiento aún</Text>
+              <Text style={{ fontSize: 13, color: colors.textMuted, textAlign: "center" }}>
                 Inicia un entrenamiento para registrar tus series y hacer seguimiento del progreso.
               </Text>
-              <TouchableOpacity onPress={handleStartWorkout} style={{ backgroundColor: "#6366f1", borderRadius: 14, paddingHorizontal: 32, paddingVertical: 12 }}>
-                <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Iniciar entrenamiento</Text>
+              <TouchableOpacity onPress={openStartModal} style={{ backgroundColor: colors.primary, borderRadius: 14, paddingHorizontal: 32, paddingVertical: 12 }}>
+                <Text style={{ color: colors.background, fontSize: 14, fontWeight: "600" }}>Iniciar entrenamiento</Text>
               </TouchableOpacity>
               {workouts.length > 0 && (
                 <TouchableOpacity onPress={() => setShowCopyModal(true)} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <Ionicons name="copy-outline" size={15} color="#6366f1" />
-                  <Text style={{ fontSize: 13, color: "#6366f1", fontWeight: "500" }}>Copiar entrenamiento anterior</Text>
+                  <Ionicons name="copy-outline" size={15} color={colors.primary} />
+                  <Text style={{ fontSize: 13, color: colors.primary, fontWeight: "500" }}>Copiar entrenamiento anterior</Text>
                 </TouchableOpacity>
               )}
             </View>
           ) : (
             /* Active workout */
             <View style={{ gap: 8 }}>
-              {/* Workout header: duration + share */}
+              {/* Workout header: timer + share */}
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                {activeWorkout.start_time && (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#f8fafc", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, flex: 1 }}>
-                    <Ionicons name="time-outline" size={14} color="#6366f1" />
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#6366f1" }}>{formatDuration(workoutDuration)}</Text>
-                    {activeWorkout.end_time && <Text style={{ fontSize: 11, color: "#94a3b8" }}>finalizado</Text>}
-                  </View>
-                )}
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#f8fafc", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, flex: 1 }}>
+                  {!activeWorkout.end_time && (
+                    <TouchableOpacity
+                      onPress={timerState === "running" ? handlePauseTimer : handleStartTimer}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons
+                        name={timerState === "running" ? "pause-circle" : "play-circle"}
+                        size={22}
+                        color="#6366f1"
+                      />
+                    </TouchableOpacity>
+                  )}
+                  {activeWorkout.end_time && <Ionicons name="time-outline" size={14} color="#6366f1" />}
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#6366f1" }}>{formatDuration(timerDisplay)}</Text>
+                  {timerState === "paused" && timerDisplay > 0 && (
+                    <Text style={{ fontSize: 11, color: "#94a3b8" }}>pausado</Text>
+                  )}
+                  {activeWorkout.end_time && <Text style={{ fontSize: 11, color: "#94a3b8" }}>finalizado</Text>}
+                </View>
                 <TouchableOpacity
                   onPress={() => { setMoveDate(activeWorkout.date); setShowMoveModal(true); }}
                   style={{ flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}
@@ -434,12 +568,14 @@ export default function HomeScreen() {
                 );
               })}
 
-              <TouchableOpacity
-                onPress={() => router.push("/exercises")}
-                style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 16, paddingVertical: 14, alignItems: "center" }}
-              >
-                <Text style={{ fontSize: 13, color: "#94a3b8" }}>+ Añadir ejercicio</Text>
-              </TouchableOpacity>
+              {!activeWorkout.end_time && (
+                <TouchableOpacity
+                  onPress={() => router.push("/exercises")}
+                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 16, paddingVertical: 14, alignItems: "center" }}
+                >
+                  <Text style={{ fontSize: 13, color: "#94a3b8" }}>+ Añadir ejercicio</Text>
+                </TouchableOpacity>
+              )}
 
               {/* Workout comment */}
               <TextInput
@@ -450,11 +586,14 @@ export default function HomeScreen() {
                 onChangeText={setWorkoutCommentLocal}
                 onBlur={handleSaveComment}
                 multiline
+                editable={!activeWorkout.end_time}
               />
 
-              <TouchableOpacity onPress={handleFinish} style={{ borderWidth: 1, borderColor: "#ef4444", borderRadius: 14, paddingVertical: 12, alignItems: "center", marginTop: 4 }}>
-                <Text style={{ fontSize: 14, fontWeight: "600", color: "#ef4444" }}>Finalizar entrenamiento</Text>
-              </TouchableOpacity>
+              {!activeWorkout.end_time && (
+                <TouchableOpacity onPress={handleFinish} style={{ borderWidth: 1, borderColor: "#ef4444", borderRadius: 14, paddingVertical: 12, alignItems: "center", marginTop: 4 }}>
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#ef4444" }}>Finalizar entrenamiento</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
@@ -498,6 +637,60 @@ export default function HomeScreen() {
           )}
         </ScrollView>
       )}
+      {/* Start workout modal — routine selector */}
+      <Modal visible={showStartModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowStartModal(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
+            <Text style={{ flex: 1, fontSize: 16, fontWeight: "700", color: "#0f172a" }}>Elige una rutina</Text>
+            <TouchableOpacity onPress={() => setShowStartModal(false)}>
+              <Ionicons name="close" size={22} color="#64748b" />
+            </TouchableOpacity>
+          </View>
+
+          {startModalLoading ? (
+            <ActivityIndicator style={{ flex: 1 }} color="#6366f1" />
+          ) : startRoutines.length === 0 ? (
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 16 }}>
+              <Ionicons name="clipboard-outline" size={48} color="#cbd5e1" />
+              <Text style={{ fontSize: 16, fontWeight: "600", color: "#64748b", textAlign: "center" }}>Sin rutinas</Text>
+              <Text style={{ fontSize: 14, color: "#94a3b8", textAlign: "center" }}>
+                Crea una rutina en el tab Rutinas para poder iniciar un entrenamiento.
+              </Text>
+              <TouchableOpacity
+                onPress={() => { setShowStartModal(false); router.push("/tools"); }}
+                style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: "600", color: "#fff" }}>Ir a Rutinas</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <FlatList
+              data={startRoutines}
+              keyExtractor={(r) => r.id}
+              contentContainerStyle={{ padding: 16, gap: 10 }}
+              renderItem={({ item: r }) => (
+                <TouchableOpacity
+                  onPress={() => handleLogRoutine(r.id)}
+                  disabled={!!loggingRoutineId}
+                  style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 16, paddingHorizontal: 16, paddingVertical: 16, gap: 14, backgroundColor: "#fff", opacity: loggingRoutineId && loggingRoutineId !== r.id ? 0.4 : 1 }}
+                >
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#6366f115", alignItems: "center", justifyContent: "center" }}>
+                    {loggingRoutineId === r.id
+                      ? <ActivityIndicator size="small" color="#6366f1" />
+                      : <Ionicons name="clipboard-outline" size={20} color="#6366f1" />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: "600", color: "#0f172a" }}>{r.name}</Text>
+                    {r.notes ? <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }} numberOfLines={1}>{r.notes}</Text> : null}
+                  </View>
+                  <Ionicons name="play-circle-outline" size={24} color="#6366f1" />
+                </TouchableOpacity>
+              )}
+            />
+          )}
+        </SafeAreaView>
+      </Modal>
+
       {/* Move workout modal */}
       <Modal visible={showMoveModal} animationType="fade" transparent onRequestClose={() => setShowMoveModal(false)}>
         <View style={{ flex: 1, backgroundColor: "#00000060", justifyContent: "center", paddingHorizontal: 32 }}>

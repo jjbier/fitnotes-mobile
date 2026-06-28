@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { SafeAreaView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, FlatList, Platform } from "react-native";
+import { SafeAreaView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, FlatList, Platform, ScrollView, useWindowDimensions } from "react-native";
+import { useTheme } from "../../lib/theme";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -7,10 +8,11 @@ import * as Notifications from "expo-notifications";
 import { useKeepAwake } from "expo-keep-awake";
 import DraggableFlatList, { ScaleDecorator, NestableScrollContainer, NestableDraggableFlatList, type RenderItemParams } from "react-native-draggable-flatlist";
 import { useWorkoutStore, useExerciseStore, ExerciseType, calculate1RM } from "@fitnotes/core";
-import { createWorkoutRepository, createProgressRepository } from "@fitnotes/database";
+import { createWorkoutRepository, createProgressRepository, createExerciseRepository } from "@fitnotes/database";
 import type { WorkoutExercise } from "@fitnotes/core";
 import { supabase } from "../../lib/supabase";
 import type { Set as FitSet } from "@fitnotes/core";
+import LineChart from "../../components/LineChart";
 
 interface LastSet {
   weight: number | null;
@@ -19,6 +21,19 @@ interface LastSet {
   time_seconds: number | null;
   order_index: number;
 }
+
+type HistorySession = {
+  workout_id: string;
+  date: string;
+  sets: {
+    weight?: number;
+    reps?: number;
+    distance?: number;
+    time_seconds?: number;
+    is_warmup: boolean;
+    order_index: number;
+  }[];
+};
 
 function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -78,6 +93,16 @@ export default function TrainingScreen() {
   const [showRenameGroup, setShowRenameGroup] = useState(false);
   const [renameGroupText, setRenameGroupText] = useState("");
 
+  const [workoutTab, setWorkoutTab] = useState<"sets" | "history" | "chart">("sets");
+  const [historySessions, setHistorySessions] = useState<HistorySession[]>([]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [chartPoints, setChartPoints] = useState<{ date: string; maxWeight: number; totalVolume: number; maxReps: number; est1RM: number; maxDistance: number; maxTime: number }[]>([]);
+  const [chartLoaded, setChartLoaded] = useState(false);
+  const [chartLoading2, setChartLoading2] = useState(false);
+  const [chartMetric, setChartMetric] = useState<"weight" | "volume" | "reps">("weight");
+  const { width } = useWindowDimensions();
+
   // Rest timer
   const [timerDuration, setTimerDuration] = useState(90);
   const [timerRemaining, setTimerRemaining] = useState(90);
@@ -87,6 +112,7 @@ export default function TrainingScreen() {
 
   const repo = useMemo(() => createWorkoutRepository(supabase), []);
   const progressRepo = useMemo(() => createProgressRepository(supabase), []);
+  const exerciseRepo = useMemo(() => createExerciseRepository(supabase), []);
 
   const workoutExercise = workoutExercises.find((we) => we.exercise_id === exerciseId);
   const exerciseSets = (workoutExercise ? sets[workoutExercise.id] ?? [] : []).slice().sort((a, b) => a.order_index - b.order_index);
@@ -96,6 +122,26 @@ export default function TrainingScreen() {
   const groupColorMap: Record<string, string> = Object.fromEntries(
     groupIds.map((id, i) => [id, GROUP_COLORS[i % GROUP_COLORS.length]!])
   );
+
+  function handleWorkoutTabChange(tab: "sets" | "history" | "chart") {
+    setWorkoutTab(tab);
+    if (tab === "history" && !historyLoaded && !historyLoading) {
+      setHistoryLoading(true);
+      exerciseRepo.getExerciseHistory(exerciseId ?? "").then(({ data }) => {
+        setHistorySessions((data ?? []).slice(0, 5) as unknown as HistorySession[]);
+        setHistoryLoaded(true);
+        setHistoryLoading(false);
+      });
+    }
+    if (tab === "chart" && !chartLoaded && !chartLoading2) {
+      setChartLoading2(true);
+      progressRepo.getChartData(exerciseId ?? "").then((points) => {
+        setChartPoints(points);
+        setChartLoaded(true);
+        setChartLoading2(false);
+      });
+    }
+  }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -552,6 +598,21 @@ export default function TrainingScreen() {
         />
       </View>
 
+      {/* Workout tabs */}
+      <View style={{ flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#f1f5f9", backgroundColor: "#fff" }}>
+        {([["sets", "barbell-outline", "Series"], ["history", "time-outline", "Historial"], ["chart", "trending-up-outline", "Gráfico"]] as const).map(([key, icon, label]) => (
+          <TouchableOpacity
+            key={key}
+            onPress={() => handleWorkoutTabChange(key)}
+            style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingVertical: 10, borderBottomWidth: 2, borderColor: workoutTab === key ? "#6366f1" : "transparent" }}
+          >
+            <Ionicons name={icon} size={14} color={workoutTab === key ? "#6366f1" : "#94a3b8"} />
+            <Text style={{ fontSize: 12, fontWeight: "600", color: workoutTab === key ? "#6366f1" : "#94a3b8" }}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {workoutTab === "sets" && <>
       {/* Rest Timer */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#f8fafc", gap: 8, backgroundColor: timerActive ? "#f0f0ff" : timerFinished ? "#f0fff4" : "#fafafa" }}>
         <Ionicons name="timer-outline" size={16} color={timerActive ? "#6366f1" : timerFinished ? "#22c55e" : "#94a3b8"} />
@@ -855,6 +916,104 @@ export default function TrainingScreen() {
           <Text style={{ fontSize: 14, fontWeight: "500", color: "#6366f1" }}>{saving ? "Añadiendo…" : "Añadir serie"}</Text>
         </TouchableOpacity>
       </NestableScrollContainer>
+      </>}
+
+      {/* History tab */}
+      {workoutTab === "history" && (
+        historyLoading ? (
+          <ActivityIndicator style={{ flex: 1, marginTop: 48 }} color="#6366f1" />
+        ) : (
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+            {historySessions.length === 0 ? (
+              <View style={{ alignItems: "center", paddingVertical: 48 }}>
+                <Ionicons name="time-outline" size={40} color="#cbd5e1" />
+                <Text style={{ fontSize: 14, color: "#94a3b8", marginTop: 12 }}>Sin historial previo</Text>
+              </View>
+            ) : (
+              historySessions.map((session) => {
+                const visible = session.sets.filter((s) => !s.is_warmup).sort((a, b) => a.order_index - b.order_index);
+                return (
+                  <View key={session.workout_id} style={{ backgroundColor: "#f8fafc", borderRadius: 14, borderWidth: 1, borderColor: "#f1f5f9", padding: 14, gap: 6 }}>
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#64748b", marginBottom: 4, textTransform: "capitalize" }}>
+                      {new Date(session.date + "T00:00:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
+                    </Text>
+                    {visible.length === 0 ? (
+                      <Text style={{ fontSize: 12, color: "#cbd5e1" }}>Sin series</Text>
+                    ) : (
+                      visible.map((s, i) => (
+                        <Text key={i} style={{ fontSize: 13, color: "#0f172a" }}>
+                          {i + 1}.{"  "}{formatLastSet(s as LastSet)}
+                        </Text>
+                      ))
+                    )}
+                  </View>
+                );
+              })
+            )}
+          </ScrollView>
+        )
+      )}
+
+      {/* Chart tab */}
+      {workoutTab === "chart" && (
+        chartLoading2 ? (
+          <ActivityIndicator style={{ flex: 1, marginTop: 48 }} color="#6366f1" />
+        ) : chartPoints.length === 0 ? (
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}>
+            <Ionicons name="trending-up-outline" size={40} color="#cbd5e1" />
+            <Text style={{ fontSize: 14, color: "#94a3b8", marginTop: 12, textAlign: "center" }}>
+              Completa series para ver tu progreso
+            </Text>
+          </View>
+        ) : (
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {([["weight", "Peso"], ["volume", "Volumen"], ["reps", "Reps"]] as const)
+                .filter(([key]) => key === "volume" ? showWeight && showReps : key === "weight" ? showWeight : showReps)
+                .map(([key, label]) => (
+                  <TouchableOpacity
+                    key={key}
+                    onPress={() => setChartMetric(key)}
+                    style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, borderColor: chartMetric === key ? "#6366f1" : "#e2e8f0", backgroundColor: chartMetric === key ? "#6366f1" : "transparent" }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: chartMetric === key ? "#fff" : "#64748b" }}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+            </View>
+            <View style={{ backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: "#f1f5f9", padding: 16 }}>
+              <LineChart
+                data={chartPoints.map((p) => ({
+                  label: new Date(p.date + "T00:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short" }),
+                  value: chartMetric === "weight" ? p.maxWeight : chartMetric === "volume" ? p.totalVolume : p.maxReps,
+                }))}
+                width={width - 64}
+                height={200}
+              />
+            </View>
+            {(() => {
+              const vals = chartPoints.map((p) => chartMetric === "weight" ? p.maxWeight : chartMetric === "volume" ? p.totalVolume : p.maxReps);
+              const best = Math.max(...vals);
+              const latest = vals[vals.length - 1] ?? 0;
+              const first = vals[0] ?? 0;
+              const trend = first > 0 ? ((latest - first) / first * 100) : 0;
+              return (
+                <View style={{ flexDirection: "row", gap: 12 }}>
+                  {[
+                    { label: "Mejor", value: `${best % 1 === 0 ? best : best.toFixed(1)}` },
+                    { label: "Último", value: `${latest % 1 === 0 ? latest : latest.toFixed(1)}` },
+                    { label: "Progresión", value: `${trend >= 0 ? "+" : ""}${trend.toFixed(1)}%` },
+                  ].map((stat) => (
+                    <View key={stat.label} style={{ flex: 1, backgroundColor: "#f8fafc", borderRadius: 12, borderWidth: 1, borderColor: "#f1f5f9", padding: 12, alignItems: "center", gap: 4 }}>
+                      <Text style={{ fontSize: 10, fontWeight: "600", color: "#94a3b8", textTransform: "uppercase" }}>{stat.label}</Text>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: "#0f172a" }}>{stat.value}</Text>
+                    </View>
+                  ))}
+                </View>
+              );
+            })()}
+          </ScrollView>
+        )
+      )}
 
       {/* Rename group modal */}
       <Modal visible={showRenameGroup} animationType="fade" transparent onRequestClose={() => setShowRenameGroup(false)}>

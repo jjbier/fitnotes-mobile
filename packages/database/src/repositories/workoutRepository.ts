@@ -86,7 +86,7 @@ export function createWorkoutRepository(client: Client) {
 
     async updateWorkout(
       id: string,
-      data: { end_time?: string; duration_minutes?: number; comment?: string }
+      data: { start_time?: string; end_time?: string; duration_minutes?: number; comment?: string }
     ) {
       const update: WorkoutUpdate = data;
       return client.from("workouts").update(update).eq("id", id).select().single();

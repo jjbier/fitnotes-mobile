@@ -28,8 +28,12 @@ interface WorkoutActions {
   reorderExercises: (orderedIds: string[]) => void;
   setActiveExercise: (exerciseId: string | null) => void;
   setWorkoutComment: (comment: string) => void;
+  reorderSets: (weId: string, orderedIds: string[]) => void;
   groupExercises: (weId1: string, weId2: string) => void;
   ungroupExercise: (weId: string) => void;
+  updateWorkoutExerciseGroup: (weId: string, groupId: string | undefined) => void;
+  renameGroup: (groupId: string, name: string) => void;
+  setWorkoutStartTime: (startTime: string) => void;
   finishWorkout: () => void;
   resetWorkout: () => void;
   setCurrentDate: (date: string) => void;
@@ -126,6 +130,7 @@ export const useWorkoutStore = create<WorkoutStore>()(
           id: generateId(),
           workout_exercise_id: workoutExerciseId,
           is_complete: false,
+          is_warmup: false,
           order_index: existingSets.length,
           ...partial,
         };
@@ -179,6 +184,18 @@ export const useWorkoutStore = create<WorkoutStore>()(
         if (state.activeWorkout) state.activeWorkout.comment = comment;
       }),
 
+    reorderSets: (weId, orderedIds) =>
+      set((state) => {
+        const existing = state.sets[weId];
+        if (!existing) return;
+        state.sets[weId] = orderedIds
+          .map((id, idx) => {
+            const s = existing.find((s) => s.id === id);
+            return s ? { ...s, order_index: idx } : null;
+          })
+          .filter((s): s is Set => s !== null);
+      }),
+
     groupExercises: (weId1, weId2) =>
       set((state) => {
         const groupId = generateId();
@@ -191,6 +208,26 @@ export const useWorkoutStore = create<WorkoutStore>()(
       set((state) => {
         const ex = state.exercises.find((e) => e.id === weId);
         if (ex) ex.group_id = undefined;
+      }),
+
+    updateWorkoutExerciseGroup: (weId, groupId) =>
+      set((state) => {
+        const ex = state.exercises.find((e) => e.id === weId);
+        if (ex) ex.group_id = groupId;
+      }),
+
+    renameGroup: (groupId, name) =>
+      set((state) => {
+        for (const ex of state.exercises) {
+          if (ex.group_id === groupId) ex.group_name = name || undefined;
+        }
+      }),
+
+    setWorkoutStartTime: (startTime) =>
+      set((state) => {
+        if (state.activeWorkout && !state.activeWorkout.start_time) {
+          state.activeWorkout.start_time = startTime;
+        }
       }),
 
     finishWorkout: () =>
