@@ -258,6 +258,7 @@ export type Database = {
           created_at: string
           exercise_id: string
           group_id: string | null
+          group_name: string | null
           id: string
           order_index: number
           routine_day_id: string
@@ -267,6 +268,7 @@ export type Database = {
           created_at?: string
           exercise_id: string
           group_id?: string | null
+          group_name?: string | null
           id?: string
           order_index?: number
           routine_day_id: string
@@ -276,6 +278,7 @@ export type Database = {
           created_at?: string
           exercise_id?: string
           group_id?: string | null
+          group_name?: string | null
           id?: string
           order_index?: number
           routine_day_id?: string

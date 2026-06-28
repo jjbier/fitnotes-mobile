@@ -60,6 +60,11 @@ export default function RoutineDetailScreen() {
   const [psSaving, setPsSaving] = useState(false);
   const psLoadingForRef = useRef<string | null>(null);
 
+  // Rename superset group modal
+  const [showRenameGroup, setShowRenameGroup] = useState(false);
+  const [renameGroupText, setRenameGroupText] = useState("");
+  const [renamingGroup, setRenamingGroup] = useState<{ dayId: string; groupId: string } | null>(null);
+
   const routineRepo = useMemo(() => createRoutineRepository(supabase), []);
   const exRepo = useMemo(() => createExerciseRepository(supabase), []);
   const workoutRepo = useMemo(() => createWorkoutRepository(supabase), []);
@@ -106,6 +111,7 @@ export default function RoutineDetailScreen() {
               loadRoutineDayExercises(day.id, rdeData.map((e) => ({
                 id: e.id, routine_day_id: e.routine_day_id, exercise_id: e.exercise_id,
                 order_index: e.order_index, group_id: e.group_id ?? undefined,
+                group_name: e.group_name ?? undefined,
               })));
             }
           }
@@ -152,14 +158,41 @@ export default function RoutineDetailScreen() {
     removeExerciseFromDay(dayId, rdeId);
   }
 
+  async function handleRenameGroup(dayId: string, groupId: string, name: string) {
+    const dayExs = routineDayExercises[dayId] ?? [];
+    await routineRepo.updateDayGroupName(groupId, name);
+    loadRoutineDayExercises(dayId, dayExs.map((e) =>
+      e.group_id === groupId ? { ...e, group_name: name || undefined } : e
+    ));
+  }
+
   async function handleToggleSuperset(dayId: string, rde: RoutineDayExercise) {
     const dayExs = (routineDayExercises[dayId] ?? []).slice().sort((a, b) => a.order_index - b.order_index);
 
     if (rde.group_id) {
-      // Quitar todos los miembros del grupo del superset
-      const members = dayExs.filter((e) => e.group_id === rde.group_id);
-      await Promise.all(members.map((e) => routineRepo.updateDayExercise(e.id, { group_id: null })));
-      loadRoutineDayExercises(dayId, dayExs.map((e) => members.find((m) => m.id === e.id) ? { ...e, group_id: undefined } : e));
+      Alert.alert("Superset", rde.group_name ?? "Superset", [
+        {
+          text: "Renombrar grupo",
+          onPress: () => {
+            setRenamingGroup({ dayId, groupId: rde.group_id! });
+            setRenameGroupText(rde.group_name ?? "");
+            setShowRenameGroup(true);
+          },
+        },
+        {
+          text: "Quitar del grupo",
+          style: "destructive",
+          onPress: async () => {
+            const members = dayExs.filter((e) => e.group_id === rde.group_id);
+            await Promise.all(members.map((e) => routineRepo.updateDayExercise(e.id, { group_id: null, group_name: null })));
+            loadRoutineDayExercises(dayId, dayExs.map((e) =>
+              members.find((m) => m.id === e.id) ? { ...e, group_id: undefined, group_name: undefined } : e
+            ));
+          },
+        },
+        { text: "Cancelar", style: "cancel" },
+      ]);
+      return;
     } else {
       // Agrupar con el siguiente ejercicio
       const idx = dayExs.findIndex((e) => e.id === rde.id);
@@ -305,14 +338,14 @@ export default function RoutineDetailScreen() {
     for (let i = 0; i < dayExs.length; i++) {
       const rde = dayExs[i]!;
       const { data: we, error: weError } = await workoutRepo.addExercise(
-        { workout_id: workout.id, exercise_id: rde.exercise_id, order_index: i },
+        { workout_id: workout.id, exercise_id: rde.exercise_id, order_index: i, group_id: rde.group_id, group_name: rde.group_name },
         userId
       );
       if (weError || !we) continue;
 
       workoutExercisesCreated.push({
         id: we.id, workout_id: we.workout_id, exercise_id: we.exercise_id,
-        order_index: we.order_index, group_id: we.group_id ?? undefined,
+        order_index: we.order_index, group_id: we.group_id ?? undefined, group_name: we.group_name ?? undefined,
       });
 
       const { data: pSets } = await routineRepo.getPredefinedSets(rde.id);
@@ -377,9 +410,19 @@ export default function RoutineDetailScreen() {
     return ({ item: rde, drag }: RenderItemParams<RoutineDayExercise>) => {
       const ex = exerciseMap[rde.exercise_id];
       const psCount = (predefinedSets[rde.id] ?? []).length;
+      const dayExsSorted = (routineDayExercises[dayId] ?? []).slice().sort((a, b) => a.order_index - b.order_index);
+      const isFirstInGroup = rde.group_id && dayExsSorted.find((e) => e.group_id === rde.group_id)?.id === rde.id;
       return (
         <ScaleDecorator>
           <View>
+            {isFirstInGroup && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 2, paddingLeft: 11 }}>
+                <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: "#6366f1" }} />
+                <Text style={{ fontSize: 10, fontWeight: "600", color: "#6366f1" }}>
+                  {rde.group_name ?? "Superset"}
+                </Text>
+              </View>
+            )}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 2 }}>
               {rde.group_id && <View style={{ width: 3, height: 28, borderRadius: 2, backgroundColor: "#6366f1" }} />}
               {editMode && (
@@ -754,6 +797,42 @@ export default function RoutineDetailScreen() {
             </TouchableOpacity>
           </View>
         </SafeAreaView>
+      </Modal>
+
+      {/* Rename superset group modal */}
+      <Modal visible={showRenameGroup} animationType="fade" transparent onRequestClose={() => setShowRenameGroup(false)}>
+        <View style={{ flex: 1, backgroundColor: "#00000060", justifyContent: "center", paddingHorizontal: 32 }}>
+          <View style={{ backgroundColor: "#fff", borderRadius: 16, padding: 20, gap: 16 }}>
+            <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>Nombre del superset</Text>
+            <TextInput
+              style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15 }}
+              value={renameGroupText}
+              onChangeText={setRenameGroupText}
+              placeholder="Ej. Pecho + Tríceps"
+              placeholderTextColor="#cbd5e1"
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={() => {
+                if (renamingGroup) void handleRenameGroup(renamingGroup.dayId, renamingGroup.groupId, renameGroupText);
+                setShowRenameGroup(false);
+              }}
+            />
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <TouchableOpacity onPress={() => setShowRenameGroup(false)} style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: "#e2e8f0", alignItems: "center" }}>
+                <Text style={{ fontSize: 14, color: "#64748b" }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  if (renamingGroup) void handleRenameGroup(renamingGroup.dayId, renamingGroup.groupId, renameGroupText);
+                  setShowRenameGroup(false);
+                }}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: "#6366f1", alignItems: "center" }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: "600", color: "#fff" }}>Guardar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );

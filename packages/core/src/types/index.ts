@@ -100,6 +100,7 @@ export interface RoutineDayExercise {
   exercise_id: string;
   order_index: number;
   group_id?: string;
+  group_name?: string;
 }
 
 export interface PredefinedSet {

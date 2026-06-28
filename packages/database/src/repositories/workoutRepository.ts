@@ -112,6 +112,7 @@ export function createWorkoutRepository(client: Client) {
         exercise_id: string;
         order_index: number;
         group_id?: string;
+        group_name?: string;
       },
       userId: string
     ) {

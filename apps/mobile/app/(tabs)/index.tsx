@@ -185,12 +185,12 @@ export default function HomeScreen() {
   async function handleLogRoutine(routineId: string) {
     setLoggingRoutineId(routineId);
     const { data: days } = await routineRepo.getDays(routineId);
-    const allDayExercises: { id: string; exercise_id: string; routine_day_id: string; order_index: number }[] = [];
+    const allDayExercises: { id: string; exercise_id: string; routine_day_id: string; order_index: number; group_id?: string; group_name?: string }[] = [];
     for (const day of days ?? []) {
       const { data: dayExs } = await routineRepo.getDayExercises(day.id);
       for (const rde of dayExs ?? []) {
         if (!allDayExercises.some((e) => e.exercise_id === rde.exercise_id)) {
-          allDayExercises.push(rde);
+          allDayExercises.push({ ...rde, group_id: rde.group_id ?? undefined, group_name: rde.group_name ?? undefined });
         }
       }
     }
@@ -212,12 +212,12 @@ export default function HomeScreen() {
     for (let i = 0; i < allDayExercises.length; i++) {
       const rde = allDayExercises[i]!;
       const { data: we } = await repo.addExercise(
-        { workout_id: workout.id, exercise_id: rde.exercise_id, order_index: i }, userId
+        { workout_id: workout.id, exercise_id: rde.exercise_id, order_index: i, group_id: rde.group_id, group_name: rde.group_name }, userId
       );
       if (!we) continue;
       workoutExercisesCreated.push({
         id: we.id, workout_id: we.workout_id, exercise_id: we.exercise_id,
-        order_index: we.order_index, group_id: we.group_id ?? undefined,
+        order_index: we.order_index, group_id: we.group_id ?? undefined, group_name: we.group_name ?? undefined,
       });
       const { data: pSets } = await routineRepo.getPredefinedSets(rde.id);
       const createdSets: Parameters<typeof loadWorkout>[2][string] = [];
