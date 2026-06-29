@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AppState } from "react-native";
+import { AppState, View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import type { AppStateStatus } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack } from "expo-router";
@@ -10,6 +10,36 @@ import { supabase } from "../lib/supabase";
 import { syncEngine } from "../lib/sync";
 import { SyncContext } from "../contexts/SyncContext";
 import type { SyncStatus } from "@fitnotes/database";
+
+const styles = StyleSheet.create({
+  syncBanner: {
+    position: "absolute",
+    bottom: 72,
+    left: 16,
+    right: 16,
+    backgroundColor: "#6366f1",
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    zIndex: 999,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  syncBannerError: {
+    backgroundColor: "#ef4444",
+  },
+  syncBannerText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "500",
+  },
+});
 
 export default function RootLayout() {
   const router = useRouter();
@@ -93,6 +123,14 @@ export default function RootLayout() {
           <Stack.Screen name="body-tracker/index" options={{ headerTitle: "Medidas corporales" }} />
           <Stack.Screen name="search/index" options={{ headerShown: false }} />
         </Stack>
+        {syncStatus !== "idle" && (
+          <View style={[styles.syncBanner, syncStatus === "error" && styles.syncBannerError]}>
+            {syncStatus === "syncing" && <ActivityIndicator size="small" color="#ffffff" />}
+            <Text style={styles.syncBannerText}>
+              {syncStatus === "syncing" ? "Sincronizando..." : "Error de sincronización"}
+            </Text>
+          </View>
+        )}
         <StatusBar style="auto" />
       </SyncContext.Provider>
     </GestureHandlerRootView>

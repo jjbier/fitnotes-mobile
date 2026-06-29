@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useProgressStore, useExerciseStore, calculate1RM, ExerciseType, getWeekRange, todayISO } from "@fitnotes/core";
@@ -6,6 +6,7 @@ import { createProgressRepository, createExerciseRepository } from "@fitnotes/da
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../lib/theme";
+import { useSyncStatus } from "../../contexts/SyncContext";
 
 export default function ProgressScreen() {
   const theme = useTheme();
@@ -24,63 +25,71 @@ export default function ProgressScreen() {
 
   const progressRepo = useMemo(() => createProgressRepository(supabase), []);
   const exRepo = useMemo(() => createExerciseRepository(supabase), []);
+  const { refetchSignal } = useSyncStatus();
+
+  const load = useCallback(async (forceReload = false) => {
+    setLoading(true);
+    const weekStart = getWeekRange(todayISO()).start;
+    const hasCache = !forceReload && exercises.length > 0 && categories.length > 0;
+    const [prRes, weeklyRes, catRes, exRes] = await Promise.all([
+      progressRepo.getAllPersonalRecords(),
+      progressRepo.getWeeklyTraining(weekStart),
+      hasCache ? Promise.resolve({ data: null }) : exRepo.getCategories(),
+      hasCache ? Promise.resolve({ data: null }) : exRepo.getExercises(),
+    ]);
+
+    let catMap: Record<string, { name: string; color: string }> = {};
+    let exCatMap: Record<string, string> = {};
+
+    if (hasCache) {
+      catMap = Object.fromEntries(categories.map((c) => [c.id, { name: c.name, color: c.color }]));
+      exCatMap = Object.fromEntries(exercises.map((e) => [e.id, e.category_id ?? ""]));
+    } else if (catRes.data && exRes.data) {
+      catMap = Object.fromEntries(catRes.data.map((c) => [c.id, { name: c.name, color: c.color }]));
+      exCatMap = Object.fromEntries(exRes.data.map((e) => [e.id, e.category_id ?? ""]));
+      loadExercises(catRes.data, exRes.data.map((ex) => ({
+        id: ex.id, name: ex.name, category_id: ex.category_id ?? "",
+        type: ex.type as ExerciseType, weight_unit: ex.weight_unit as "kg" | "lb",
+        notes: ex.notes ?? undefined, is_favorite: ex.is_favorite, created_at: ex.created_at,
+      })));
+    }
+
+    if (Object.keys(catMap).length > 0) {
+      const byCat: Record<string, { name: string; color: string; sets: number; volume: number }> = {};
+      for (const item of weeklyRes) {
+        const catId = exCatMap[item.exerciseId] ?? "";
+        const cat = catMap[catId];
+        if (!cat) continue;
+        if (!byCat[catId]) byCat[catId] = { name: cat.name, color: cat.color, sets: 0, volume: 0 };
+        byCat[catId]!.sets += item.setCount;
+        byCat[catId]!.volume += item.volume;
+      }
+      setWeeklyByCategory(
+        Object.entries(byCat)
+          .map(([catId, vals]) => ({ catId, ...vals }))
+          .sort((a, b) => b.sets - a.sets)
+      );
+    }
+
+    if (prRes.data) {
+      loadPersonalRecords(prRes.data.map((r) => ({
+        id: r.id, exercise_id: r.exercise_id, reps: r.reps, weight: r.weight, achieved_at: r.achieved_at,
+      })));
+    }
+    setLoading(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [progressRepo, exRepo]);
 
   useEffect(() => {
-    async function load() {
-      setLoading(true);
-      const weekStart = getWeekRange(todayISO()).start;
-      const hasCache = exercises.length > 0 && categories.length > 0;
-      const [prRes, weeklyRes, catRes, exRes] = await Promise.all([
-        progressRepo.getAllPersonalRecords(),
-        progressRepo.getWeeklyTraining(weekStart),
-        hasCache ? Promise.resolve({ data: null }) : exRepo.getCategories(),
-        hasCache ? Promise.resolve({ data: null }) : exRepo.getExercises(),
-      ]);
-
-      let catMap: Record<string, { name: string; color: string }> = {};
-      let exCatMap: Record<string, string> = {};
-
-      if (hasCache) {
-        catMap = Object.fromEntries(categories.map((c) => [c.id, { name: c.name, color: c.color }]));
-        exCatMap = Object.fromEntries(exercises.map((e) => [e.id, e.category_id ?? ""]));
-      } else if (catRes.data && exRes.data) {
-        catMap = Object.fromEntries(catRes.data.map((c) => [c.id, { name: c.name, color: c.color }]));
-        exCatMap = Object.fromEntries(exRes.data.map((e) => [e.id, e.category_id ?? ""]));
-        loadExercises(catRes.data, exRes.data.map((ex) => ({
-          id: ex.id, name: ex.name, category_id: ex.category_id ?? "",
-          type: ex.type as ExerciseType, weight_unit: ex.weight_unit as "kg" | "lb",
-          notes: ex.notes ?? undefined, is_favorite: ex.is_favorite, created_at: ex.created_at,
-        })));
-      }
-
-      if (Object.keys(catMap).length > 0) {
-        // Group weekly training by category
-        const byCat: Record<string, { name: string; color: string; sets: number; volume: number }> = {};
-        for (const item of weeklyRes) {
-          const catId = exCatMap[item.exerciseId] ?? "";
-          const cat = catMap[catId];
-          if (!cat) continue;
-          if (!byCat[catId]) byCat[catId] = { name: cat.name, color: cat.color, sets: 0, volume: 0 };
-          byCat[catId]!.sets += item.setCount;
-          byCat[catId]!.volume += item.volume;
-        }
-        setWeeklyByCategory(
-          Object.entries(byCat)
-            .map(([catId, vals]) => ({ catId, ...vals }))
-            .sort((a, b) => b.sets - a.sets)
-        );
-      }
-
-      if (prRes.data) {
-        loadPersonalRecords(prRes.data.map((r) => ({
-          id: r.id, exercise_id: r.exercise_id, reps: r.reps, weight: r.weight, achieved_at: r.achieved_at,
-        })));
-      }
-      setLoading(false);
-    }
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (refetchSignal === 0) return;
+    load(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refetchSignal]);
 
   const exerciseMap = Object.fromEntries(exercises.map((e) => [e.id, e]));
 

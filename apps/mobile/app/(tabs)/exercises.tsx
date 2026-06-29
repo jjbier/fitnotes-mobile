@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   SafeAreaView, ScrollView, Text, View, TouchableOpacity,
   TextInput, ActivityIndicator, Modal, KeyboardAvoidingView,
@@ -14,6 +14,7 @@ import { createExerciseRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import type { Category, Exercise } from "@fitnotes/core";
 import { useTheme } from "../../lib/theme";
+import { useSyncStatus } from "../../contexts/SyncContext";
 
 const TYPE_OPTIONS: { value: ExerciseType; label: string }[] = [
   { value: ExerciseType.WEIGHT_REPS, label: "Peso × Reps" },
@@ -87,41 +88,50 @@ export default function ExercisesScreen() {
   const [catEditSaving, setCatEditSaving] = useState(false);
 
   const repo = useMemo(() => createExerciseRepository(supabase), []);
+  const { refetchSignal } = useSyncStatus();
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) setUserId(session.user.id);
+    const [catRes, exRes, statsRes] = await Promise.all([
+      repo.getCategories(),
+      repo.getExercises(),
+      repo.getExerciseStats(),
+    ]);
+    if (catRes.data && exRes.data) {
+      loadExercises(
+        catRes.data,
+        exRes.data.map((ex) => ({
+          id: ex.id,
+          name: ex.name,
+          category_id: ex.category_id ?? "",
+          type: ex.type as ExerciseType,
+          weight_unit: (ex.weight_unit as "kg" | "lb"),
+          notes: ex.notes ?? undefined,
+          is_favorite: ex.is_favorite,
+          created_at: ex.created_at,
+          weight_increment: ex.weight_increment ?? undefined,
+          default_rest_seconds: ex.default_rest_seconds ?? undefined,
+          default_chart: (ex.default_chart ?? "weight") as "weight" | "volume" | "reps",
+        }))
+      );
+    }
+    if (statsRes.data) setExerciseStats(statsRes.data);
+    setLoading(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repo]);
 
   useEffect(() => {
-    async function load() {
-      setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) setUserId(session.user.id);
-      const [catRes, exRes, statsRes] = await Promise.all([
-        repo.getCategories(),
-        repo.getExercises(),
-        repo.getExerciseStats(),
-      ]);
-      if (catRes.data && exRes.data) {
-        loadExercises(
-          catRes.data,
-          exRes.data.map((ex) => ({
-            id: ex.id,
-            name: ex.name,
-            category_id: ex.category_id ?? "",
-            type: ex.type as ExerciseType,
-            weight_unit: (ex.weight_unit as "kg" | "lb"),
-            notes: ex.notes ?? undefined,
-            is_favorite: ex.is_favorite,
-            created_at: ex.created_at,
-            weight_increment: ex.weight_increment ?? undefined,
-            default_rest_seconds: ex.default_rest_seconds ?? undefined,
-            default_chart: (ex.default_chart ?? "weight") as "weight" | "volume" | "reps",
-          }))
-        );
-      }
-      if (statsRes.data) setExerciseStats(statsRes.data);
-      setLoading(false);
-    }
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (refetchSignal === 0) return;
+    load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refetchSignal]);
 
   function openCreateModal() {
     const cats = useExerciseStore.getState().categories;
