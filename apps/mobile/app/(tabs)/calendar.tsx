@@ -18,6 +18,7 @@ export default function CalendarScreen() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [workoutDates, setWorkoutDates] = useState<Set<string>>(new Set());
+  const [categoryColors, setCategoryColors] = useState<Record<string, string[]>>({});
   const [filteredDates, setFilteredDates] = useState<Set<string> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -67,8 +68,12 @@ export default function CalendarScreen() {
   useEffect(() => {
     async function load() {
       setIsLoading(true);
-      const { data } = await repo.getWorkoutsForMonth(year, month);
-      if (data) setWorkoutDates(new Set(data.map((w: { date: string }) => w.date)));
+      const [workoutsRes, colors] = await Promise.all([
+        repo.getWorkoutsForMonth(year, month),
+        repo.getWorkoutCategoryColorsForMonth(year, month),
+      ]);
+      if (workoutsRes.data) setWorkoutDates(new Set(workoutsRes.data.map((w: { date: string }) => w.date)));
+      setCategoryColors(colors);
       setIsLoading(false);
     }
     load();
@@ -215,7 +220,10 @@ export default function CalendarScreen() {
                 const isHighlighted = activeDates.has(dateStr);
                 const isToday = dateStr === today;
                 const isSelected = dateStr === selectedDate;
-                const dotColor = filteredDates ? theme.warning : theme.primary;
+                const dots = filteredDates
+                  ? (isHighlighted ? [theme.warning] : [])
+                  : (categoryColors[dateStr] ?? (hasWorkout ? [theme.primary] : []));
+                const visibleDots = dots.slice(0, 4);
                 return (
                   <TouchableOpacity
                     key={day}
@@ -231,8 +239,12 @@ export default function CalendarScreen() {
                       <Text style={{ fontSize: 14, fontWeight: isToday || hasWorkout ? "600" : "400", color: isSelected ? "#fff" : isToday ? theme.primary : theme.text }}>
                         {day}
                       </Text>
-                      {isHighlighted && (
-                        <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: isSelected ? "#fff" : dotColor, position: "absolute", bottom: 2 }} />
+                      {visibleDots.length > 0 && (
+                        <View style={{ flexDirection: "row", gap: 2, position: "absolute", bottom: 2 }}>
+                          {visibleDots.map((color, ci) => (
+                            <View key={ci} style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: isSelected ? "#fff" : color }} />
+                          ))}
+                        </View>
                       )}
                     </View>
                   </TouchableOpacity>
