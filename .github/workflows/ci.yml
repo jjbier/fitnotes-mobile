@@ -6,11 +6,16 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
 
 jobs:
+  # ── Core: type-check + tests + web build ─────────────────────────────────────
   ci:
     name: Type Check · Test · Build
     runs-on: ubuntu-latest
@@ -33,7 +38,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Type check
+      - name: Type check (all packages)
         run: pnpm run type-check
 
       - name: Test
@@ -42,9 +47,14 @@ jobs:
       - name: Build web
         run: pnpm --filter @fitnotes/web run build
 
+  # ── RLS Security Audit ───────────────────────────────────────────────────────
   rls-audit:
     name: RLS Security Audit
     runs-on: ubuntu-latest
+    # Only run when DB-related files change
+    if: |
+      github.event_name == 'push' ||
+      contains(github.event.pull_request.labels.*.name, 'db')
     env:
       SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       SUPABASE_PAT: ${{ secrets.SUPABASE_PAT }}
@@ -91,6 +101,7 @@ jobs:
           done
           exit $FAIL
 
+  # ── Lint ─────────────────────────────────────────────────────────────────────
   lint:
     name: Lint
     runs-on: ubuntu-latest
