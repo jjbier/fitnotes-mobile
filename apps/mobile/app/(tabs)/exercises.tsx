@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, memo } from "react";
 import {
   SafeAreaView, ScrollView, Text, View, TouchableOpacity,
   TextInput, ActivityIndicator, Modal, KeyboardAvoidingView,
@@ -794,7 +794,7 @@ export default function ExercisesScreen() {
   );
 }
 
-function CategoryCard({ name, color, count, onPress }: { name: string; color: string; count: number; onPress: () => void }) {
+const CategoryCard = memo(function CategoryCard({ name, color, count, onPress }: { name: string; color: string; count: number; onPress: () => void }) {
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -808,7 +808,7 @@ function CategoryCard({ name, color, count, onPress }: { name: string; color: st
       <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
     </TouchableOpacity>
   );
-}
+});
 
 function formatLastUsed(dateStr: string): string {
   const date = new Date(dateStr + "T00:00:00");
@@ -821,7 +821,7 @@ function formatLastUsed(dateStr: string): string {
   return date.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-function ExerciseRow({
+const ExerciseRow = memo(function ExerciseRow({
   ex,
   categories,
   stats,
@@ -869,4 +869,4 @@ function ExerciseRow({
       </View>
     </TouchableOpacity>
   );
-}
+});

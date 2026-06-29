@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import { SafeAreaView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, FlatList, Platform, ScrollView, useWindowDimensions } from "react-native";
 import { useTheme } from "../../lib/theme";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -438,6 +438,12 @@ export default function TrainingScreen() {
     reorderSets(workoutExercise.id, orderedIds);
     void repo.reorderSets(data.map((s, i) => ({ id: s.id, order_index: i })));
   }
+
+  const handlePickExercise = useCallback((exId: string) => {
+    setShowAddExercise(false);
+    router.replace(`/workout/${exId}` as never);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function handleGroupMenu() {
     if (!workoutExercise) return;
@@ -1096,19 +1102,7 @@ export default function TrainingScreen() {
               </View>
             }
             renderItem={({ item: ex }) => (
-              <TouchableOpacity
-                onPress={() => {
-                  setShowAddExercise(false);
-                  router.replace(`/workout/${ex.id}` as never);
-                }}
-                style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: "#f1f5f9", backgroundColor: "#fff", gap: 12 }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: "500", color: "#0f172a" }}>{ex.name}</Text>
-                  <Text style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{ex.type.replace(/_/g, " ").toLowerCase()}</Text>
-                </View>
-                <Ionicons name="add-circle-outline" size={20} color="#6366f1" />
-              </TouchableOpacity>
+              <ExercisePickerItem id={ex.id} name={ex.name} type={ex.type} onPress={handlePickExercise} />
             )}
           />
         </SafeAreaView>
@@ -1116,3 +1110,25 @@ export default function TrainingScreen() {
     </SafeAreaView>
   );
 }
+
+const ExercisePickerItem = memo(function ExercisePickerItem({
+  id, name, type, onPress,
+}: {
+  id: string;
+  name: string;
+  type: string;
+  onPress: (id: string) => void;
+}) {
+  return (
+    <TouchableOpacity
+      onPress={() => onPress(id)}
+      style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: "#f1f5f9", backgroundColor: "#fff", gap: 12 }}
+    >
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 14, fontWeight: "500", color: "#0f172a" }}>{name}</Text>
+        <Text style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{type.replace(/_/g, " ").toLowerCase()}</Text>
+      </View>
+      <Ionicons name="add-circle-outline" size={20} color="#6366f1" />
+    </TouchableOpacity>
+  );
+});
