@@ -554,7 +554,7 @@ export default function ExercisesScreen() {
               <View style={{ gap: 8 }}>
                 <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Categoría</Text>
                 {modalCategories.length > 0 && (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                     {modalCategories.map((cat) => (
                       <TouchableOpacity
                         key={cat.id}
@@ -565,7 +565,7 @@ export default function ExercisesScreen() {
                         <Text style={{ fontSize: 13, fontWeight: "500", color: "#0f172a" }}>{cat.name}</Text>
                       </TouchableOpacity>
                     ))}
-                  </ScrollView>
+                  </View>
                 )}
                 <TouchableOpacity
                   onPress={() => setShowNewCat((v) => !v)}
