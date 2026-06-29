@@ -161,6 +161,9 @@ export default function ProgressScreen() {
                 {/* Exercise header */}
                 <TouchableOpacity
                   onPress={() => setExpanded((prev) => prev === exId ? null : exId)}
+                  accessibilityLabel={`${ex?.name ?? "Ejercicio"} — ${expanded === exId ? "contraer" : "expandir"} récords`}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: expanded === exId }}
                   style={{ flexDirection: "row", alignItems: "center", padding: 14, gap: 10 }}
                 >
                   <View style={{ flex: 1 }}>

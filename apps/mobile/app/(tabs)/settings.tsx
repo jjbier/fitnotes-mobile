@@ -198,12 +198,18 @@ export default function SettingsScreen() {
             <View style={styles.unitToggle}>
               <TouchableOpacity
                 onPress={() => handleWeightUnitChange("kg")}
+                accessibilityLabel="Usar kilogramos"
+                accessibilityRole="radio"
+                accessibilityState={{ selected: weightUnit === "kg" }}
                 style={[styles.unitBtn, weightUnit === "kg" && styles.unitBtnActive]}
               >
                 <Text style={[styles.unitBtnText, weightUnit === "kg" && styles.unitBtnTextActive]}>kg</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => handleWeightUnitChange("lb")}
+                accessibilityLabel="Usar libras"
+                accessibilityRole="radio"
+                accessibilityState={{ selected: weightUnit === "lb" }}
                 style={[styles.unitBtn, weightUnit === "lb" && styles.unitBtnActive]}
               >
                 <Text style={[styles.unitBtnText, weightUnit === "lb" && styles.unitBtnTextActive]}>lb</Text>
@@ -232,12 +238,18 @@ export default function SettingsScreen() {
             <View style={styles.unitToggle}>
               <TouchableOpacity
                 onPress={() => handleCalendarWeekStart(1)}
+                accessibilityLabel="Empezar semana el lunes"
+                accessibilityRole="radio"
+                accessibilityState={{ selected: calendarWeekStart === 1 }}
                 style={[styles.unitBtn, calendarWeekStart === 1 && styles.unitBtnActive]}
               >
                 <Text style={[styles.unitBtnText, calendarWeekStart === 1 && styles.unitBtnTextActive]}>Lu</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => handleCalendarWeekStart(0)}
+                accessibilityLabel="Empezar semana el domingo"
+                accessibilityRole="radio"
+                accessibilityState={{ selected: calendarWeekStart === 0 }}
                 style={[styles.unitBtn, calendarWeekStart === 0 && styles.unitBtnActive]}
               >
                 <Text style={[styles.unitBtnText, calendarWeekStart === 0 && styles.unitBtnTextActive]}>Do</Text>
@@ -251,6 +263,9 @@ export default function SettingsScreen() {
             </View>
             <TouchableOpacity
               onPress={() => handleAutoSelectNextSet(!autoSelectNextSet)}
+              accessibilityRole="switch"
+              accessibilityLabel="Auto-pasar a siguiente serie"
+              accessibilityState={{ checked: autoSelectNextSet }}
               style={{ width: 44, height: 26, borderRadius: 13, backgroundColor: autoSelectNextSet ? colors.primary : colors.border, justifyContent: "center", paddingHorizontal: 2 }}
             >
               <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: colors.background, alignSelf: autoSelectNextSet ? "flex-end" : "flex-start", shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 2, elevation: 2 }} />
@@ -375,7 +390,7 @@ export default function SettingsScreen() {
           <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
             <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
               <Text style={{ flex: 1, fontSize: 17, fontWeight: "700", color: "#0f172a" }}>Importar datos CSV</Text>
-              <TouchableOpacity onPress={() => setShowImportModal(false)}>
+              <TouchableOpacity onPress={() => setShowImportModal(false)} accessibilityLabel="Cerrar modal">
                 <Ionicons name="close" size={22} color="#64748b" />
               </TouchableOpacity>
             </View>
