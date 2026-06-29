@@ -34,3 +34,7 @@ ios/
 # Playwright
 /apps/web/playwright-report/
 /apps/web/test-results/
+
+# EAS / credentials
+apps/mobile/google-service-account.json
+apps/mobile/credentials.json
