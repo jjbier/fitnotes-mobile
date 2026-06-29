@@ -42,6 +42,55 @@ jobs:
       - name: Build web
         run: pnpm --filter @fitnotes/web run build
 
+  rls-audit:
+    name: RLS Security Audit
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_PAT: ${{ secrets.SUPABASE_PAT }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify RLS enabled on all tables
+        run: |
+          RESULT=$(curl -sf -X POST \
+            "https://api.supabase.com/v1/projects/${SUPABASE_PROJECT_REF}/database/query" \
+            -H "Authorization: Bearer ${SUPABASE_PAT}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "query": "SELECT tablename, rowsecurity, (SELECT count(*) FROM pg_policies p WHERE p.tablename = t.tablename AND p.schemaname = t.schemaname AND p.cmd = '\''ALL'\'' AND p.qual = '\''(auth.uid() = user_id)'\'') AS correct_policies FROM pg_tables t WHERE t.schemaname = '\''public'\'' AND t.tablename IN (SELECT unnest(ARRAY['\''categories'\'','\''exercises'\'','\''workouts'\'','\''workout_exercises'\'','\''sets'\'','\''personal_records'\'','\''routines'\'','\''routine_days'\'','\''routine_day_exercises'\'','\''predefined_sets'\'','\''body_measurements'\'','\''body_measurement_entries'\'','\''exercise_goals'\''])) ORDER BY tablename"
+            }')
+          echo "$RESULT" | python3 -c "
+          import sys, json
+          rows = json.load(sys.stdin)
+          failed = [r for r in rows if not r['rowsecurity'] or int(r['correct_policies']) == 0]
+          if failed:
+              print('FAIL — tables with RLS issues:')
+              for r in failed: print(f\"  {r['tablename']}: rls={r['rowsecurity']}, correct_policies={r['correct_policies']}\")
+              sys.exit(1)
+          print(f'PASS — {len(rows)}/{len(rows)} tables have RLS enabled with correct policy')
+          "
+
+      - name: Verify unauthenticated access returns 0 rows
+        run: |
+          TABLES="workouts exercises categories sets personal_records routines body_measurements"
+          FAIL=0
+          for TABLE in $TABLES; do
+            COUNT=$(curl -sf "${NEXT_PUBLIC_SUPABASE_URL}/rest/v1/${TABLE}?select=id" \
+              -H "apikey: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}" \
+              -H "Authorization: Bearer ${NEXT_PUBLIC_SUPABASE_ANON_KEY}" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))")
+            if [ "$COUNT" != "0" ]; then
+              echo "FAIL — $TABLE returned $COUNT rows without auth"
+              FAIL=1
+            else
+              echo "PASS — $TABLE: 0 rows (anon)"
+            fi
+          done
+          exit $FAIL
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
