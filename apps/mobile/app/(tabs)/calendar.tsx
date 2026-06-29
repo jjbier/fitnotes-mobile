@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator, Modal } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Animated, Dimensions, PanResponder, SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator, Modal } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { formatWorkoutDate, useExerciseStore, ExerciseType } from "@fitnotes/core";
@@ -36,6 +36,44 @@ export default function CalendarScreen() {
 
   const storeExercises = useExerciseStore((s) => s.exercises);
   const loadExercises = useExerciseStore((s) => s.loadExercises);
+
+  // Swipe between months
+  const SCREEN_W = Dimensions.get("window").width;
+  const translateX = useRef(new Animated.Value(0)).current;
+  const yearRef = useRef(year);
+  const monthRef = useRef(month);
+  useEffect(() => { yearRef.current = year; }, [year]);
+  useEffect(() => { monthRef.current = month; }, [month]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) =>
+        Math.abs(g.dx) > Math.abs(g.dy) * 1.5 && Math.abs(g.dx) > 12,
+      onPanResponderMove: (_, g) => { translateX.setValue(g.dx); },
+      onPanResponderRelease: (_, g) => {
+        if (g.dx > 60) {
+          Animated.timing(translateX, { toValue: SCREEN_W, duration: 180, useNativeDriver: true }).start(() => {
+            const m = monthRef.current; const y = yearRef.current;
+            if (m === 1) { setYear(y - 1); setMonth(12); } else setMonth(m - 1);
+            translateX.setValue(-SCREEN_W);
+            Animated.timing(translateX, { toValue: 0, duration: 180, useNativeDriver: true }).start();
+          });
+        } else if (g.dx < -60) {
+          Animated.timing(translateX, { toValue: -SCREEN_W, duration: 180, useNativeDriver: true }).start(() => {
+            const m = monthRef.current; const y = yearRef.current;
+            if (m === 12) { setYear(y + 1); setMonth(1); } else setMonth(m + 1);
+            translateX.setValue(SCREEN_W);
+            Animated.timing(translateX, { toValue: 0, duration: 180, useNativeDriver: true }).start();
+          });
+        } else {
+          Animated.spring(translateX, { toValue: 0, useNativeDriver: true, tension: 100, friction: 10 }).start();
+        }
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+      },
+    })
+  ).current;
 
   const repo = useMemo(() => createCalendarRepository(supabase), []);
   const exRepo = useMemo(() => createExerciseRepository(supabase), []);
@@ -187,71 +225,76 @@ export default function CalendarScreen() {
         </ScrollView>
       ) : (
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}>
-          {/* Month nav */}
-          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
-            <TouchableOpacity onPress={prevMonth} style={{ padding: 8 }}>
-              <Ionicons name="chevron-back" size={20} color={theme.textSecondary} />
-            </TouchableOpacity>
-            <Text style={{ flex: 1, textAlign: "center", fontSize: 15, fontWeight: "600", color: theme.text }}>{monthName}</Text>
-            <TouchableOpacity onPress={nextMonth} style={{ padding: 8 }}>
-              <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
-            </TouchableOpacity>
-          </View>
+          {/* Swipeable calendar area */}
+          <View style={{ overflow: "hidden" }}>
+            <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
+              {/* Month nav */}
+              <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
+                <TouchableOpacity onPress={prevMonth} style={{ padding: 8 }}>
+                  <Ionicons name="chevron-back" size={20} color={theme.textSecondary} />
+                </TouchableOpacity>
+                <Text style={{ flex: 1, textAlign: "center", fontSize: 15, fontWeight: "600", color: theme.text }}>{monthName}</Text>
+                <TouchableOpacity onPress={nextMonth} style={{ padding: 8 }}>
+                  <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
+                </TouchableOpacity>
+              </View>
 
-          {/* DOW headers */}
-          <View style={{ flexDirection: "row", marginBottom: 4 }}>
-            {DAYS.map((d) => (
-              <Text key={d} style={{ flex: 1, textAlign: "center", fontSize: 11, fontWeight: "600", color: theme.textMuted }}>{d}</Text>
-            ))}
-          </View>
+              {/* DOW headers */}
+              <View style={{ flexDirection: "row", marginBottom: 4 }}>
+                {DAYS.map((d) => (
+                  <Text key={d} style={{ flex: 1, textAlign: "center", fontSize: 11, fontWeight: "600", color: theme.textMuted }}>{d}</Text>
+                ))}
+              </View>
 
-          {isLoading ? (
-            <View style={{ height: 200, justifyContent: "center", alignItems: "center" }}>
-              <ActivityIndicator color={theme.primary} />
-            </View>
-          ) : (
-            <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-              {Array.from({ length: firstDow }).map((_, i) => (
-                <View key={`e${i}`} style={{ width: `${100/7}%`, aspectRatio: 1 }} />
-              ))}
-              {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
-                const dateStr = `${year}-${pad(month)}-${pad(day)}`;
-                const hasWorkout = workoutDates.has(dateStr);
-                const isHighlighted = activeDates.has(dateStr);
-                const isToday = dateStr === today;
-                const isSelected = dateStr === selectedDate;
-                const dots = filteredDates
-                  ? (isHighlighted ? [theme.warning] : [])
-                  : (categoryColors[dateStr] ?? (hasWorkout ? [theme.primary] : []));
-                const visibleDots = dots.slice(0, 4);
-                return (
-                  <TouchableOpacity
-                    key={day}
-                    onPress={() => handleSelectDate(dateStr)}
-                    style={{ width: `${100/7}%`, aspectRatio: 1, alignItems: "center", justifyContent: "center" }}
-                  >
-                    <View style={{
-                      width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center",
-                      backgroundColor: isSelected ? theme.primary : "transparent",
-                      borderWidth: isToday && !isSelected ? 2 : 0,
-                      borderColor: theme.primary,
-                    }}>
-                      <Text style={{ fontSize: 14, fontWeight: isToday || hasWorkout ? "600" : "400", color: isSelected ? "#fff" : isToday ? theme.primary : theme.text }}>
-                        {day}
-                      </Text>
-                      {visibleDots.length > 0 && (
-                        <View style={{ flexDirection: "row", gap: 2, position: "absolute", bottom: 2 }}>
-                          {visibleDots.map((color, ci) => (
-                            <View key={ci} style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: isSelected ? "#fff" : color }} />
-                          ))}
+              {isLoading ? (
+                <View style={{ height: 200, justifyContent: "center", alignItems: "center" }}>
+                  <ActivityIndicator color={theme.primary} />
+                </View>
+              ) : (
+                <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+                  {Array.from({ length: firstDow }).map((_, i) => (
+                    <View key={`e${i}`} style={{ width: `${100/7}%`, aspectRatio: 1 }} />
+                  ))}
+                  {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
+                    const dateStr = `${year}-${pad(month)}-${pad(day)}`;
+                    const hasWorkout = workoutDates.has(dateStr);
+                    const isHighlighted = activeDates.has(dateStr);
+                    const isToday = dateStr === today;
+                    const isSelected = dateStr === selectedDate;
+                    const dots = filteredDates
+                      ? (isHighlighted ? [theme.warning] : [])
+                      : (categoryColors[dateStr] ?? (hasWorkout ? [theme.primary] : []));
+                    const visibleDots = dots.slice(0, 4);
+                    return (
+                      <TouchableOpacity
+                        key={day}
+                        onPress={() => handleSelectDate(dateStr)}
+                        style={{ width: `${100/7}%`, aspectRatio: 1, alignItems: "center", justifyContent: "center" }}
+                      >
+                        <View style={{
+                          width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center",
+                          backgroundColor: isSelected ? theme.primary : "transparent",
+                          borderWidth: isToday && !isSelected ? 2 : 0,
+                          borderColor: theme.primary,
+                        }}>
+                          <Text style={{ fontSize: 14, fontWeight: isToday || hasWorkout ? "600" : "400", color: isSelected ? "#fff" : isToday ? theme.primary : theme.text }}>
+                            {day}
+                          </Text>
+                          {visibleDots.length > 0 && (
+                            <View style={{ flexDirection: "row", gap: 2, position: "absolute", bottom: 2 }}>
+                              {visibleDots.map((color, ci) => (
+                                <View key={ci} style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: isSelected ? "#fff" : color }} />
+                              ))}
+                            </View>
+                          )}
                         </View>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </Animated.View>
+          </View>
 
           {/* Selected date panel */}
           {selectedDate && (
