@@ -349,10 +349,6 @@ export default function TrainingScreen() {
       });
     }
     setSaving(false);
-    // Auto-start rest timer after logging a set
-    setTimerRemaining(timerDuration);
-    setTimerRunning(true);
-    void scheduleRestNotification(timerDuration);
   }
 
   async function handleIncrementField(s: FitSet, field: "weight" | "reps" | "distance" | "time_seconds", delta: number) {
@@ -393,13 +389,6 @@ export default function TrainingScreen() {
         }
       }
       return;
-    }
-
-    // Auto-start rest timer on set completion
-    if (nowComplete) {
-      setTimerRemaining(timerDuration);
-      setTimerRunning(true);
-      void scheduleRestNotification(timerDuration);
     }
 
     // Auto-select next incomplete set
