@@ -38,3 +38,7 @@ ios/
 # EAS / credentials
 apps/mobile/google-service-account.json
 apps/mobile/credentials.json
+
+# Local session notes
+sesion
+expo.dev
