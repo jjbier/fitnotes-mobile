@@ -1,42 +1,41 @@
 # Trabajo pendiente
 
-_Last updated: 2026-06-28_
+_Last updated: 2026-06-30_
 
-## Completado ✅ (todo el plan Phases 0–7)
-- Auth web + mobile
-- Ejercicios CRUD web + mobile (todos los ExerciseTypes)
-- Workout logging: sets CRUD todos los ExerciseTypes
-- Progreso: PRs auto-calculados (trigger SQL), charts web + mobile
+## Completado ✅ (Phases 0–7 + pulido)
+
+**Core / Database**
+- Auth web + mobile, stores Zustand+Immer, 144 tests Vitest
+- Ejercicios CRUD (todos los ExerciseTypes), categorías con color, toggle favorito optimistic
+- Workout logging: sets CRUD optimistic con rollback, todos los ExerciseTypes, WorkoutTimer
+- Progreso: PRs trigger SQL, Recharts LineChart (métricas + tendencia + PNG), ExerciseOverview, goals
 - Body Tracker web + mobile
-- Calendario web + mobile
-- Herramientas (1RM, Set%, Plate calculators) web + mobile
-- Settings: perfil, kg/lb, export CSV, delete account
-- SyncEngine integrado en mobile
-- RestTimer con expo-haptics (background notifications)
-- Sesión persistente mobile (FileStorage, auto-refresh)
-- Delete ejercicio del workout (home + training screen)
-- Edit sets persiste en DB
-- 144 tests Vitest en packages/core
-- Android APK release — verificado en dispositivo físico
-- Rutinas completas con supersets + nombres personalizables de grupos
-- Predefined sets con race condition fix
-- Drag & drop days y ejercicios
-- Log routine day → workout real con group_id/group_name propagado
-- Speed dial FAB en Ejercicios
+- Calendario web + mobile (dots coloreados por categoría, filtros avanzados)
+- Herramientas (1RM, Set%, Plate) + PRSelector + RestTimer
+- Settings completos: toggles, recalcular PRs, backup/restore, CSV, Google Drive, delete account
+- SyncEngine push/pull + cola persistente en mobile
+- Rutinas: supersets+nombres, predefined sets, drag&drop, log day→workout
 - Config por ejercicio: weight_increment, default_rest_seconds, default_chart
-- Goals repository + pantalla mobile
-- Búsqueda global con historial
-- Exercise history con gráfico LineChart
-- **Dark mode mobile**: useTheme() en todas las pantallas (12 actualizadas en Phase 7)
-- **Web loading/error boundaries** en todas las rutas incluidas sub-rutas
-- **accessibilityLabel** en icon-only buttons (exercises, index, workout)
+- Goals, búsqueda global, exercise history con gráfico
 
-## Pendiente (no crítico)
-- Eliminar `routines/index.tsx` (código muerto — `tools.tsx` lo duplica)
-- SyncEngine: pull no actualiza stores de ejercicios/rutinas (solo workout de hoy)
-- Phase 7.6 CI/CD: GitHub Actions, EAS build, Vercel config, README
+**Phase 7 — Pulido**
+- Dark mode mobile: `useTheme()` en todas las pantallas
+- Web loading/error boundaries en todas las rutas + sub-rutas
+- Virtualización web: `useWindowVirtualizer` en exercise list + category list
+- Optimistic updates: TrainingScreen (create/update/delete/toggle) con rollback + error banner
+- Accesibilidad WCAG AA web: skip link, focus trap, ARIA roles, `lang="es"`, per-route layout.tsx
+- Seguridad: CSP headers, X-Frame-Options, robots.txt
+- CI/CD: GitHub Actions (6 workflows), dependabot, PR template, Vercel + EAS config
+- E2E Playwright: auth.setup + 3 proyectos + 5 nuevos spec files (exercises/workout/routines/progress/body-tracker)
+- Sync cross-device fix: calendar.tsx suscrito a refetchSignal
+- APK release Android estable
+
+## Pendiente real (bloqueado externamente)
+- **EAS `projectId`**: `app.json` tiene placeholder — `eas init` requiere cuenta Expo del usuario
+- **Detox**: cero tests automatizados en mobile
+- **SyncEngine pull**: no actualiza stores de ejercicios/rutinas (solo workout hoy)
 
 ## Descartado
 - `shadcn/ui` — incompatibilidad eslint-config-next + ESLint v9
 - `packages/ui` — sin spec de design tokens
-- Offline-first SQLite — app funciona directamente con Supabase; sin red falla graciosamente
+- Offline-first SQLite — app funciona directamente con Supabase

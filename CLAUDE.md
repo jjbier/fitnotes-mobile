@@ -35,6 +35,8 @@ fitnotes-app/
 | Supabase client | `@supabase/supabase-js@^2.108.2` + `@supabase/ssr@^0.12.0` | FIJAS — cambiarlas rompe genéricos |
 | Validación | Zod 3 | schemas en `@fitnotes/core/schemas` |
 | Drag & drop | `react-native-draggable-flatlist@4.0.3` | NestableScrollContainer + NestableDraggableFlatList |
+| Virtualización web | `@tanstack/react-virtual@3.14.4` | `useWindowVirtualizer` en listas de ejercicios |
+| Tests web E2E | Playwright | 3 proyectos: setup, chromium, chromium-auth |
 
 ---
 
@@ -56,6 +58,10 @@ fitnotes-app/
 - **Supersets**: `group_id` en `routine_day_exercises` — tap icono 🔗 agrupa con siguiente ejercicio, tap morado abre Alert (renombrar/disolver)
 - **Predefined sets race condition fix**: `useRef` para trackear qué ejercicio está cargando — descartar respuesta si el usuario cambió de ejercicio
 - **Dark mode mobile**: `useTheme()` de `apps/mobile/lib/theme.ts` — sigue esquema del sistema via `useColorScheme()`
+- **Optimistic updates web**: store update → async persist → rollback en error; temp IDs para creates con `opacity-60`
+- **Virtualización web**: `useWindowVirtualizer` con `scrollMargin: listRef.current?.offsetTop ?? 0`; dropdown fijo via `getBoundingClientRect()` + scroll listener para cerrar
+- **Accessibility web**: focus trap `lib/useFocusTrap.ts`, skip link `#main-content`, `role="dialog/tablist/tab"`, `aria-current="page"`, `lang="es"`, per-route `layout.tsx` para metadata en client components
+- **CSP**: `default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src ... *.supabase.co ... accounts.google.com`
 
 ---
 
@@ -79,17 +85,34 @@ fitnotes-app/
 ### `apps/web` ✅ — todas las rutas conectadas a Supabase
 `/dashboard`, `/exercise`, `/exercise/[id]`, `/progress`, `/calendar`, `/routines`, `/routines/[id]`, `/body-tracker`, `/tools`, `/settings` (incl. export CSV + delete account)
 
-**Web loading/error boundaries** (`loading.tsx` + `error.tsx`) en todas las rutas incluyendo sub-rutas: `exercise/[id]`, `exercise/history/[exerciseId]`, `routines/[id]`, `workout/[date]`.
+**Web loading/error boundaries** (`loading.tsx` + `error.tsx`) en todas las rutas incluyendo sub-rutas.
+
+**Rendimiento**: `useWindowVirtualizer` en `/exercise` y `/exercise/[id]` — soporta catálogos grandes sin jank.
+
+**Accesibilidad WCAG AA**: skip link, `useFocusTrap` en modales (`ExerciseOverview`, `PredefinedSetsModal`), `role="dialog/tablist/tab"`, `aria-current="page"` en nav, `lang="es"`, `aria-live="polite"` en acciones asíncronas.
+
+**Seguridad**: CSP headers en `next.config.ts` y `vercel.json`, `X-Frame-Options: DENY`, `Referrer-Policy`, `robots.txt`.
+
+**CI/CD**: `.github/workflows/` (type-check, test, web-build, lint, rls-audit, EAS), `.github/dependabot.yml`, `.github/PULL_REQUEST_TEMPLATE.md`.
+
+**E2E Playwright** (`apps/web/e2e/`):
+- `auth.setup.ts` + 3 proyectos en `playwright.config.ts` (setup / chromium / chromium-auth)
+- `exercises.spec.ts`: CRUD categoría + ejercicio, toggle favorito, editar, eliminar
+- `workout.spec.ts`: iniciar workout, añadir ejercicio, CRUD series, finalizar
+- `routines.spec.ts`: crear, copiar, editar, abrir, eliminar
+- `progress.spec.ts`: tabs, overview, historial
+- `body-tracker.spec.ts`: registrar medida, historial, gráfica, settings
+- `auth.spec.ts`, `calculations.spec.ts`, `tools.spec.ts`, `phases56.spec.ts` (existentes)
 
 ### `apps/mobile` ✅ — APK release funcionando en dispositivo Android
 
-**Dark mode**: todas las pantallas usan `useTheme()` y siguen el esquema del sistema (light/dark). Tab bar, status bar y modales también adaptan colores.
+**Dark mode**: todas las pantallas usan `useTheme()` y siguen el esquema del sistema (light/dark).
 
 **Tabs:**
 | Tab | Contenido |
 |---|---|
 | Hoy | workout por fecha, delete ejercicio, navegar a training |
-| Calendario | grid mensual, list view |
+| Calendario | grid mensual, list view, refetchSignal sync |
 | Ejercicios | browse + speed dial FAB (crear ejercicio / nueva rutina) |
 | Progreso | PRs expandibles, 1RM estimado |
 | **Rutinas** | lista rutinas — crear/editar/copiar/eliminar vía menú ⋮ |
@@ -98,28 +121,11 @@ fitnotes-app/
 **Rutas no-tab:**
 - `workout/[exerciseId]` — sets CRUD completo, todos los ExerciseTypes, RestTimer haptics
 - `routines/[id]` — días + ejercicios, edit mode, drag & drop days+ejercicios, predefined sets, supersets con nombres personalizables, log routine day → workout real
-- `calculators` — 1RM, Set%, Plate calculators (accesible desde Configuración)
+- `calculators` — 1RM, Set%, Plate calculators
 - `body-tracker` — CRUD medidas + entradas
-- `exercises/[categoryId]`
-- `search/` — búsqueda global de ejercicios con historial
-- `goals/` — objetivos por ejercicio
-- `exercise-history/[exerciseId]` — historial completo + gráfico
+- `exercises/[categoryId]`, `search/`, `goals/`, `exercise-history/[exerciseId]`
 
-**Rutinas — características completas:**
-- Crear/editar nombre+notas/copiar/eliminar vía menú ⋮
-- Días con drag & drop reordenar
-- Ejercicios por día con drag & drop reordenar
-- Predefined sets por ejercicio (modal, campos vacíos = copian del historial)
-- **Supersets con nombres personalizables**: icono 🔗 → agrupa (group_id); tap en morado → Alert: "Renombrar grupo" | "Quitar del grupo" | "Cancelar"
-- Log routine day → crea workout real con predefined sets y group_name propagado
-- `?create=1` param abre modal de nueva rutina automáticamente
-
-**Config por ejercicio** (migración 003):
-- `weight_increment` — usado en botones +/− del workout
-- `default_rest_seconds` — inicializa el RestTimer al abrir el ejercicio
-- `default_chart` — `"weight" | "volume" | "reps"` (migración 004)
-
-**Accessibility**: `accessibilityLabel` en todos los botones de icono (exercises, index, workout).
+**Sync cross-device**: todos los tabs (`index`, `exercises`, `progress`, `tools`, `calendar`) suscritos a `refetchSignal` — se refrescan automáticamente tras sync remoto.
 
 ### Android APK ✅
 ```bash
@@ -133,9 +139,10 @@ cd apps/mobile/android && ./gradlew assembleRelease --no-daemon
 
 - `shadcn/ui` no inicializado — incompatibilidad `eslint-config-next` + ESLint v9
 - `packages/ui` vacío
-- SyncEngine pull no actualiza stores de ejercicios/rutinas (solo today workout via `refetchSignal`)
-- `routines/index.tsx` es código muerto — el tab usa `(tabs)/tools.tsx` que duplica esa UI
-- Phase 7.6 (CI/CD: GitHub Actions, EAS build, Vercel config, README) — no iniciado
+- **SyncEngine pull**: no actualiza stores de ejercicios/rutinas (solo today workout via `refetchSignal`)
+- **EAS `projectId`**: `app.json` tiene placeholder — requiere `eas init` con cuenta Expo real
+- **Detox**: cero tests automatizados en mobile
+- **E2E tests**: se saltan si no hay `PLAYWRIGHT_USER_EMAIL` + `PLAYWRIGHT_USER_PASSWORD`
 
 ---
 
@@ -146,6 +153,7 @@ pnpm --filter @fitnotes/web dev
 pnpm --filter @fitnotes/mobile start
 pnpm --filter @fitnotes/core test
 cd apps/mobile && npx tsc --noEmit
+cd apps/web && PLAYWRIGHT_USER_EMAIL=x PLAYWRIGHT_USER_PASSWORD=y npx playwright test
 cd apps/mobile/android && ./gradlew assembleRelease --no-daemon
 /opt/Android-Sdk/platform-tools/adb install apps/mobile/android/app/build/outputs/apk/release/app-release.apk
 ```
