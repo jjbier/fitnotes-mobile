@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Dimensions, PanResponder, SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator, Modal } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -6,6 +6,7 @@ import { formatWorkoutDate, useExerciseStore, ExerciseType } from "@fitnotes/cor
 import { createCalendarRepository, createExerciseRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../lib/theme";
+import { useSyncStatus } from "../../contexts/SyncContext";
 
 function pad(n: number): string { return String(n).padStart(2, "0"); }
 
@@ -75,9 +76,23 @@ export default function CalendarScreen() {
     })
   ).current;
 
+  const { refetchSignal } = useSyncStatus();
+
   const repo = useMemo(() => createCalendarRepository(supabase), []);
   const exRepo = useMemo(() => createExerciseRepository(supabase), []);
   const today = now.toISOString().split("T")[0]!;
+
+  const loadMonth = useCallback(async (y: number, m: number) => {
+    setIsLoading(true);
+    const [workoutsRes, colors] = await Promise.all([
+      repo.getWorkoutsForMonth(y, m),
+      repo.getWorkoutCategoryColorsForMonth(y, m),
+    ]);
+    if (workoutsRes.data) setWorkoutDates(new Set(workoutsRes.data.map((w: { date: string }) => w.date)));
+    setCategoryColors(colors);
+    setIsLoading(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repo]);
 
   useEffect(() => {
     async function boot() {
@@ -104,19 +119,18 @@ export default function CalendarScreen() {
   }, []);
 
   useEffect(() => {
-    async function load() {
-      setIsLoading(true);
-      const [workoutsRes, colors] = await Promise.all([
-        repo.getWorkoutsForMonth(year, month),
-        repo.getWorkoutCategoryColorsForMonth(year, month),
-      ]);
-      if (workoutsRes.data) setWorkoutDates(new Set(workoutsRes.data.map((w: { date: string }) => w.date)));
-      setCategoryColors(colors);
-      setIsLoading(false);
-    }
-    load();
+    loadMonth(year, month);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, month]);
+
+  useEffect(() => {
+    if (refetchSignal === 0) return;
+    loadMonth(year, month);
+    if (listView) {
+      repo.getWorkoutHistory(50).then(({ data }: { data: { id: string; date: string }[] | null }) => { if (data) setHistory(data); });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refetchSignal]);
 
   useEffect(() => {
     if (listView) {
