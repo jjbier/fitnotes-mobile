@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AppState, View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import type { AppStateStatus } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -10,6 +10,8 @@ import { supabase } from "../lib/supabase";
 import { syncEngine, persistSyncQueue } from "../lib/sync";
 import { SyncContext } from "../contexts/SyncContext";
 import type { SyncStatus } from "@fitnotes/database";
+import { useExerciseStore, useRoutineStore, ExerciseType } from "@fitnotes/core";
+import { createExerciseRepository, createRoutineRepository } from "@fitnotes/database";
 
 const styles = StyleSheet.create({
   syncBanner: {
@@ -53,6 +55,12 @@ export default function RootLayout() {
   const [refetchSignal, setRefetchSignal] = useState(0);
   const appState = useRef(AppState.currentState);
 
+  // Store actions for targeted updates after sync
+  const loadExercises = useExerciseStore((s) => s.loadExercises);
+  const loadRoutines = useRoutineStore((s) => s.loadRoutines);
+  const exerciseRepo = useMemo(() => createExerciseRepository(supabase), []);
+  const routineRepo = useMemo(() => createRoutineRepository(supabase), []);
+
   useEffect(() => {
     // Check initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -91,7 +99,44 @@ export default function RootLayout() {
           setLastSyncAt(new Date().toISOString());
           setPendingCount(syncEngine.getPendingCount());
           void persistSyncQueue();
-          if (result.pulled > 0) {
+
+          const ct = result.changedTables;
+
+          // Refresh exercise/routine stores directly so all screens see new data
+          if (ct.has("exercises") || ct.has("categories")) {
+            const [catRes, exRes] = await Promise.all([
+              exerciseRepo.getCategories(),
+              exerciseRepo.getExercises(),
+            ]);
+            if (catRes.data && exRes.data) {
+              loadExercises(
+                catRes.data,
+                exRes.data.map((ex) => ({
+                  id: ex.id,
+                  name: ex.name,
+                  category_id: ex.category_id ?? "",
+                  type: ex.type as ExerciseType,
+                  weight_unit: (ex.weight_unit as "kg" | "lb"),
+                  notes: ex.notes ?? undefined,
+                  is_favorite: ex.is_favorite,
+                  created_at: ex.created_at,
+                  weight_increment: ex.weight_increment ?? undefined,
+                  default_rest_seconds: ex.default_rest_seconds ?? undefined,
+                  default_chart: (ex.default_chart ?? "weight") as "weight" | "volume" | "reps",
+                }))
+              );
+            }
+          }
+
+          if (ct.has("routines") || ct.has("routine_days") || ct.has("routine_day_exercises")) {
+            const { data } = await routineRepo.getRoutines();
+            if (data) {
+              loadRoutines(data.map((r) => ({ id: r.id, name: r.name, notes: r.notes ?? undefined })));
+            }
+          }
+
+          // Workout data is tab-scoped — refetchSignal triggers re-queries in index/calendar
+          if (ct.has("workouts") || ct.has("workout_exercises") || ct.has("sets")) {
             setRefetchSignal((n) => n + 1);
           }
         } catch {

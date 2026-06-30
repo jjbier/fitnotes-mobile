@@ -15,6 +15,8 @@ export interface SyncResult {
   pushed: number;
   pulled: number;
   conflicts: ConflictRecord[];
+  /** Tables that had remote changes during the last pull. */
+  changedTables: Set<string>;
 }
 
 export interface ConflictRecord {
@@ -37,10 +39,12 @@ const SYNCABLE_TABLES = [
   "workouts",
   "workout_exercises",
   "sets",
+  "categories",
   "exercises",
   "routines",
   "routine_days",
   "routine_day_exercises",
+  "predefined_sets",
 ] as const;
 
 export class SyncEngine {
@@ -80,7 +84,7 @@ export class SyncEngine {
    */
   async pushLocalChanges(): Promise<SyncResult> {
     if (this.pendingOps.length === 0) {
-      return { pushed: 0, pulled: 0, conflicts: [] };
+      return { pushed: 0, pulled: 0, conflicts: [], changedTables: new Set() };
     }
 
     this.status = "syncing";
@@ -103,7 +107,7 @@ export class SyncEngine {
 
     this.pendingOps = failed;
     this.status = failed.length > 0 ? "error" : "idle";
-    return { pushed, pulled: 0, conflicts: [] };
+    return { pushed, pulled: 0, conflicts: [], changedTables: new Set() };
   }
 
   /**
@@ -115,29 +119,31 @@ export class SyncEngine {
     this.status = "syncing";
     try {
       let pulled = 0;
+      const changedTables = new Set<string>();
 
       for (const table of SYNCABLE_TABLES) {
-        const query = this.client
+        // Build query — reassign to apply the since filter correctly
+        let query = this.client
           .from(table)
-          .select("*")
-          .order("updated_at" as never, { ascending: false })
-          .limit(200);
+          .select("id", { count: "exact", head: true }) as ReturnType<typeof this.client.from>;
 
         if (since) {
-          query.gt("updated_at" as never, since);
+          query = (query as unknown as { gt: (col: string, val: string) => typeof query })
+            .gt("updated_at", since) as unknown as ReturnType<typeof this.client.from>;
         }
 
-        const { data, error } = await query;
-        if (!error && data) {
-          pulled += data.length;
+        const { count, error } = await (query as unknown as Promise<{ count: number | null; error: unknown }>);
+        if (!error && count && count > 0) {
+          pulled += count;
+          changedTables.add(table);
         }
       }
 
       this.status = "idle";
-      return { pushed: 0, pulled, conflicts: [] };
+      return { pushed: 0, pulled, conflicts: [], changedTables };
     } catch {
       this.status = "error";
-      return { pushed: 0, pulled: 0, conflicts: [] };
+      return { pushed: 0, pulled: 0, conflicts: [], changedTables: new Set() };
     }
   }
 
@@ -163,6 +169,7 @@ export class SyncEngine {
       pushed: pushResult.pushed,
       pulled: pullResult.pulled,
       conflicts: [...pushResult.conflicts, ...pullResult.conflicts],
+      changedTables: pullResult.changedTables,
     };
   }
 
