@@ -14,6 +14,9 @@ export interface ChartPoint {
   maxWeight: number;
   totalVolume: number;
   maxReps: number;
+  est1RM: number;
+  maxDistance: number;
+  maxTime: number;
 }
 
 interface ProgressState {
