@@ -6,6 +6,7 @@ export { useWorkoutStore } from "./stores/workoutStore.js";
 export { useExerciseStore } from "./stores/exerciseStore.js";
 export { useProgressStore } from "./stores/progressStore.js";
 export { useRoutineStore } from "./stores/routineStore.js";
+export { useBodyTrackerStore } from "./stores/bodyTrackerStore.js";
 
 // Utils
 export * from "./utils/calculations.js";

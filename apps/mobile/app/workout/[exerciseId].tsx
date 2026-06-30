@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import { SafeAreaView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, FlatList, Platform, ScrollView, useWindowDimensions } from "react-native";
+import * as FileSystem from "expo-file-system";
 import { useTheme } from "../../lib/theme";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -144,15 +145,20 @@ export default function TrainingScreen() {
   }
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const timerFile = (FileSystem.documentDirectory ?? "") + "last-timer-duration.json";
+    Promise.all([
+      supabase.auth.getSession(),
+      FileSystem.readAsStringAsync(timerFile).then((s) => JSON.parse(s) as { seconds: number }).catch(() => null),
+    ]).then(([{ data: { session } }, savedTimer]) => {
       if (session?.user) {
         setUserId(session.user.id);
         setWeightUnit((session.user.user_metadata?.weight_unit as "kg" | "lb" | undefined) ?? "kg");
         setGlobalWeightIncrement((session.user.user_metadata?.default_weight_increment as number | undefined) ?? 2.5);
         setAutoSelectNextSet((session.user.user_metadata?.auto_select_next_set as boolean | undefined) ?? true);
         const globalRest = (session.user.user_metadata?.default_rest_seconds as number | undefined) ?? 90;
-        setTimerDuration((prev) => prev === 90 ? globalRest : prev);
-        setTimerRemaining((prev) => prev === 90 ? globalRest : prev);
+        const restoredDuration = savedTimer?.seconds ?? globalRest;
+        setTimerDuration(restoredDuration);
+        setTimerRemaining(restoredDuration);
       }
     });
   }, []);
@@ -254,7 +260,16 @@ export default function TrainingScreen() {
           if (prev <= 1) {
             clearInterval(intervalRef.current!);
             setTimerRunning(false);
-            void cancelRestNotification();
+            notifIdRef.current = null;
+            void Notifications.scheduleNotificationAsync({
+              content: {
+                title: "¡Descanso terminado!",
+                body: "Es hora de tu siguiente serie 💪",
+                sound: "default",
+                ...(Platform.OS === "android" ? { channelId: "rest-timer" } : {}),
+              },
+              trigger: null,
+            });
             void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             return 0;
           }
@@ -294,6 +309,8 @@ export default function TrainingScreen() {
     const next = Math.max(15, timerDuration + delta);
     setTimerDuration(next);
     if (!timerRunning) setTimerRemaining(next);
+    const timerFile = (FileSystem.documentDirectory ?? "") + "last-timer-duration.json";
+    FileSystem.writeAsStringAsync(timerFile, JSON.stringify({ seconds: next })).catch(() => {});
   }
 
   async function handleRemoveExercise() {

@@ -60,6 +60,14 @@ export class SyncEngine {
     return this.pendingOps.length;
   }
 
+  getPendingOps(): PendingOperation[] {
+    return [...this.pendingOps];
+  }
+
+  loadOps(ops: PendingOperation[]): void {
+    this.pendingOps = [...ops];
+  }
+
   /** Add an operation to the local pending queue for later sync. */
   queueOperation(op: PendingOperation): void {
     this.pendingOps.push(op);

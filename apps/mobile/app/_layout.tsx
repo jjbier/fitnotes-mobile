@@ -7,7 +7,7 @@ import { StatusBar } from "expo-status-bar";
 import { useRouter, useSegments } from "expo-router";
 import "../global.css";
 import { supabase } from "../lib/supabase";
-import { syncEngine } from "../lib/sync";
+import { syncEngine, persistSyncQueue } from "../lib/sync";
 import { SyncContext } from "../contexts/SyncContext";
 import type { SyncStatus } from "@fitnotes/database";
 
@@ -90,6 +90,7 @@ export default function RootLayout() {
           setSyncStatus("idle");
           setLastSyncAt(new Date().toISOString());
           setPendingCount(syncEngine.getPendingCount());
+          void persistSyncQueue();
           if (result.pulled > 0) {
             setRefetchSignal((n) => n + 1);
           }

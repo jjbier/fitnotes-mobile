@@ -143,6 +143,75 @@ export function createWorkoutRepository(client: Client) {
       );
     },
 
+    async copyWorkout(
+      sourceWorkoutId: string,
+      targetWorkoutId: string,
+      userId: string,
+      existingExerciseIds: string[],
+      startOrderIndex: number
+    ): Promise<void> {
+      const { data: sourceExercises } = await client
+        .from("workout_exercises")
+        .select("*")
+        .eq("workout_id", sourceWorkoutId)
+        .order("order_index", { ascending: true });
+
+      if (!sourceExercises?.length) return;
+
+      const existingSet = new Set(existingExerciseIds);
+      let orderIndex = startOrderIndex;
+
+      for (const we of sourceExercises) {
+        if (existingSet.has(we.exercise_id)) continue;
+
+        const insert: WorkoutExerciseInsert = {
+          workout_id: targetWorkoutId,
+          exercise_id: we.exercise_id,
+          order_index: orderIndex++,
+          group_id: we.group_id ?? null,
+          group_name: we.group_name ?? null,
+          user_id: userId,
+        };
+        const { data: newWe } = await client
+          .from("workout_exercises")
+          .insert(insert)
+          .select()
+          .single();
+
+        if (!newWe) continue;
+
+        const { data: sourceSets } = await client
+          .from("sets")
+          .select("*")
+          .eq("workout_exercise_id", we.id)
+          .order("order_index", { ascending: true });
+
+        if (sourceSets?.length) {
+          const setInserts: SetInsert[] = sourceSets.map((s) => ({
+            workout_exercise_id: newWe.id,
+            order_index: s.order_index,
+            weight: s.weight,
+            reps: s.reps,
+            distance: s.distance,
+            time_seconds: s.time_seconds,
+            is_complete: false,
+            is_warmup: s.is_warmup ?? false,
+            user_id: userId,
+          }));
+          await client.from("sets").insert(setInserts);
+        }
+      }
+    },
+
+    async moveWorkout(workoutId: string, targetDate: string) {
+      return client
+        .from("workouts")
+        .update({ date: targetDate })
+        .eq("id", workoutId)
+        .select()
+        .single();
+    },
+
     // ─── Sets ──────────────────────────────────────────────────────────────────
 
     async getSets(workoutExerciseId: string) {

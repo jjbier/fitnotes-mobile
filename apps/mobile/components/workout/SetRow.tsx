@@ -8,6 +8,7 @@
  *  - Previous-session ghost values as placeholders
  */
 
+import { memo } from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { Set } from "@fitnotes/core";
@@ -19,7 +20,7 @@ interface SetRowProps {
   onDelete: () => void;
 }
 
-export default function SetRow({ set, index, onToggleComplete, onDelete }: SetRowProps) {
+const SetRow = memo(function SetRow({ set, index, onToggleComplete, onDelete }: SetRowProps) {
   return (
     <View className="flex-row items-center gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
       {/* Set number */}
@@ -77,4 +78,6 @@ export default function SetRow({ set, index, onToggleComplete, onDelete }: SetRo
       </TouchableOpacity>
     </View>
   );
-}
+});
+
+export default SetRow;
