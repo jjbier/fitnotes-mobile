@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
-import { SafeAreaView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, FlatList, Platform, ScrollView, useWindowDimensions } from "react-native";
+import { SafeAreaView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, FlatList, ScrollView, Vibration, useWindowDimensions } from "react-native";
 import * as FileSystem from "expo-file-system";
 import { useTheme } from "../../lib/theme";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import * as Notifications from "expo-notifications";
 import { useKeepAwake } from "expo-keep-awake";
 import DraggableFlatList, { ScaleDecorator, NestableScrollContainer, NestableDraggableFlatList, type RenderItemParams } from "react-native-draggable-flatlist";
 import { useWorkoutStore, useExerciseStore, ExerciseType, calculate1RM } from "@fitnotes/core";
@@ -109,7 +108,6 @@ export default function TrainingScreen() {
   const [timerRemaining, setTimerRemaining] = useState(90);
   const [timerRunning, setTimerRunning] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const notifIdRef = useRef<string | null>(null);
 
   const repo = useMemo(() => createWorkoutRepository(supabase), []);
   const progressRepo = useMemo(() => createProgressRepository(supabase), []);
@@ -210,49 +208,6 @@ export default function TrainingScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workoutExercise?.id, activeWorkout?.id]);
 
-  // Configure notification handler and request permissions once
-  useEffect(() => {
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: false,
-        shouldShowBanner: true,
-        shouldShowList: true,
-      }),
-    });
-    if (Platform.OS === "android") {
-      void Notifications.setNotificationChannelAsync("rest-timer", {
-        name: "Descanso entre series",
-        importance: Notifications.AndroidImportance.HIGH,
-        sound: "default",
-        vibrationPattern: [0, 250, 250, 250],
-      });
-    }
-    void Notifications.requestPermissionsAsync();
-  }, []);
-
-  async function scheduleRestNotification(seconds: number) {
-    await cancelRestNotification();
-    const id = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "¡Descanso terminado!",
-        body: "Es hora de tu siguiente serie 💪",
-        sound: "default",
-        ...(Platform.OS === "android" ? { channelId: "rest-timer" } : {}),
-      },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds, repeats: false },
-    });
-    notifIdRef.current = id;
-  }
-
-  async function cancelRestNotification() {
-    if (notifIdRef.current) {
-      await Notifications.cancelScheduledNotificationAsync(notifIdRef.current);
-      notifIdRef.current = null;
-    }
-  }
-
   useEffect(() => {
     if (timerRunning) {
       intervalRef.current = setInterval(() => {
@@ -260,16 +215,7 @@ export default function TrainingScreen() {
           if (prev <= 1) {
             clearInterval(intervalRef.current!);
             setTimerRunning(false);
-            notifIdRef.current = null;
-            void Notifications.scheduleNotificationAsync({
-              content: {
-                title: "¡Descanso terminado!",
-                body: "Es hora de tu siguiente serie 💪",
-                sound: "default",
-                ...(Platform.OS === "android" ? { channelId: "rest-timer" } : {}),
-              },
-              trigger: null,
-            });
+            Vibration.vibrate([0, 400, 150, 400, 150, 400]);
             void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             return 0;
           }
@@ -287,22 +233,16 @@ export default function TrainingScreen() {
     if (timerRemaining === 0) {
       setTimerRemaining(timerDuration);
       setTimerRunning(true);
-      void scheduleRestNotification(timerDuration);
     } else if (timerRunning) {
-      // Pause
       setTimerRunning(false);
-      void cancelRestNotification();
     } else {
-      // Resume — reschedule for remaining time
       setTimerRunning(true);
-      void scheduleRestNotification(timerRemaining);
     }
   }
 
   function handleTimerReset() {
     setTimerRunning(false);
     setTimerRemaining(timerDuration);
-    void cancelRestNotification();
   }
 
   function handleChangeDuration(delta: number) {
