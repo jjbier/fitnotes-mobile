@@ -1,8 +1,8 @@
 # Trabajo pendiente
 
-_Last updated: 2026-06-30_
+_Last updated: 2026-07-01_
 
-## Completado ✅ (Phases 0–7 + pulido)
+## Completado ✅ (Phases 0–7 + pulido + sync + UX fixes)
 
 **Core / Database**
 - Auth web + mobile, stores Zustand+Immer, 144 tests Vitest
@@ -13,7 +13,7 @@ _Last updated: 2026-06-30_
 - Calendario web + mobile (dots coloreados por categoría, filtros avanzados)
 - Herramientas (1RM, Set%, Plate) + PRSelector + RestTimer
 - Settings completos: toggles, recalcular PRs, backup/restore, CSV, Google Drive, delete account
-- SyncEngine push/pull + cola persistente en mobile
+- SyncEngine push/pull/sync con `changedTables` propagado; stores de ejercicios/rutinas actualizados directamente
 - Rutinas: supersets+nombres, predefined sets, drag&drop, log day→workout
 - Config por ejercicio: weight_increment, default_rest_seconds, default_chart
 - Goals, búsqueda global, exercise history con gráfico
@@ -30,10 +30,14 @@ _Last updated: 2026-06-30_
 - Sync cross-device fix: calendar.tsx suscrito a refetchSignal
 - APK release Android estable
 
+**UX fixes post-release**
+- Rest timer: solo manual (no auto-start al añadir/completar serie)
+- Rest timer: vibración al terminar en vez de push notification
+- 30 ejercicios creados en Supabase: Tren Inferior / Pecho / Espalda / Hombros / Brazos (6 cada uno)
+
 ## Pendiente real (bloqueado externamente)
 - **EAS `projectId`**: `app.json` tiene placeholder — `eas init` requiere cuenta Expo del usuario
 - **Detox**: cero tests automatizados en mobile
-- **SyncEngine pull**: no actualiza stores de ejercicios/rutinas (solo workout hoy)
 
 ## Descartado
 - `shadcn/ui` — incompatibilidad eslint-config-next + ESLint v9

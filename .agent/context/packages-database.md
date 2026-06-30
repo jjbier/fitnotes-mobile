@@ -1,6 +1,6 @@
 # packages/database — @fitnotes/database
 
-_Last updated: 2026-06-28_
+_Last updated: 2026-07-01_
 
 ## Cliente Supabase (`src/supabase/client.ts`)
 
@@ -34,12 +34,27 @@ createServerClient(cookieStore)    // Server Components / Route Handlers
 ## SyncEngine (`src/sync/syncEngine.ts`)
 
 ```ts
-sync(lastSyncAt?): Promise<{ pushed: number, pulled: number }>
-getPendingCount(): number
+interface SyncResult {
+  pushed: number;
+  pulled: number;
+  conflicts: ConflictRecord[];
+  changedTables: Set<string>;  // tablas con cambios remotos — usado en _layout.tsx
+}
+
+sync(lastSyncAt?): Promise<SyncResult>
+pushLocalChanges(): Promise<SyncResult>
+pullRemoteChanges(since?): Promise<SyncResult>
 ```
 
 - Mobile singleton: `lib/sync.ts` → `export const syncEngine = new SyncEngine(supabase)`
-- Pull solo actualiza workout de hoy via `refetchSignal` — **NO actualiza stores de ejercicios/rutinas**
+- `_layout.tsx` usa `changedTables` para actualizaciones selectivas:
+  - `exercises` o `categories` → `loadExercises(...)` directo en store
+  - `routines` / `routine_days` / `routine_day_exercises` → `loadRoutines(...)` directo en store
+  - `workouts` / `workout_exercises` / `sets` → `setRefetchSignal(n + 1)`
+
+## exercise_type enum en DB
+Valores UPPERCASE: `WEIGHT_REPS`, `REPS_ONLY`, `DISTANCE_TIME`, `WEIGHT_ONLY`, `TIME_ONLY`
+Al insertar ejercicios desde fuera de la app, usar siempre UPPERCASE.
 
 ## Applying migrations (sin CLI instalado)
 

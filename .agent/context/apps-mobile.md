@@ -1,6 +1,6 @@
 # apps/mobile — Expo SDK 52
 
-_Last updated: 2026-06-30_
+_Last updated: 2026-07-01_
 
 ## Config
 - `app.json` → scheme `fitnotes`, typedRoutes enabled. **expo-sqlite plugin ELIMINADO** (causaba crash). EAS `projectId` es placeholder — requiere `eas init`
@@ -36,6 +36,13 @@ const theme = useTheme();
 - `SyncContext` → `refetchSignal` counter, incrementado por `_layout.tsx` tras pull
 - **Todos los tabs** suscritos: `index.tsx`, `exercises.tsx`, `progress.tsx`, `tools.tsx`, `calendar.tsx`
 - `calendar.tsx` usa `useCallback` para `loadMonth(y, m)` y recarga en `useEffect([refetchSignal])`
+- `_layout.tsx` actualiza ejercicios (`loadExercises`) y rutinas (`loadRoutines`) directamente cuando `changedTables` contiene esas tablas — no requiere refetchSignal para estos stores
+- workout/workout_exercises/sets → `setRefetchSignal(n + 1)`
+
+## Rest Timer (workout/[exerciseId].tsx)
+- Solo arranque manual — NO se inicia automáticamente al añadir/completar series
+- Fin de tiempo: `Vibration.vibrate([0, 400, 150, 400, 150, 400])` + `Haptics.notificationAsync(Success)`
+- **Sin** push notifications (`expo-notifications` eliminado del flujo del timer)
 
 ## Accessibility
 - Icon-only buttons deben tener `accessibilityLabel="..."` en español
@@ -51,11 +58,11 @@ app/
 │   ├── _layout.tsx              6 tabs: Hoy/Calendario/Ejercicios/Progreso/Rutinas/Configuración
 │   ├── index.tsx                Hoy — workout por fecha, delete ejercicio, refetchSignal
 │   ├── calendar.tsx             grid + lista, swipe entre meses, refetchSignal ✅
-│   ├── exercises.tsx            browse + speed dial FAB (crear ejercicio / nueva rutina → /tools?create=1)
+│   ├── exercises.tsx            browse + speed dial FAB (crear ejercicio / nueva rutina)
 │   ├── progress.tsx             PRs expandibles + 1RM estimado
 │   ├── tools.tsx                ← TAB "RUTINAS" — lista/crear/editar/copiar/eliminar
 │   └── settings.tsx             perfil, kg/lb, Herramientas→calculadoras, body-tracker, sign-out, delete
-├── workout/[exerciseId].tsx     sets CRUD — todos los ExerciseTypes — RestTimer — delete ejercicio
+├── workout/[exerciseId].tsx     sets CRUD — todos los ExerciseTypes — RestTimer manual+vibración
 ├── routines/[id].tsx            días + ejercicios, edit mode, drag&drop, predefined sets, supersets+nombres, log
 ├── calculators.tsx              1RM / Set% / Plate calculators
 ├── body-tracker/index.tsx       CRUD medidas + entradas

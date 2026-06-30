@@ -62,6 +62,9 @@ fitnotes-app/
 - **Virtualización web**: `useWindowVirtualizer` con `scrollMargin: listRef.current?.offsetTop ?? 0`; dropdown fijo via `getBoundingClientRect()` + scroll listener para cerrar
 - **Accessibility web**: focus trap `lib/useFocusTrap.ts`, skip link `#main-content`, `role="dialog/tablist/tab"`, `aria-current="page"`, `lang="es"`, per-route `layout.tsx` para metadata en client components
 - **CSP**: `default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src ... *.supabase.co ... accounts.google.com`
+- **SyncEngine targeted updates**: `changedTables: Set<string>` en `SyncResult` — `_layout.tsx` recarga ejercicios/rutinas en stores directamente; workout tables incrementan `refetchSignal`
+- **Rest timer**: arranque solo manual. Fin de tiempo → `Vibration.vibrate([0,400,150,400,150,400])` + haptics. Sin push notifications
+- **exercise_type enum en DB**: valores UPPERCASE (`WEIGHT_REPS`, `REPS_ONLY`, `DISTANCE_TIME`, `WEIGHT_ONLY`, `TIME_ONLY`)
 
 ---
 
@@ -80,33 +83,26 @@ fitnotes-app/
 - `routineRepository` incluye: `copyRoutine`, `updateRoutine`, `updateDayExercise`, `updateDayGroupName`, `reorderDays`, `reorderExercises`, `getPredefinedSets`, `savePredefinedSets`
 - `workoutRepository.addExercise` acepta `group_id` y `group_name`
 - Migraciones aplicadas en Supabase: 001–005 (incluye `group_name` en `routine_day_exercises`)
-- `SyncEngine` — push/pull/sync
+- `SyncEngine` — push/pull/sync con `changedTables` propagado correctamente
 
 ### `apps/web` ✅ — todas las rutas conectadas a Supabase
 `/dashboard`, `/exercise`, `/exercise/[id]`, `/progress`, `/calendar`, `/routines`, `/routines/[id]`, `/body-tracker`, `/tools`, `/settings` (incl. export CSV + delete account)
 
 **Web loading/error boundaries** (`loading.tsx` + `error.tsx`) en todas las rutas incluyendo sub-rutas.
 
-**Rendimiento**: `useWindowVirtualizer` en `/exercise` y `/exercise/[id]` — soporta catálogos grandes sin jank.
+**Rendimiento**: `useWindowVirtualizer` en `/exercise` y `/exercise/[id]`.
 
-**Accesibilidad WCAG AA**: skip link, `useFocusTrap` en modales (`ExerciseOverview`, `PredefinedSetsModal`), `role="dialog/tablist/tab"`, `aria-current="page"` en nav, `lang="es"`, `aria-live="polite"` en acciones asíncronas.
+**Accesibilidad WCAG AA**: skip link, `useFocusTrap`, `role="dialog/tablist/tab"`, `aria-current="page"`, `lang="es"`, `aria-live="polite"`.
 
 **Seguridad**: CSP headers en `next.config.ts` y `vercel.json`, `X-Frame-Options: DENY`, `Referrer-Policy`, `robots.txt`.
 
 **CI/CD**: `.github/workflows/` (type-check, test, web-build, lint, rls-audit, EAS), `.github/dependabot.yml`, `.github/PULL_REQUEST_TEMPLATE.md`.
 
-**E2E Playwright** (`apps/web/e2e/`):
-- `auth.setup.ts` + 3 proyectos en `playwright.config.ts` (setup / chromium / chromium-auth)
-- `exercises.spec.ts`: CRUD categoría + ejercicio, toggle favorito, editar, eliminar
-- `workout.spec.ts`: iniciar workout, añadir ejercicio, CRUD series, finalizar
-- `routines.spec.ts`: crear, copiar, editar, abrir, eliminar
-- `progress.spec.ts`: tabs, overview, historial
-- `body-tracker.spec.ts`: registrar medida, historial, gráfica, settings
-- `auth.spec.ts`, `calculations.spec.ts`, `tools.spec.ts`, `phases56.spec.ts` (existentes)
+**E2E Playwright** (`apps/web/e2e/`): 3 proyectos (setup/chromium/chromium-auth); specs: exercises, workout, routines, progress, body-tracker, auth, calculations, tools, phases56.
 
-### `apps/mobile` ✅ — APK release funcionando en dispositivo Android
+### `apps/mobile` ✅ — APK release en dispositivo Android
 
-**Dark mode**: todas las pantallas usan `useTheme()` y siguen el esquema del sistema (light/dark).
+**Dark mode**: todas las pantallas usan `useTheme()`.
 
 **Tabs:**
 | Tab | Contenido |
@@ -115,17 +111,15 @@ fitnotes-app/
 | Calendario | grid mensual, list view, refetchSignal sync |
 | Ejercicios | browse + speed dial FAB (crear ejercicio / nueva rutina) |
 | Progreso | PRs expandibles, 1RM estimado |
-| **Rutinas** | lista rutinas — crear/editar/copiar/eliminar vía menú ⋮ |
-| Configuración | perfil, kg/lb, **Herramientas** (→ calculadoras), body tracker, sign-out, delete account |
+| Rutinas | lista rutinas — crear/editar/copiar/eliminar vía menú ⋮ |
+| Configuración | perfil, kg/lb, Herramientas (→ calculadoras), body tracker, sign-out, delete account |
 
 **Rutas no-tab:**
-- `workout/[exerciseId]` — sets CRUD completo, todos los ExerciseTypes, RestTimer haptics
-- `routines/[id]` — días + ejercicios, edit mode, drag & drop days+ejercicios, predefined sets, supersets con nombres personalizables, log routine day → workout real
-- `calculators` — 1RM, Set%, Plate calculators
-- `body-tracker` — CRUD medidas + entradas
-- `exercises/[categoryId]`, `search/`, `goals/`, `exercise-history/[exerciseId]`
+- `workout/[exerciseId]` — sets CRUD completo, todos los ExerciseTypes, RestTimer manual + vibración al terminar
+- `routines/[id]` — días + ejercicios, edit mode, drag & drop, predefined sets, supersets con nombres, log day → workout
+- `calculators`, `body-tracker`, `exercises/[categoryId]`, `search/`, `goals/`, `exercise-history/[exerciseId]`
 
-**Sync cross-device**: todos los tabs (`index`, `exercises`, `progress`, `tools`, `calendar`) suscritos a `refetchSignal` — se refrescan automáticamente tras sync remoto.
+**Sync cross-device**: todos los tabs suscritos a `refetchSignal`. `_layout.tsx` actualiza stores de ejercicios y rutinas directamente cuando `changedTables` lo indica.
 
 ### Android APK ✅
 ```bash
@@ -133,13 +127,15 @@ cd apps/mobile/android && ./gradlew assembleRelease --no-daemon
 /opt/Android-Sdk/platform-tools/adb install apps/mobile/android/app/build/outputs/apk/release/app-release.apk
 ```
 
+### Datos en Supabase ✅
+30 ejercicios creados: 6 por cada categoría (Tren Inferior, Pecho, Espalda, Hombros, Brazos).
+
 ---
 
 ## Pendiente / descartado
 
 - `shadcn/ui` no inicializado — incompatibilidad `eslint-config-next` + ESLint v9
 - `packages/ui` vacío
-- **SyncEngine pull**: no actualiza stores de ejercicios/rutinas (solo today workout via `refetchSignal`)
 - **EAS `projectId`**: `app.json` tiene placeholder — requiere `eas init` con cuenta Expo real
 - **Detox**: cero tests automatizados en mobile
 - **E2E tests**: se saltan si no hay `PLAYWRIGHT_USER_EMAIL` + `PLAYWRIGHT_USER_PASSWORD`
