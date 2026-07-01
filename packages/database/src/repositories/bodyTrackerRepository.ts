@@ -12,7 +12,14 @@ export function createBodyTrackerRepository(client: Client) {
         .from("body_measurements")
         .select("*")
         .order("is_enabled", { ascending: false })
-        .order("name", { ascending: true });
+        .order("order_index", { ascending: true });
+    },
+
+    async reorderMeasurements(updates: { id: string; order_index: number }[]) {
+      const promises = updates.map(({ id, order_index }) =>
+        client.from("body_measurements").update({ order_index }).eq("id", id)
+      );
+      return Promise.all(promises);
     },
 
     createMeasurement(data: Omit<MeasurementInsert, "user_id">, userId: string) {
@@ -70,6 +77,51 @@ export function createBodyTrackerRepository(client: Client) {
         .from("body_measurement_entries")
         .delete()
         .eq("measurement_id", measurementId);
+    },
+
+    async seedDefaultMeasurementsIfNeeded(userId: string) {
+      const { count } = await client
+        .from("body_measurements")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId);
+      if (count) return { seeded: false };
+
+      const defaults: Omit<MeasurementInsert, "user_id">[] = [
+        { name: "Peso corporal", unit: "kg", goal_type: "DECREASE", is_default: true, is_enabled: true, order_index: 0 },
+        { name: "Grasa corporal", unit: "%", goal_type: "DECREASE", is_default: true, is_enabled: true, order_index: 1 },
+      ];
+      const { data, error } = await client
+        .from("body_measurements")
+        .insert(defaults.map((d) => ({ ...d, user_id: userId })))
+        .select();
+      return { seeded: !error, data, error };
+    },
+
+    async exportAllCSV(): Promise<string> {
+      const { data: measurements } = await client.from("body_measurements").select("id, name, unit");
+      const mMap: Record<string, { name: string; unit: string }> = {};
+      for (const m of measurements ?? []) mMap[m.id] = { name: m.name, unit: m.unit };
+
+      const { data: entries } = await client
+        .from("body_measurement_entries")
+        .select("*")
+        .order("recorded_at");
+      if (!entries?.length) return "";
+
+      const rows = ["measurement,value,unit,recorded_at,comment"];
+      for (const e of entries) {
+        const m = mMap[e.measurement_id] ?? { name: e.measurement_id, unit: "" };
+        rows.push(
+          [
+            `"${m.name}"`,
+            e.value,
+            `"${m.unit}"`,
+            e.recorded_at,
+            `"${(e.comment ?? "").replace(/"/g, '""')}"`,
+          ].join(",")
+        );
+      }
+      return rows.join("\n");
     },
   };
 }

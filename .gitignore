@@ -42,3 +42,6 @@ apps/mobile/credentials.json
 # Local session notes
 sesion
 expo.dev
+
+# Supabase CLI local state
+supabase/.temp/

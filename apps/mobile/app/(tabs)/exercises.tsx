@@ -686,7 +686,7 @@ export default function ExercisesScreen() {
               </View>
 
               {/* Actions */}
-              <View style={{ marginTop: 4 }}>
+              <View style={{ marginTop: 4, gap: 8 }}>
                 <TouchableOpacity
                   onPress={() => handleSave(false)}
                   disabled={saving}
@@ -698,6 +698,17 @@ export default function ExercisesScreen() {
                       : (editingExercise ? "Guardar cambios" : "Crear ejercicio")}
                   </Text>
                 </TouchableOpacity>
+                {!editingExercise && (
+                  <TouchableOpacity
+                    onPress={() => handleSave(true)}
+                    disabled={saving}
+                    style={{ borderRadius: 12, borderWidth: 1.5, borderColor: "#6366f1", paddingVertical: 14, alignItems: "center", opacity: saving ? 0.6 : 1 }}
+                  >
+                    <Text style={{ color: "#6366f1", fontSize: 16, fontWeight: "700" }}>
+                      Guardar y nuevo
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </ScrollView>
           </SafeAreaView>

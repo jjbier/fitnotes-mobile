@@ -59,6 +59,40 @@ export function createCalendarRepository(client: Client) {
         .limit(limit);
     },
 
+    async getWorkoutHistoryDetailed(limit = 30): Promise<{
+      id: string; date: string; comment: string | null;
+      categories: { id: string; name: string; color: string }[];
+    }[]> {
+      const { data } = await client
+        .from("workouts")
+        .select("id, date, comment, workout_exercises(exercises(categories(id, name, color)))")
+        .order("date", { ascending: false })
+        .limit(limit);
+      if (!data) return [];
+      type Row = {
+        id: string; date: string; comment: string | null;
+        workout_exercises: { exercises: { categories: { id: string; name: string; color: string } | null } | null }[] | null;
+      };
+      return (data as Row[]).map((w) => {
+        const seen = new Set<string>();
+        const categories: { id: string; name: string; color: string }[] = [];
+        for (const we of w.workout_exercises ?? []) {
+          const cat = we.exercises?.categories;
+          if (cat && !seen.has(cat.id)) { seen.add(cat.id); categories.push(cat); }
+        }
+        return { id: w.id, date: w.date, comment: w.comment, categories };
+      });
+    },
+
+    getWorkoutSetDetail(workoutId: string) {
+      return client
+        .from("workouts")
+        .select("id, date, workout_exercises(order_index, exercises(name), sets(weight, reps, distance, time_seconds, is_complete, is_warmup, order_index))")
+        .eq("id", workoutId)
+        .order("order_index", { referencedTable: "workout_exercises", ascending: true })
+        .single();
+    },
+
     getWorkoutDatesForExercise(exerciseId: string) {
       return client
         .from("workout_exercises")

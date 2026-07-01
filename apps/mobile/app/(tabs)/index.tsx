@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator, Alert, TextInput, Share, Modal, FlatList } from "react-native";
+import { NestableScrollContainer, NestableDraggableFlatList, ScaleDecorator, type RenderItemParams } from "react-native-draggable-flatlist";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useWorkoutStore, useExerciseStore, formatWorkoutDate, todayISO, ExerciseType } from "@fitnotes/core";
+import type { WorkoutExercise } from "@fitnotes/core";
 import { createWorkoutRepository, createExerciseRepository, createRoutineRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import { useSyncStatus } from "../../contexts/SyncContext";
@@ -23,6 +25,7 @@ export default function HomeScreen() {
   const loadWorkouts = useWorkoutStore((s) => s.loadWorkouts);
   const startWorkout = useWorkoutStore((s) => s.startWorkout);
   const removeExerciseFromWorkout = useWorkoutStore((s) => s.removeExerciseFromWorkout);
+  const reorderExercises = useWorkoutStore((s) => s.reorderExercises);
   const addExerciseToWorkout = useWorkoutStore((s) => s.addExerciseToWorkout);
   const removeWorkoutFromHistory = useWorkoutStore((s) => s.removeWorkoutFromHistory);
   const finishWorkout = useWorkoutStore((s) => s.finishWorkout);
@@ -52,6 +55,8 @@ export default function HomeScreen() {
   const [showSummary, setShowSummary] = useState(false);
   const [summaryStats, setSummaryStats] = useState<{ duration: number; exercises: number; sets: number; volume: number } | null>(null);
   const [recentSummaries, setRecentSummaries] = useState<Record<string, { exerciseCount: number; volume: number }>>({});
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedWEIds, setSelectedWEIds] = useState<Set<string>>(new Set());
   const { status: syncStatus, pendingCount, refetchSignal } = useSyncStatus();
 
   const repo = useMemo(() => createWorkoutRepository(supabase), []);
@@ -279,6 +284,45 @@ export default function HomeScreen() {
     ]);
   }
 
+  function toggleSelectMode() {
+    setSelectMode((v) => !v);
+    setSelectedWEIds(new Set());
+  }
+
+  function toggleSelectWE(id: string) {
+    setSelectedWEIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function handleDeleteSelected() {
+    if (selectedWEIds.size === 0) return;
+    Alert.alert(
+      `¿Eliminar ${selectedWEIds.size} ejercicio(s)?`,
+      "Se eliminarán también todas sus series.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        { text: "Eliminar", style: "destructive", onPress: async () => {
+          const ids = [...selectedWEIds];
+          for (const id of ids) {
+            removeExerciseFromWorkout(id);
+            await repo.removeExercise(id);
+          }
+          setSelectMode(false);
+          setSelectedWEIds(new Set());
+        }},
+      ]
+    );
+  }
+
+  function handleReorderExercises(data: WorkoutExercise[]) {
+    const orderedIds = data.map((we) => we.id);
+    reorderExercises(orderedIds);
+    void repo.reorderExercises(data.map((we, i) => ({ id: we.id, order_index: i })));
+  }
+
   async function handleRemoveExercise(workoutExerciseId: string, exerciseName: string) {
     Alert.alert(`¿Eliminar "${exerciseName}"?`, "Se eliminarán también todas sus series.", [
       { text: "Cancelar", style: "cancel" },
@@ -457,7 +501,7 @@ export default function HomeScreen() {
           <ActivityIndicator color={colors.primary} />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 60, gap: 12 }}>
+        <NestableScrollContainer contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 60, gap: 12 }}>
           {!activeWorkout || !activeWorkout.id ? (
             /* No workout */
             <View style={{ borderWidth: 1, borderColor: colors.border, borderStyle: "dashed", borderRadius: 20, padding: 40, alignItems: "center", gap: 12, marginTop: 8 }}>
@@ -513,62 +557,119 @@ export default function HomeScreen() {
                   <Ionicons name="share-outline" size={16} color="#64748b" />
                   <Text style={{ fontSize: 13, color: "#64748b" }}>Compartir</Text>
                 </TouchableOpacity>
+                {workoutExercises.length > 0 && (
+                  <TouchableOpacity
+                    onPress={toggleSelectMode}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: selectMode ? "#6366f1" : "#e2e8f0", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}
+                    accessibilityLabel={selectMode ? "Cancelar selección" : "Seleccionar varios ejercicios"}
+                  >
+                    <Ionicons name="checkbox-outline" size={16} color={selectMode ? "#6366f1" : "#64748b"} />
+                  </TouchableOpacity>
+                )}
               </View>
 
-              {workoutExercises.map((we, weIdx) => {
-                const ex = exerciseMap[we.exercise_id];
-                const weSets = (sets[we.id] ?? []);
-                const completedCount = weSets.filter((s) => s.is_complete).length;
-                const totalCount = weSets.length;
-                const allDone = totalCount > 0 && completedCount === totalCount;
-                const progress = totalCount > 0 ? completedCount / totalCount : 0;
-                const exName = ex?.name ?? we.exercise_id;
-                const isGrouped = !!we.group_id;
-                const prevGrouped = weIdx > 0 && workoutExercises[weIdx - 1]?.group_id === we.group_id;
-                const nextGrouped = weIdx < workoutExercises.length - 1 && workoutExercises[weIdx + 1]?.group_id === we.group_id;
-                return (
-                  <View key={we.id} style={{ flexDirection: "row" }}>
-                    {isGrouped ? (
-                      <View style={{ width: 4, backgroundColor: "#8b5cf6", borderRadius: 2, marginRight: 8, marginTop: prevGrouped ? 0 : 8, marginBottom: nextGrouped ? 0 : 8 }} />
-                    ) : <View style={{ width: 12 }} />}
-                  <View style={{ flex: 1, borderWidth: 1, borderColor: allDone ? "#22c55e30" : isGrouped ? "#8b5cf620" : "#f1f5f9", borderRadius: 16, backgroundColor: allDone ? "#f0fdf4" : "#fff", overflow: "hidden" }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 8 }}>
-                      <TouchableOpacity
-                        onPress={() => router.push(`/workout/${we.exercise_id}`)}
-                        style={{ flex: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, gap: 12 }}
-                      >
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>{exName}</Text>
-                          <Text style={{ fontSize: 12, color: allDone ? "#16a34a" : "#94a3b8", marginTop: 2 }}>
-                            {totalCount === 0
-                              ? "Sin series"
-                              : allDone
-                              ? `${totalCount} series completadas`
-                              : `${completedCount}/${totalCount} series`}
-                          </Text>
+              {selectMode && (
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#eff0fe", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}>
+                  <Text style={{ fontSize: 13, color: "#6366f1", fontWeight: "500" }}>{selectedWEIds.size} seleccionado(s)</Text>
+                  <TouchableOpacity
+                    onPress={handleDeleteSelected}
+                    disabled={selectedWEIds.size === 0}
+                    style={{ opacity: selectedWEIds.size === 0 ? 0.4 : 1 }}
+                  >
+                    <Text style={{ fontSize: 13, color: "#ef4444", fontWeight: "600" }}>Eliminar seleccionados</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              <NestableDraggableFlatList
+                data={workoutExercises}
+                keyExtractor={(we) => we.id}
+                scrollEnabled={false}
+                onDragEnd={({ data }) => handleReorderExercises(data)}
+                renderItem={({ item: we, drag, isActive, getIndex }: RenderItemParams<WorkoutExercise>) => {
+                  const weIdx = getIndex() ?? 0;
+                  const ex = exerciseMap[we.exercise_id];
+                  const weSets = (sets[we.id] ?? []);
+                  const completedCount = weSets.filter((s) => s.is_complete).length;
+                  const totalCount = weSets.length;
+                  const allDone = totalCount > 0 && completedCount === totalCount;
+                  const progress = totalCount > 0 ? completedCount / totalCount : 0;
+                  const exName = ex?.name ?? we.exercise_id;
+                  const isGrouped = !!we.group_id;
+                  const prevGrouped = weIdx > 0 && workoutExercises[weIdx - 1]?.group_id === we.group_id;
+                  const nextGrouped = weIdx < workoutExercises.length - 1 && workoutExercises[weIdx + 1]?.group_id === we.group_id;
+                  const isSelected = selectedWEIds.has(we.id);
+                  return (
+                    <ScaleDecorator activeScale={0.98}>
+                      <View style={{ flexDirection: "row" }}>
+                        {isGrouped ? (
+                          <View style={{ width: 4, backgroundColor: "#8b5cf6", borderRadius: 2, marginRight: 8, marginTop: prevGrouped ? 0 : 8, marginBottom: nextGrouped ? 0 : 8 }} />
+                        ) : <View style={{ width: 12 }} />}
+                      <View style={{ flex: 1, marginBottom: 8, borderWidth: 1, borderColor: isSelected ? "#6366f1" : allDone ? "#22c55e30" : isGrouped ? "#8b5cf620" : "#f1f5f9", borderRadius: 16, backgroundColor: isSelected ? "#eff0fe" : allDone ? "#f0fdf4" : "#fff", overflow: "hidden" }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 8 }}>
+                          {selectMode && (
+                            <TouchableOpacity
+                              onPress={() => toggleSelectWE(we.id)}
+                              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                              style={{ paddingLeft: 14 }}
+                              accessibilityLabel={isSelected ? "Deseleccionar" : "Seleccionar"}
+                            >
+                              <Ionicons name={isSelected ? "checkbox" : "square-outline"} size={20} color={isSelected ? "#6366f1" : "#94a3b8"} />
+                            </TouchableOpacity>
+                          )}
+                          <TouchableOpacity
+                            onPress={() => selectMode ? toggleSelectWE(we.id) : router.push(`/workout/${we.exercise_id}`)}
+                            style={{ flex: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, gap: 12 }}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>{exName}</Text>
+                              <Text style={{ fontSize: 12, color: allDone ? "#16a34a" : "#94a3b8", marginTop: 2 }}>
+                                {totalCount === 0
+                                  ? "Sin series"
+                                  : allDone
+                                  ? `${totalCount} series completadas`
+                                  : `${completedCount}/${totalCount} series`}
+                              </Text>
+                            </View>
+                            {allDone
+                              ? <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
+                              : !selectMode ? <Ionicons name="chevron-forward" size={16} color="#94a3b8" /> : null}
+                          </TouchableOpacity>
+                          {!selectMode && (
+                            <>
+                              <TouchableOpacity
+                                onPress={() => handleRemoveExercise(we.id, exName)}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                style={{ padding: 8 }}
+                                accessibilityLabel="Eliminar ejercicio"
+                              >
+                                <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                              </TouchableOpacity>
+                              {!activeWorkout.end_time && workoutExercises.length > 1 && (
+                                <TouchableOpacity
+                                  onLongPress={drag}
+                                  disabled={isActive}
+                                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                  style={{ padding: 8 }}
+                                  accessibilityLabel="Mantener pulsado para reordenar"
+                                >
+                                  <Ionicons name="reorder-three-outline" size={18} color="#94a3b8" />
+                                </TouchableOpacity>
+                              )}
+                            </>
+                          )}
                         </View>
-                        {allDone
-                          ? <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
-                          : <Ionicons name="chevron-forward" size={16} color="#94a3b8" />}
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => handleRemoveExercise(we.id, exName)}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        style={{ padding: 8 }}
-                        accessibilityLabel="Eliminar ejercicio"
-                      >
-                        <Ionicons name="trash-outline" size={16} color="#ef4444" />
-                      </TouchableOpacity>
-                    </View>
-                    {totalCount > 0 && !allDone && (
-                      <View style={{ height: 3, backgroundColor: "#f1f5f9" }}>
-                        <View style={{ height: 3, width: `${progress * 100}%`, backgroundColor: progress > 0 ? "#6366f1" : "#f1f5f9", borderRadius: 2 }} />
+                        {totalCount > 0 && !allDone && (
+                          <View style={{ height: 3, backgroundColor: "#f1f5f9" }}>
+                            <View style={{ height: 3, width: `${progress * 100}%`, backgroundColor: progress > 0 ? "#6366f1" : "#f1f5f9", borderRadius: 2 }} />
+                          </View>
+                        )}
                       </View>
-                    )}
-                  </View>
-                  </View>
-                );
-              })}
+                      </View>
+                    </ScaleDecorator>
+                  );
+                }}
+              />
 
               {!activeWorkout.end_time && (
                 <TouchableOpacity
@@ -638,7 +739,7 @@ export default function HomeScreen() {
               })}
             </View>
           )}
-        </ScrollView>
+        </NestableScrollContainer>
       )}
       {/* Start workout modal — routine selector */}
       <Modal visible={showStartModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowStartModal(false)}>

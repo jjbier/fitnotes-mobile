@@ -13,6 +13,8 @@ interface LineChartProps {
   height?: number;
   color?: string;
   mini?: boolean;
+  goalValue?: number;
+  trendData?: number[];
 }
 
 const PAD_TOP = 20;
@@ -33,12 +35,13 @@ function niceMin(v: number, max: number): number {
   return Math.floor(v / magnitude) * magnitude;
 }
 
-export default function LineChart({ data, width, height = 180, color = "#6366f1", mini = false }: LineChartProps) {
+export default function LineChart({ data, width, height = 180, color = "#6366f1", mini = false, goalValue, trendData }: LineChartProps) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
   if (!data || data.length === 0) return null;
 
   const points = data.slice(-20);
+  const trendPoints = !mini && trendData && trendData.length === data.length ? trendData.slice(-20) : null;
 
   const padTop = mini ? 4 : PAD_TOP;
   const padBottom = mini ? 4 : PAD_BOTTOM;
@@ -48,7 +51,10 @@ export default function LineChart({ data, width, height = 180, color = "#6366f1"
   const chartW = width - padLeft - padRight;
   const chartH = height - padTop - padBottom;
 
-  const values = points.map((p) => p.value);
+  const hasGoal = !mini && typeof goalValue === "number" && Number.isFinite(goalValue);
+  const values = points.map((p) => p.value)
+    .concat(hasGoal ? [goalValue!] : [])
+    .concat(trendPoints ?? []);
   const rawMax = Math.max(...values);
   const rawMin = Math.min(...values);
   const yMax = niceMax(rawMax);
@@ -65,6 +71,10 @@ export default function LineChart({ data, width, height = 180, color = "#6366f1"
 
   const lineParts = points.map((p, i) => `${i === 0 ? "M" : "L"} ${xPos(i).toFixed(1)} ${yPos(p.value).toFixed(1)}`);
   const linePath = lineParts.join(" ");
+
+  const trendPath = trendPoints
+    ? trendPoints.map((v, i) => `${i === 0 ? "M" : "L"} ${xPos(i).toFixed(1)} ${yPos(v).toFixed(1)}`).join(" ")
+    : null;
 
   const areaPath = [
     linePath,
@@ -100,8 +110,27 @@ export default function LineChart({ data, width, height = 180, color = "#6366f1"
           <Line key={i} x1={padLeft} y1={yPos(v)} x2={padLeft + chartW} y2={yPos(v)} stroke="#f1f5f9" strokeWidth={1} />
         ))}
 
+        {/* Goal line */}
+        {hasGoal && (
+          <>
+            <Line
+              x1={padLeft} y1={yPos(goalValue!)}
+              x2={padLeft + chartW} y2={yPos(goalValue!)}
+              stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="4,3"
+            />
+            <SvgText x={padLeft + chartW} y={yPos(goalValue!) - 4} fontSize={9} fill="#f59e0b" textAnchor="end" fontWeight="600">
+              Objetivo {goalValue! % 1 === 0 ? goalValue : goalValue!.toFixed(1)}
+            </SvgText>
+          </>
+        )}
+
         {/* Area fill */}
         <Path d={areaPath} fill={`url(#${gradId})`} />
+
+        {/* Trend line */}
+        {trendPath && (
+          <Path d={trendPath} stroke="#f97316" strokeWidth={1.5} strokeDasharray="5,3" fill="none" strokeLinejoin="round" strokeLinecap="round" />
+        )}
 
         {/* Line */}
         <Path d={linePath} stroke={color} strokeWidth={mini ? 1.5 : 2} fill="none" strokeLinejoin="round" strokeLinecap="round" />

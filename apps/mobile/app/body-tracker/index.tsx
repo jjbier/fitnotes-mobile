@@ -6,6 +6,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { NestableScrollContainer, NestableDraggableFlatList, ScaleDecorator, type RenderItemParams } from "react-native-draggable-flatlist";
 import { createBodyTrackerRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import LineChart, { type ChartDataPoint } from "../../components/LineChart";
@@ -19,6 +20,7 @@ interface Measurement {
   is_enabled: boolean;
   goal_type: string;
   goal_value: number | null;
+  is_default: boolean;
 }
 
 interface Entry {
@@ -40,6 +42,7 @@ export default function BodyTrackerScreen() {
   const [latestEntries, setLatestEntries] = useState<Record<string, Entry>>({});
   const [previousEntries, setPreviousEntries] = useState<Record<string, Entry>>({});
   const [historyEntries, setHistoryEntries] = useState<Entry[]>([]);
+  const [historyFilterId, setHistoryFilterId] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [userId, setUserId] = useState("");
 
@@ -58,7 +61,7 @@ export default function BodyTrackerScreen() {
   const [editMeasurement, setEditMeasurement] = useState<Measurement | null>(null);
   const [measureName, setMeasureName] = useState("");
   const [measureUnit, setMeasureUnit] = useState("kg");
-  const [measureGoalType, setMeasureGoalType] = useState<"INCREASE" | "DECREASE">("INCREASE");
+  const [measureGoalType, setMeasureGoalType] = useState<"INCREASE" | "DECREASE" | "SPECIFIC">("INCREASE");
   const [measureGoalValue, setMeasureGoalValue] = useState("");
   const [measureSaving, setMeasureSaving] = useState(false);
 
@@ -68,7 +71,10 @@ export default function BodyTrackerScreen() {
     setIsLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
     const uid = session?.user?.id ?? "";
-    if (uid) setUserId(uid);
+    if (uid) {
+      setUserId(uid);
+      await repo.seedDefaultMeasurementsIfNeeded(uid);
+    }
 
     const { data: mData } = await repo.getMeasurements();
     if (mData) {
@@ -144,10 +150,11 @@ export default function BodyTrackerScreen() {
   }
 
   function openEditMeasurement(m: Measurement) {
+    if (m.is_default) return;
     setEditMeasurement(m);
     setMeasureName(m.name);
     setMeasureUnit(m.unit);
-    setMeasureGoalType((m.goal_type === "DECREASE" ? "DECREASE" : "INCREASE") as "INCREASE" | "DECREASE");
+    setMeasureGoalType((m.goal_type === "DECREASE" || m.goal_type === "SPECIFIC" ? m.goal_type : "INCREASE") as "INCREASE" | "DECREASE" | "SPECIFIC");
     setMeasureGoalValue(m.goal_value != null ? String(m.goal_value) : "");
     setMeasureModal(true);
   }
@@ -173,7 +180,7 @@ export default function BodyTrackerScreen() {
       );
     } else {
       const { data, error } = await repo.createMeasurement(
-        { name: measureName.trim(), unit: measureUnit.trim(), is_enabled: true, goal_type: measureGoalType, goal_value: goalVal },
+        { name: measureName.trim(), unit: measureUnit.trim(), is_enabled: true, goal_type: measureGoalType, goal_value: goalVal, order_index: measurements.length },
         userId
       );
       if (error) { Alert.alert("Error", error.message); setMeasureSaving(false); return; }
@@ -189,6 +196,7 @@ export default function BodyTrackerScreen() {
   }
 
   function handleDeleteMeasurement(m: Measurement) {
+    if (m.is_default) return;
     Alert.alert(
       "Eliminar medida",
       `¿Eliminar "${m.name}" y todo su historial? Esta acción no se puede deshacer.`,
@@ -205,6 +213,37 @@ export default function BodyTrackerScreen() {
         },
       ]
     );
+  }
+
+  function handleResetMeasurement(m: Measurement) {
+    Alert.alert(
+      "Reiniciar medida",
+      `¿Eliminar todos los valores registrados de "${m.name}"? Esta acción no se puede deshacer.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Reiniciar",
+          style: "destructive",
+          onPress: async () => {
+            await repo.resetMeasurement(m.id);
+            setLatestEntries((prev) => { const next = { ...prev }; delete next[m.id]; return next; });
+            setPreviousEntries((prev) => { const next = { ...prev }; delete next[m.id]; return next; });
+            setHistoryEntries((prev) => prev.filter((e) => e.measurement_id !== m.id));
+          },
+        },
+      ]
+    );
+  }
+
+  async function handleMeasurementDragEnd({ data }: { data: Measurement[] }) {
+    const prevOrder = measurements;
+    const disabledPart = measurements.filter((m) => !m.is_enabled);
+    setMeasurements([...data, ...disabledPart]);
+    const results = await repo.reorderMeasurements(data.map((m, i) => ({ id: m.id, order_index: i })));
+    if (results.some((r) => r.error)) {
+      setMeasurements(prevOrder);
+      Alert.alert("Error", "No se pudo guardar el orden. Inténtalo de nuevo.");
+    }
   }
 
   function handleDeleteEntry(id: string) {
@@ -225,6 +264,38 @@ export default function BodyTrackerScreen() {
   const disabledMeasurements = measurements.filter((m) => !m.is_enabled);
   const measurementName = (id: string) => measurements.find((m) => m.id === id)?.name ?? "—";
   const measurementUnit = (id: string) => measurements.find((m) => m.id === id)?.unit ?? "";
+  const measurementById = (id: string) => measurements.find((m) => m.id === id);
+
+  const entriesByMeasurement = useMemo(() => {
+    const map: Record<string, Entry[]> = {};
+    for (const e of historyEntries) (map[e.measurement_id] ??= []).push(e);
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyEntries]);
+
+  function deltaColorFor(m: Measurement | undefined, current: number, prev: number): string {
+    if (!m) return theme.textMuted;
+    if (m.goal_type === "SPECIFIC" && m.goal_value != null) {
+      return Math.abs(current - m.goal_value) <= Math.abs(prev - m.goal_value) ? theme.success : theme.danger;
+    }
+    const delta = current - prev;
+    return m.goal_type === "DECREASE"
+      ? (delta <= 0 ? theme.success : theme.danger)
+      : (delta >= 0 ? theme.success : theme.danger);
+  }
+
+  const groupedHistory = useMemo(() => {
+    const filtered = historyFilterId ? historyEntries.filter((e) => e.measurement_id === historyFilterId) : historyEntries;
+    const groups: { date: string; entries: Entry[] }[] = [];
+    for (const e of filtered) {
+      const date = e.recorded_at.split("T")[0]!;
+      const last = groups[groups.length - 1];
+      if (last && last.date === date) last.entries.push(e);
+      else groups.push({ date, entries: [e] });
+    }
+    return groups;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyEntries, historyFilterId]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
@@ -263,7 +334,7 @@ export default function BodyTrackerScreen() {
           <ActivityIndicator color={theme.primary} />
         </View>
       ) : tab === "track" ? (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 80, gap: 10 }}>
+        <NestableScrollContainer contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 80 }}>
           {enabledMeasurements.length === 0 && disabledMeasurements.length === 0 ? (
             <View style={{ paddingVertical: 60, alignItems: "center", gap: 14 }}>
               <Ionicons name="body-outline" size={52} color={theme.textDisabled} />
@@ -280,62 +351,83 @@ export default function BodyTrackerScreen() {
             </View>
           ) : (
             <>
-              {enabledMeasurements.map((m) => {
-                const latest = latestEntries[m.id];
-                return (
-                  <View key={m.id} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 16, padding: 16, gap: 4 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
-                        <Text style={{ fontSize: 15, fontWeight: "600", color: theme.text }}>{m.name}</Text>
-                        <View style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 }}>
-                          <Text style={{ fontSize: 11, color: theme.textMuted }}>{m.unit}</Text>
+              <NestableDraggableFlatList
+                data={enabledMeasurements}
+                keyExtractor={(item) => item.id}
+                onDragEnd={handleMeasurementDragEnd}
+                scrollEnabled={false}
+                ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+                renderItem={({ item: m, drag, isActive }: RenderItemParams<Measurement>) => {
+                  const latest = latestEntries[m.id];
+                  return (
+                    <ScaleDecorator activeScale={1.02}>
+                      <View style={{ borderWidth: 1, borderColor: isActive ? theme.primary : theme.border, borderRadius: 16, padding: 16, gap: 4 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+                            <TouchableOpacity onPressIn={drag} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Reordenar medida">
+                              <Ionicons name="menu" size={18} color={theme.textMuted} />
+                            </TouchableOpacity>
+                            <Text style={{ fontSize: 15, fontWeight: "600", color: theme.text }}>{m.name}</Text>
+                            <View style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 }}>
+                              <Text style={{ fontSize: 11, color: theme.textMuted }}>{m.unit}</Text>
+                            </View>
+                          </View>
+                          <View style={{ flexDirection: "row", gap: 12 }}>
+                            {!m.is_default && (
+                              <TouchableOpacity onPress={() => openEditMeasurement(m)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                <Ionicons name="pencil-outline" size={17} color={theme.textMuted} />
+                              </TouchableOpacity>
+                            )}
+                            <TouchableOpacity onPress={() => handleToggleEnabled(m)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                              <Ionicons name="eye-outline" size={17} color={theme.textMuted} />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => handleResetMeasurement(m)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={`Reiniciar ${m.name}`}>
+                              <Ionicons name="refresh-outline" size={17} color={theme.textMuted} />
+                            </TouchableOpacity>
+                            {!m.is_default && (
+                              <TouchableOpacity onPress={() => handleDeleteMeasurement(m)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                <Ionicons name="trash-outline" size={17} color={theme.textMuted} />
+                              </TouchableOpacity>
+                            )}
+                          </View>
                         </View>
-                      </View>
-                      <View style={{ flexDirection: "row", gap: 12 }}>
-                        <TouchableOpacity onPress={() => openEditMeasurement(m)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                          <Ionicons name="pencil-outline" size={17} color={theme.textMuted} />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => handleToggleEnabled(m)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                          <Ionicons name="eye-outline" size={17} color={theme.textMuted} />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => handleDeleteMeasurement(m)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                          <Ionicons name="trash-outline" size={17} color={theme.textMuted} />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
 
-                    <Text style={{ fontSize: 34, fontWeight: "700", color: theme.text, marginTop: 4 }}>
-                      {latest ? latest.value : "—"}
-                    </Text>
-                    <Text style={{ fontSize: 12, color: theme.textMuted }}>
-                      {latest
-                        ? new Date(latest.recorded_at).toLocaleDateString("es-ES")
-                        : "Sin registros aún"}
-                    </Text>
-                    {(() => {
-                      const prev = previousEntries[m.id];
-                      if (!latest || !prev) return null;
-                      const delta = latest.value - prev.value;
-                      const sign = delta >= 0 ? "+" : "";
-                      const color = m.goal_type === "DECREASE"
-                        ? (delta <= 0 ? theme.success : theme.danger)
-                        : (delta >= 0 ? theme.success : theme.danger);
-                      return (
-                        <Text style={{ fontSize: 13, fontWeight: "600", color }}>
-                          {sign}{delta % 1 === 0 ? delta : delta.toFixed(1)} {m.unit} vs anterior
+                        <Text style={{ fontSize: 34, fontWeight: "700", color: theme.text, marginTop: 4 }}>
+                          {latest ? latest.value : "—"}
                         </Text>
-                      );
-                    })()}
+                        <Text style={{ fontSize: 12, color: theme.textMuted }}>
+                          {latest
+                            ? new Date(latest.recorded_at).toLocaleDateString("es-ES")
+                            : "Sin registros aún"}
+                        </Text>
+                        {(() => {
+                          const prev = previousEntries[m.id];
+                          if (!latest || !prev) return null;
+                          const delta = latest.value - prev.value;
+                          const sign = delta >= 0 ? "+" : "";
+                          const color = m.goal_type === "SPECIFIC" && m.goal_value != null
+                            ? (Math.abs(latest.value - m.goal_value) <= Math.abs(prev.value - m.goal_value) ? theme.success : theme.danger)
+                            : m.goal_type === "DECREASE"
+                            ? (delta <= 0 ? theme.success : theme.danger)
+                            : (delta >= 0 ? theme.success : theme.danger);
+                          return (
+                            <Text style={{ fontSize: 13, fontWeight: "600", color }}>
+                              {sign}{delta % 1 === 0 ? delta : delta.toFixed(1)} {m.unit} vs anterior
+                            </Text>
+                          );
+                        })()}
 
-                    <TouchableOpacity
-                      onPress={() => openLogModal(m.id)}
-                      style={{ marginTop: 8, borderWidth: 1.5, borderColor: theme.primary, borderRadius: 10, paddingVertical: 8, alignItems: "center" }}
-                    >
-                      <Text style={{ color: theme.primary, fontSize: 13, fontWeight: "600" }}>+ Registrar valor</Text>
-                    </TouchableOpacity>
-                  </View>
-                );
-              })}
+                        <TouchableOpacity
+                          onPress={() => openLogModal(m.id)}
+                          style={{ marginTop: 8, borderWidth: 1.5, borderColor: theme.primary, borderRadius: 10, paddingVertical: 8, alignItems: "center" }}
+                        >
+                          <Text style={{ color: theme.primary, fontSize: 13, fontWeight: "600" }}>+ Registrar valor</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </ScaleDecorator>
+                  );
+                }}
+              />
 
               {disabledMeasurements.length > 0 && (
                 <View style={{ marginTop: 8, gap: 8 }}>
@@ -354,49 +446,89 @@ export default function BodyTrackerScreen() {
                       >
                         <Text style={{ fontSize: 12, color: theme.textSecondary }}>Activar</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleDeleteMeasurement(m)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                        <Ionicons name="trash-outline" size={16} color={theme.textDisabled} />
-                      </TouchableOpacity>
+                      {!m.is_default && (
+                        <TouchableOpacity onPress={() => handleDeleteMeasurement(m)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                          <Ionicons name="trash-outline" size={16} color={theme.textDisabled} />
+                        </TouchableOpacity>
+                      )}
                     </View>
                   ))}
                 </View>
               )}
             </>
           )}
-        </ScrollView>
+        </NestableScrollContainer>
       ) : tab === "history" ? (
         /* History tab */
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, gap: 6 }}>
-          {historyEntries.length === 0 ? (
-            <View style={{ paddingVertical: 60, alignItems: "center", gap: 10 }}>
-              <Ionicons name="time-outline" size={44} color={theme.textDisabled} />
-              <Text style={{ fontSize: 14, color: theme.textMuted }}>Sin registros aún</Text>
-            </View>
-          ) : (
-            historyEntries.map((entry) => (
-              <View
-                key={entry.id}
-                style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: theme.borderLight, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, gap: 10 }}
+        <View style={{ flex: 1 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingBottom: 8 }}>
+            <TouchableOpacity
+              onPress={() => setHistoryFilterId("")}
+              style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5, borderColor: historyFilterId === "" ? theme.primary : theme.border, backgroundColor: historyFilterId === "" ? theme.primary : "transparent" }}
+            >
+              <Text style={{ fontSize: 13, fontWeight: "600", color: historyFilterId === "" ? "white" : theme.textSecondary }}>Todas</Text>
+            </TouchableOpacity>
+            {measurements.map((m) => (
+              <TouchableOpacity
+                key={m.id}
+                onPress={() => setHistoryFilterId(m.id)}
+                style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5, borderColor: historyFilterId === m.id ? theme.primary : theme.border, backgroundColor: historyFilterId === m.id ? theme.primary : "transparent" }}
               >
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: "500", color: theme.text }}>
-                    {measurementName(entry.measurement_id)}
-                  </Text>
-                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>
-                    {new Date(entry.recorded_at).toLocaleDateString("es-ES")}
-                    {entry.comment ? ` · ${entry.comment}` : ""}
-                  </Text>
-                </View>
-                <Text style={{ fontSize: 16, fontWeight: "600", color: theme.text }}>
-                  {entry.value} {measurementUnit(entry.measurement_id)}
-                </Text>
-                <TouchableOpacity onPress={() => handleDeleteEntry(entry.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Ionicons name="trash-outline" size={16} color={theme.textDisabled} />
-                </TouchableOpacity>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: historyFilterId === m.id ? "white" : theme.textSecondary }}>{m.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, gap: 10 }}>
+            {groupedHistory.length === 0 ? (
+              <View style={{ paddingVertical: 60, alignItems: "center", gap: 10 }}>
+                <Ionicons name="time-outline" size={44} color={theme.textDisabled} />
+                <Text style={{ fontSize: 14, color: theme.textMuted }}>Sin registros aún</Text>
               </View>
-            ))
-          )}
-        </ScrollView>
+            ) : (
+              groupedHistory.map((group) => (
+                <View key={group.date} style={{ gap: 6 }}>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: theme.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                    {new Date(`${group.date}T12:00:00`).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}
+                  </Text>
+                  {group.entries.map((entry) => {
+                    const m = measurementById(entry.measurement_id);
+                    const list = entriesByMeasurement[entry.measurement_id] ?? [];
+                    const idx = list.findIndex((x) => x.id === entry.id);
+                    const prev = idx >= 0 ? list[idx + 1] : undefined;
+                    const delta = prev ? entry.value - prev.value : null;
+                    return (
+                      <View
+                        key={entry.id}
+                        style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: theme.borderLight, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, gap: 10 }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 14, fontWeight: "500", color: theme.text }}>
+                            {measurementName(entry.measurement_id)}
+                          </Text>
+                          {entry.comment && (
+                            <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>{entry.comment}</Text>
+                          )}
+                          {delta != null && prev && (
+                            <Text style={{ fontSize: 11, fontWeight: "600", color: deltaColorFor(m, entry.value, prev.value), marginTop: 2 }}>
+                              {delta >= 0 ? "+" : ""}{delta % 1 === 0 ? delta : delta.toFixed(1)} {measurementUnit(entry.measurement_id)} vs anterior
+                            </Text>
+                          )}
+                        </View>
+                        <Text style={{ fontSize: 16, fontWeight: "600", color: theme.text }}>
+                          {entry.value} {measurementUnit(entry.measurement_id)}
+                        </Text>
+                        <TouchableOpacity onPress={() => handleDeleteEntry(entry.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                          <Ionicons name="trash-outline" size={16} color={theme.textDisabled} />
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </View>
+              ))
+            )}
+          </ScrollView>
+        </View>
       ) : (
         /* Chart tab */
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, gap: 16 }}>
@@ -440,7 +572,7 @@ export default function BodyTrackerScreen() {
                     <Text style={{ fontSize: 13, fontWeight: "600", color: theme.text }}>{selectedM?.name}</Text>
                     <Text style={{ fontSize: 11, color: theme.textMuted }}>{selectedM?.unit}</Text>
                   </View>
-                  <LineChart data={chartData} width={width - 64} height={200} color={theme.primary} />
+                  <LineChart data={chartData} width={width - 64} height={200} color={theme.primary} goalValue={selectedM?.goal_value ?? undefined} />
                 </View>
 
                 <View style={{ flexDirection: "row", gap: 12 }}>
@@ -574,15 +706,15 @@ export default function BodyTrackerScreen() {
               <View style={{ gap: 8 }}>
                 <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textLabel }}>Objetivo (tendencia deseada)</Text>
                 <View style={{ flexDirection: "row", gap: 8 }}>
-                  {(["INCREASE", "DECREASE"] as const).map((t) => (
+                  {(["INCREASE", "DECREASE", "SPECIFIC"] as const).map((t) => (
                     <TouchableOpacity
                       key={t}
                       onPress={() => setMeasureGoalType(t)}
                       style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 10, borderWidth: 1.5, borderColor: measureGoalType === t ? theme.primary : theme.border, backgroundColor: measureGoalType === t ? theme.primary : "transparent", paddingVertical: 10 }}
                     >
-                      <Text style={{ fontSize: 16 }}>{t === "INCREASE" ? "↑" : "↓"}</Text>
+                      <Text style={{ fontSize: 16 }}>{t === "INCREASE" ? "↑" : t === "DECREASE" ? "↓" : "🎯"}</Text>
                       <Text style={{ fontSize: 13, fontWeight: "600", color: measureGoalType === t ? "white" : theme.textSecondary }}>
-                        {t === "INCREASE" ? "Aumentar" : "Disminuir"}
+                        {t === "INCREASE" ? "Aumentar" : t === "DECREASE" ? "Disminuir" : "Valor fijo"}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -591,7 +723,9 @@ export default function BodyTrackerScreen() {
 
               {/* Goal value */}
               <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textLabel }}>Valor objetivo (opcional)</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textLabel }}>
+                  Valor objetivo{measureGoalType === "SPECIFIC" ? "" : " (opcional)"}
+                </Text>
                 <TextInput
                   style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: theme.text }}
                   placeholder={`ej. ${measureGoalType === "DECREASE" ? "70" : "80"}`}

@@ -7,10 +7,11 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { ExerciseType, getExerciseFields, useExerciseStore, calculate1RM } from "@fitnotes/core";
-import { createExerciseRepository, createProgressRepository, createWorkoutRepository } from "@fitnotes/database";
+import { ExerciseType, getExerciseFields, useExerciseStore, calculate1RM, estimateRepMax, todayISO } from "@fitnotes/core";
+import { createExerciseRepository, createProgressRepository, createWorkoutRepository, type ChartPoint } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import LineChart, { type ChartDataPoint } from "../../components/LineChart";
+import DateInput from "../../components/DateInput";
 
 type SetRow = {
   id: string;
@@ -31,7 +32,7 @@ type Session = {
   sets: SetRow[];
 };
 
-type Metric = "weight" | "volume" | "reps" | "est1rm" | "distance" | "time";
+type Metric = "weight" | "volume" | "reps" | "totalReps" | "est1rm" | "distance" | "totalDistance" | "time" | "totalTime" | "speed" | "pace" | "weightByReps" | "repMaxProgression";
 type HistoryTab = "history" | "chart" | "stats";
 
 function formatDate(dateStr: string): string {
@@ -64,12 +65,19 @@ function formatSet(set: SetRow, type: ExerciseType, unit: string): string {
 }
 
 const ALL_METRICS: { key: Metric; label: string; types: ExerciseType[] | "all" }[] = [
-  { key: "weight",   label: "Peso máx",  types: [ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHT_ONLY, ExerciseType.WEIGHT_DISTANCE, ExerciseType.WEIGHT_TIME] },
-  { key: "volume",   label: "Volumen",   types: [ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHT_DISTANCE, ExerciseType.WEIGHT_TIME] },
-  { key: "est1rm",   label: "1RM est.",  types: [ExerciseType.WEIGHT_REPS] },
-  { key: "reps",     label: "Reps máx",  types: [ExerciseType.WEIGHT_REPS, ExerciseType.REPS_ONLY, ExerciseType.REPS_DISTANCE, ExerciseType.REPS_TIME] },
-  { key: "distance", label: "Distancia", types: [ExerciseType.DISTANCE_TIME, ExerciseType.DISTANCE_ONLY, ExerciseType.WEIGHT_DISTANCE, ExerciseType.REPS_DISTANCE] },
-  { key: "time",     label: "Tiempo",    types: [ExerciseType.DISTANCE_TIME, ExerciseType.TIME_ONLY, ExerciseType.WEIGHT_TIME, ExerciseType.REPS_TIME] },
+  { key: "weight",       label: "Peso máx",     types: [ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHT_ONLY, ExerciseType.WEIGHT_DISTANCE, ExerciseType.WEIGHT_TIME] },
+  { key: "volume",       label: "Volumen",      types: [ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHT_DISTANCE, ExerciseType.WEIGHT_TIME] },
+  { key: "est1rm",       label: "1RM est.",     types: [ExerciseType.WEIGHT_REPS] },
+  { key: "reps",         label: "Reps máx",     types: [ExerciseType.WEIGHT_REPS, ExerciseType.REPS_ONLY, ExerciseType.REPS_DISTANCE, ExerciseType.REPS_TIME] },
+  { key: "totalReps",    label: "Reps totales", types: [ExerciseType.WEIGHT_REPS, ExerciseType.REPS_ONLY, ExerciseType.REPS_DISTANCE, ExerciseType.REPS_TIME] },
+  { key: "distance",     label: "Distancia máx", types: [ExerciseType.DISTANCE_TIME, ExerciseType.DISTANCE_ONLY, ExerciseType.WEIGHT_DISTANCE, ExerciseType.REPS_DISTANCE] },
+  { key: "totalDistance", label: "Distancia total", types: [ExerciseType.DISTANCE_TIME, ExerciseType.DISTANCE_ONLY, ExerciseType.WEIGHT_DISTANCE, ExerciseType.REPS_DISTANCE] },
+  { key: "time",         label: "Tiempo máx",   types: [ExerciseType.DISTANCE_TIME, ExerciseType.TIME_ONLY, ExerciseType.WEIGHT_TIME, ExerciseType.REPS_TIME] },
+  { key: "totalTime",    label: "Tiempo total", types: [ExerciseType.DISTANCE_TIME, ExerciseType.TIME_ONLY, ExerciseType.WEIGHT_TIME, ExerciseType.REPS_TIME] },
+  { key: "speed",        label: "Velocidad máx", types: [ExerciseType.DISTANCE_TIME] },
+  { key: "pace",         label: "Mejor ritmo",  types: [ExerciseType.DISTANCE_TIME] },
+  { key: "weightByReps", label: "Peso por reps", types: [ExerciseType.WEIGHT_REPS] },
+  { key: "repMaxProgression", label: "Progresión rep max", types: [ExerciseType.WEIGHT_REPS] },
 ];
 
 export default function ExerciseHistoryScreen() {
@@ -90,9 +98,18 @@ export default function ExerciseHistoryScreen() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [chartPoints, setChartPoints] = useState<{ date: string; maxWeight: number; totalVolume: number; maxReps: number; est1RM: number; maxDistance: number; maxTime: number }[]>([]);
+  const [chartPoints, setChartPoints] = useState<ChartPoint[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [metric, setMetric] = useState<Metric>((storeExercise?.default_chart ?? "weight") as Metric);
+  const [repTarget, setRepTarget] = useState(5);
+  const [showTrend, setShowTrend] = useState(false);
+  const [estRepLimit, setEstRepLimit] = useState<number | undefined>(undefined);
+  const [userId, setUserId] = useState("");
+  const [copyingSetId, setCopyingSetId] = useState<string | null>(null);
+  const [copiedSetIds, setCopiedSetIds] = useState<Set<string>>(new Set());
+  const [statsPeriod, setStatsPeriod] = useState<"workout" | "week" | "month" | "year" | "all" | "custom">("all");
+  const [statsFrom, setStatsFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]!; });
+  const [statsTo, setStatsTo] = useState(() => new Date().toISOString().split("T")[0]!);
 
   const [hideWarmup, setHideWarmup] = useState(true);
 
@@ -114,6 +131,51 @@ export default function ExerciseHistoryScreen() {
 
   const exerciseType = (type ?? ExerciseType.WEIGHT_REPS) as ExerciseType;
   const unit = weightUnit ?? "kg";
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const v = session?.user?.user_metadata?.estimated_records_rep_limit as number | undefined;
+      setEstRepLimit(v && v > 0 ? v : undefined);
+      if (session?.user?.id) setUserId(session.user.id);
+    });
+  }, []);
+
+  async function handleCopyToToday(set: SetRow) {
+    if (!userId) return;
+    setCopyingSetId(set.id);
+    try {
+      const today = todayISO();
+      let todayWorkout = (await workoutRepo.getWorkoutByDate(today)).data;
+      if (!todayWorkout) {
+        todayWorkout = (await workoutRepo.createWorkout({ date: today }, userId)).data;
+      }
+      if (!todayWorkout) return;
+
+      const todayWEs = (await workoutRepo.getWorkoutExercises(todayWorkout.id)).data ?? [];
+      let targetWE = todayWEs.find((w) => w.exercise_id === exerciseId);
+      if (!targetWE) {
+        targetWE = (await workoutRepo.addExercise({
+          workout_id: todayWorkout.id,
+          exercise_id: exerciseId,
+          order_index: todayWEs.length,
+        }, userId)).data ?? undefined;
+      }
+      if (!targetWE) return;
+
+      await workoutRepo.createSet({
+        workout_exercise_id: targetWE.id,
+        order_index: 999,
+        ...(set.weight != null && { weight: set.weight }),
+        ...(set.reps != null && { reps: set.reps }),
+        ...(set.distance != null && { distance: set.distance }),
+        ...(set.time_seconds != null && { time_seconds: set.time_seconds }),
+      }, userId);
+
+      setCopiedSetIds((prev) => new Set(prev).add(set.id));
+    } finally {
+      setCopyingSetId(null);
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -256,20 +318,52 @@ export default function ExerciseHistoryScreen() {
     if (metric === "volume") return p.totalVolume;
     if (metric === "est1rm") return p.est1RM;
     if (metric === "reps") return p.maxReps;
+    if (metric === "totalReps") return p.totalReps;
     if (metric === "distance") return p.maxDistance;
+    if (metric === "totalDistance") return p.totalDistance;
     if (metric === "time") return p.maxTime;
+    if (metric === "totalTime") return p.totalTime;
+    if (metric === "speed") return p.maxSpeed;
+    if (metric === "pace") return p.bestPace;
     return 0;
   }
 
-  const chartData: ChartDataPoint[] = chartPoints.map((p) => ({
-    label: formatDateShort(p.date),
-    value: metricValue(p),
-  }));
+  const isSpecialMetric = metric === "weightByReps" || metric === "repMaxProgression";
 
-  const chartUnit = metric === "weight" || metric === "est1rm" ? unit
+  const rawChartData: ChartDataPoint[] = isSpecialMetric
+    ? chartPoints
+        .map((p) => ({
+          label: formatDateShort(p.date),
+          value: metric === "weightByReps"
+            ? p.weightByReps[repTarget]
+            : (p.est1RM > 0 ? estimateRepMax(p.est1RM, repTarget) : undefined),
+        }))
+        .filter((p): p is ChartDataPoint => p.value != null && p.value > 0)
+    : chartPoints.map((p) => ({ label: formatDateShort(p.date), value: metricValue(p) }));
+
+  const trendValues = showTrend && rawChartData.length >= 2
+    ? (() => {
+        const values = rawChartData.map((p) => p.value);
+        const n = values.length;
+        const xMean = (n - 1) / 2;
+        const yMean = values.reduce((s, v) => s + v, 0) / n;
+        const num = values.reduce((s, v, i) => s + (i - xMean) * (v - yMean), 0);
+        const den = values.reduce((s, _, i) => s + (i - xMean) ** 2, 0);
+        if (den === 0) return values.map(() => yMean);
+        const slope = num / den;
+        const intercept = yMean - slope * xMean;
+        return values.map((_, i) => slope * i + intercept);
+      })()
+    : null;
+
+  const chartData = rawChartData;
+
+  const chartUnit = metric === "weight" || metric === "est1rm" || metric === "weightByReps" || metric === "repMaxProgression" ? unit
     : metric === "volume" ? `${unit}·reps`
-    : metric === "reps" ? "reps"
-    : metric === "distance" ? "m"
+    : metric === "reps" || metric === "totalReps" ? "reps"
+    : metric === "distance" || metric === "totalDistance" ? "km"
+    : metric === "speed" ? "km/h"
+    : metric === "pace" ? "s/km"
     : "s";
 
   return (
@@ -379,6 +473,21 @@ export default function ExerciseHistoryScreen() {
                         {!selectMode && set.comment ? (
                           <Text style={{ fontSize: 11, color: "#94a3b8", maxWidth: 100 }} numberOfLines={1}>{set.comment}</Text>
                         ) : null}
+                        {!selectMode && (
+                          <TouchableOpacity
+                            onPress={() => handleCopyToToday(set)}
+                            disabled={copyingSetId === set.id}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            accessibilityLabel="Copiar serie a hoy"
+                            style={{ marginLeft: 8 }}
+                          >
+                            <Ionicons
+                              name={copiedSetIds.has(set.id) ? "checkmark-circle" : "copy-outline"}
+                              size={15}
+                              color={copiedSetIds.has(set.id) ? "#10b981" : "#94a3b8"}
+                            />
+                          </TouchableOpacity>
+                        )}
                         {!selectMode && <Ionicons name="pencil-outline" size={13} color="#cbd5e1" style={{ marginLeft: 6 }} />}
                       </TouchableOpacity>
                     ))
@@ -401,30 +510,64 @@ export default function ExerciseHistoryScreen() {
             <Text style={{ fontSize: 16, fontWeight: "600", color: "#64748b", marginTop: 16 }}>Sin datos</Text>
           </View>
         ) : (() => {
-          const allSets = sessions.flatMap((s) => s.sets);
+          const filteredSessions = (() => {
+            if (statsPeriod === "workout") return sessions.slice(0, 1);
+            if (statsPeriod === "all") return sessions;
+            if (statsPeriod === "custom") return sessions.filter((s) => s.date >= statsFrom && s.date <= statsTo);
+            const days = statsPeriod === "week" ? 7 : statsPeriod === "month" ? 30 : 365;
+            const cutoff = new Date();
+            cutoff.setDate(cutoff.getDate() - days);
+            const cutoffStr = cutoff.toISOString().split("T")[0]!;
+            return sessions.filter((s) => s.date >= cutoffStr);
+          })();
+          const allSets = filteredSessions.flatMap((s) => s.sets);
           const completeSets = allSets.filter((s) => s.is_complete && !s.is_warmup);
           const setsWithWeight = completeSets.filter((s) => s.weight != null && s.reps != null);
           const bestWeight = setsWithWeight.length > 0 ? Math.max(...setsWithWeight.map((s) => s.weight!)) : null;
           const bestReps = completeSets.filter((s) => s.reps != null).length > 0 ? Math.max(...completeSets.filter((s) => s.reps != null).map((s) => s.reps!)) : null;
           const totalVolume = setsWithWeight.reduce((acc, s) => acc + s.weight! * s.reps!, 0);
           const totalSets = completeSets.length;
-          const avgSetsPerSession = sessions.length > 0 ? (totalSets / sessions.length).toFixed(1) : "0";
-          const bestORM = setsWithWeight.length > 0
-            ? Math.max(...setsWithWeight.filter((s) => s.reps! < 37).map((s) => calculate1RM(s.weight!, s.reps!)))
+          const avgSetsPerSession = filteredSessions.length > 0 ? (totalSets / filteredSessions.length).toFixed(1) : "0";
+          const ormEligible = setsWithWeight.filter((s) => s.reps! < 37 && (!estRepLimit || s.reps! <= estRepLimit));
+          const bestORM = ormEligible.length > 0
+            ? Math.max(...ormEligible.map((s) => calculate1RM(s.weight!, s.reps!)))
             : null;
           const stats = [
-            { label: "Sesiones", value: String(sessions.length), icon: "calendar-outline" as const },
+            { label: "Sesiones", value: String(filteredSessions.length), icon: "calendar-outline" as const },
             { label: "Series totales", value: String(totalSets), icon: "list-outline" as const },
             { label: "Series/sesión", value: avgSetsPerSession, icon: "stats-chart-outline" as const },
             { label: "Mejor peso", value: bestWeight != null ? `${bestWeight} ${unit}` : "—", icon: "barbell-outline" as const },
             { label: "Mejor reps", value: bestReps != null ? `${bestReps}` : "—", icon: "repeat-outline" as const },
             { label: "Volumen total", value: totalVolume > 0 ? `${(totalVolume / 1000).toFixed(1)}k ${unit}` : "—", icon: "flame-outline" as const },
             { label: "1RM estimado", value: bestORM != null ? `${bestORM % 1 === 0 ? bestORM : bestORM.toFixed(1)} ${unit}` : "—", icon: "trophy-outline" as const },
-            { label: "Primera sesión", value: sessions.at(-1)?.date ?? "—", icon: "time-outline" as const },
-            { label: "Última sesión", value: sessions[0]?.date ?? "—", icon: "checkmark-circle-outline" as const },
+            { label: "Primera sesión", value: filteredSessions.at(-1)?.date ?? "—", icon: "time-outline" as const },
+            { label: "Última sesión", value: filteredSessions[0]?.date ?? "—", icon: "checkmark-circle-outline" as const },
           ];
           return (
             <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 2 }}>
+                {([["workout", "Sesión"], ["week", "Semana"], ["month", "Mes"], ["year", "Año"], ["all", "Todo"], ["custom", "Personalizado"]] as const).map(([key, label]) => (
+                  <TouchableOpacity
+                    key={key}
+                    onPress={() => setStatsPeriod(key)}
+                    style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 18, borderWidth: 1.5, borderColor: statsPeriod === key ? "#6366f1" : "#e2e8f0", backgroundColor: statsPeriod === key ? "#6366f1" : "transparent" }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: statsPeriod === key ? "#fff" : "#64748b" }}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {statsPeriod === "custom" && (
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <View style={{ flex: 1 }}>
+                    <DateInput value={statsFrom} onChange={setStatsFrom} placeholder="Desde" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <DateInput value={statsTo} onChange={setStatsTo} placeholder="Hasta" />
+                  </View>
+                </View>
+              )}
+
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                 {stats.map((stat) => (
                   <View key={stat.label} style={{ width: "47%", backgroundColor: "#f8fafc", borderRadius: 14, borderWidth: 1, borderColor: "#f1f5f9", padding: 14, gap: 6 }}>
@@ -472,7 +615,32 @@ export default function ExerciseHistoryScreen() {
                   <Text style={{ fontSize: 12, fontWeight: "600", color: metric === m.key ? "#fff" : "#64748b" }}>{m.label}</Text>
                 </TouchableOpacity>
               ))}
+              <TouchableOpacity
+                onPress={() => setShowTrend((v) => !v)}
+                style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, borderColor: showTrend ? "#f97316" : "#e2e8f0", backgroundColor: showTrend ? "#f97316" : "transparent", alignItems: "center" }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "600", color: showTrend ? "#fff" : "#64748b" }}>Tendencia</Text>
+              </TouchableOpacity>
             </View>
+
+            {isSpecialMetric && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748b" }}>Repeticiones:</Text>
+                <TouchableOpacity
+                  onPress={() => setRepTarget((v) => Math.max(1, v - 1))}
+                  style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: "#e2e8f0", alignItems: "center", justifyContent: "center" }}
+                >
+                  <Text style={{ fontSize: 16, color: "#64748b" }}>−</Text>
+                </TouchableOpacity>
+                <Text style={{ fontSize: 14, fontWeight: "700", color: "#0f172a", minWidth: 20, textAlign: "center" }}>{repTarget}</Text>
+                <TouchableOpacity
+                  onPress={() => setRepTarget((v) => Math.min(15, v + 1))}
+                  style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: "#e2e8f0", alignItems: "center", justifyContent: "center" }}
+                >
+                  <Text style={{ fontSize: 16, color: "#64748b" }}>+</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* Chart */}
             <View style={{ backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: "#f1f5f9", padding: 16 }}>
@@ -482,7 +650,13 @@ export default function ExerciseHistoryScreen() {
                 </Text>
                 <Text style={{ fontSize: 11, color: "#94a3b8" }}>{chartUnit}</Text>
               </View>
-              <LineChart data={chartData} width={width - 64} height={200} />
+              {chartData.length === 0 ? (
+                <Text style={{ fontSize: 13, color: "#94a3b8", textAlign: "center", paddingVertical: 24 }}>
+                  Sin sesiones a {repTarget} reps aún.
+                </Text>
+              ) : (
+                <LineChart data={chartData} width={width - 64} height={200} trendData={trendValues ?? undefined} />
+              )}
             </View>
 
             {/* Summary stats */}

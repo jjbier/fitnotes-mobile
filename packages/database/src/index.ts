@@ -16,3 +16,5 @@ export { createCalendarRepository } from "./repositories/calendarRepository.js";
 export type { CalendarRepository } from "./repositories/calendarRepository.js";
 export { createGoalsRepository } from "./repositories/goalsRepository.js";
 export type { GoalsRepository, ExerciseGoalRow } from "./repositories/goalsRepository.js";
+export { createBackupRepository, isBackupData } from "./repositories/backupRepository.js";
+export type { BackupRepository, BackupData } from "./repositories/backupRepository.js";

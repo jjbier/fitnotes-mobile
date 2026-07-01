@@ -12,6 +12,13 @@ import { SyncContext } from "../contexts/SyncContext";
 import type { SyncStatus } from "@fitnotes/database";
 import { useExerciseStore, useRoutineStore, ExerciseType } from "@fitnotes/core";
 import { createExerciseRepository, createRoutineRepository } from "@fitnotes/database";
+import { useThemeModeStore, type ThemeMode } from "../lib/theme";
+import type { Session } from "@supabase/supabase-js";
+
+function applyThemeFromSession(session: Session | null) {
+  const pref = (session?.user.user_metadata?.theme_preference as ThemeMode | undefined) ?? "system";
+  useThemeModeStore.getState().setMode(pref);
+}
 
 const styles = StyleSheet.create({
   syncBanner: {
@@ -64,6 +71,7 @@ export default function RootLayout() {
   useEffect(() => {
     // Check initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      applyThemeFromSession(session);
       const inAuthGroup = segments[0] === "(auth)";
       const inTabsGroup = segments[0] === "(tabs)";
 
@@ -77,6 +85,7 @@ export default function RootLayout() {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      applyThemeFromSession(session);
       if (!initialized) return;
       if (session) {
         router.replace("/(tabs)");

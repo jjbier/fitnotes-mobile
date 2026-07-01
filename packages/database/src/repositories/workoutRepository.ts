@@ -541,6 +541,47 @@ export function createWorkoutRepository(client: Client) {
       }
       return rows.join("\n");
     },
+
+    async deleteWorkoutHistory(
+      userId: string,
+      opts: { dateFrom?: string; dateTo?: string; exerciseId?: string }
+    ): Promise<number> {
+      let workoutIdsQuery = client.from("workouts").select("id").eq("user_id", userId);
+      if (opts.dateFrom) workoutIdsQuery = workoutIdsQuery.gte("date", opts.dateFrom);
+      if (opts.dateTo) workoutIdsQuery = workoutIdsQuery.lte("date", opts.dateTo);
+      const { data: workouts } = await workoutIdsQuery;
+      const workoutIds = (workouts ?? []).map((w) => w.id);
+      if (workoutIds.length === 0) return 0;
+
+      if (opts.exerciseId) {
+        const { data: wes } = await client
+          .from("workout_exercises")
+          .select("id, workout_id")
+          .eq("exercise_id", opts.exerciseId)
+          .in("workout_id", workoutIds);
+        const matched = wes ?? [];
+        if (matched.length === 0) return 0;
+
+        const weIds = matched.map((w) => w.id);
+        await client.from("workout_exercises").delete().in("id", weIds);
+
+        // Clean up workouts left with no exercises after this deletion
+        const affectedWorkoutIds = [...new Set(matched.map((w) => w.workout_id))];
+        const { data: remaining } = await client
+          .from("workout_exercises")
+          .select("workout_id")
+          .in("workout_id", affectedWorkoutIds);
+        const stillHas = new Set((remaining ?? []).map((r) => r.workout_id));
+        const emptyWorkoutIds = affectedWorkoutIds.filter((id) => !stillHas.has(id));
+        if (emptyWorkoutIds.length > 0) {
+          await client.from("workouts").delete().in("id", emptyWorkoutIds);
+        }
+        return weIds.length;
+      }
+
+      await client.from("workouts").delete().in("id", workoutIds);
+      return workoutIds.length;
+    },
   };
 }
 

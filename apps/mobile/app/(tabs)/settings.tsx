@@ -17,8 +17,8 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
-import { useTheme } from "../../lib/theme";
-import { createWorkoutRepository } from "@fitnotes/database";
+import { useTheme, useThemeModeStore, type ThemeMode } from "../../lib/theme";
+import { createWorkoutRepository, createBackupRepository, createBodyTrackerRepository, isBackupData, type BackupData } from "@fitnotes/database";
 
 function parseCSVRows(csv: string) {
   const lines = csv.trim().split(/\r?\n/);
@@ -58,12 +58,30 @@ export default function SettingsScreen() {
   const [defaultWeightIncrement, setDefaultWeightIncrement] = useState("2.5");
   const [calendarWeekStart, setCalendarWeekStart] = useState<0 | 1>(1);
   const [autoSelectNextSet, setAutoSelectNextSet] = useState(true);
+  const [trackPersonalRecords, setTrackPersonalRecords] = useState(true);
+  const [markSetsComplete, setMarkSetsComplete] = useState(true);
   const [defaultRestSeconds, setDefaultRestSeconds] = useState("90");
+  const [estimatedRecordsRepLimit, setEstimatedRecordsRepLimit] = useState("");
   const [signOutLoading, setSignOutLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importCSV, setImportCSV] = useState("");
   const [importLoading, setImportLoading] = useState(false);
+  const themeMode = useThemeModeStore((s) => s.mode);
+  const setThemeMode = useThemeModeStore((s) => s.setMode);
+  const [recalcStatus, setRecalcStatus] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [fullBackupLoading, setFullBackupLoading] = useState(false);
+  const [bodyExportLoading, setBodyExportLoading] = useState(false);
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [restorePaste, setRestorePaste] = useState("");
+  const [restoreParsed, setRestoreParsed] = useState<BackupData | null>(null);
+  const [restoreLoading, setRestoreLoading] = useState(false);
+  const [showDeleteHistoryModal, setShowDeleteHistoryModal] = useState(false);
+  const [deleteHistoryFrom, setDeleteHistoryFrom] = useState("");
+  const [deleteHistoryTo, setDeleteHistoryTo] = useState("");
+  const [deleteHistoryExerciseId, setDeleteHistoryExerciseId] = useState<string | null>(null);
+  const [deleteHistoryLoading, setDeleteHistoryLoading] = useState(false);
+  const [exerciseOptions, setExerciseOptions] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -74,9 +92,20 @@ export default function SettingsScreen() {
       setDefaultWeightIncrement(String((session.user.user_metadata?.default_weight_increment as number | undefined) ?? 2.5));
       setCalendarWeekStart((session.user.user_metadata?.calendar_week_start as 0 | 1 | undefined) ?? 1);
       setAutoSelectNextSet((session.user.user_metadata?.auto_select_next_set as boolean | undefined) ?? true);
+      setTrackPersonalRecords((session.user.user_metadata?.track_personal_records as boolean | undefined) ?? true);
+      setMarkSetsComplete((session.user.user_metadata?.mark_sets_complete as boolean | undefined) ?? true);
       setDefaultRestSeconds(String((session.user.user_metadata?.default_rest_seconds as number | undefined) ?? 90));
+      setEstimatedRecordsRepLimit(String((session.user.user_metadata?.estimated_records_rep_limit as number | undefined) ?? ""));
+    });
+    supabase.from("exercises").select("id, name").order("name").then(({ data }) => {
+      setExerciseOptions(data ?? []);
     });
   }, []);
+
+  async function handleThemeModeChange(mode: ThemeMode) {
+    setThemeMode(mode);
+    await supabase.auth.updateUser({ data: { theme_preference: mode } });
+  }
 
   async function handleWeightUnitChange(unit: "kg" | "lb") {
     setWeightUnit(unit);
@@ -101,12 +130,28 @@ export default function SettingsScreen() {
     await supabase.auth.updateUser({ data: { auto_select_next_set: val } });
   }
 
+  async function handleTrackPersonalRecords(val: boolean) {
+    setTrackPersonalRecords(val);
+    await supabase.auth.updateUser({ data: { track_personal_records: val } });
+  }
+
+  async function handleMarkSetsComplete(val: boolean) {
+    setMarkSetsComplete(val);
+    await supabase.auth.updateUser({ data: { mark_sets_complete: val } });
+  }
+
   async function handleDefaultRestSeconds(val: string) {
     setDefaultRestSeconds(val);
     const parsed = parseInt(val);
     if (!isNaN(parsed) && parsed > 0) {
       await supabase.auth.updateUser({ data: { default_rest_seconds: parsed } });
     }
+  }
+
+  async function handleEstimatedRecordsRepLimit(val: string) {
+    setEstimatedRecordsRepLimit(val);
+    const parsed = parseInt(val);
+    await supabase.auth.updateUser({ data: { estimated_records_rep_limit: !isNaN(parsed) && parsed > 0 ? parsed : null } });
   }
 
   async function handleExportCSV() {
@@ -133,6 +178,100 @@ export default function SettingsScreen() {
       "Importación completada",
       `${imported} series importadas.\n${skipped > 0 ? `${skipped} series omitidas (fechas ya existentes).\n` : ""}${newExercises > 0 ? `${newExercises} ejercicios nuevos creados.` : ""}`
     );
+  }
+
+  async function handleRecalcPRs() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
+    setRecalcStatus("running");
+    try {
+      const repo = createBackupRepository(supabase);
+      await repo.recalculatePersonalRecords(session.user.id);
+      setRecalcStatus("done");
+    } catch {
+      setRecalcStatus("error");
+    } finally {
+      setTimeout(() => setRecalcStatus("idle"), 3000);
+    }
+  }
+
+  async function handleFullBackup() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
+    setFullBackupLoading(true);
+    try {
+      const repo = createBackupRepository(supabase);
+      const backup = await repo.exportBackup(session.user.id);
+      await Share.share({
+        message: JSON.stringify(backup),
+        title: `fitnotes-backup-${backup.exported_at.split("T")[0]}.fitnotes`,
+      });
+    } finally {
+      setFullBackupLoading(false);
+    }
+  }
+
+  function handleRestorePasteChange(text: string) {
+    setRestorePaste(text);
+    if (!text.trim()) { setRestoreParsed(null); return; }
+    try {
+      const parsed = JSON.parse(text);
+      setRestoreParsed(isBackupData(parsed) ? parsed : null);
+    } catch {
+      setRestoreParsed(null);
+    }
+  }
+
+  async function handleExecuteRestore() {
+    if (!restoreParsed) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
+    setRestoreLoading(true);
+    try {
+      const repo = createBackupRepository(supabase);
+      await repo.restoreBackup(session.user.id, restoreParsed);
+      setShowRestoreModal(false);
+      setRestorePaste("");
+      setRestoreParsed(null);
+      Alert.alert("Restauración completada", "Todos los datos se han restaurado correctamente.");
+    } catch (err) {
+      Alert.alert("Error", err instanceof Error ? err.message : "Error desconocido durante la restauración.");
+    } finally {
+      setRestoreLoading(false);
+    }
+  }
+
+  async function handleExportBodyTrackerCSV() {
+    setBodyExportLoading(true);
+    try {
+      const repo = createBodyTrackerRepository(supabase);
+      const csv = await repo.exportAllCSV();
+      if (!csv) { Alert.alert("Sin datos", "No hay medidas corporales que exportar."); return; }
+      await Share.share({ message: csv, title: "FitNotes Body Tracker Export" });
+    } finally {
+      setBodyExportLoading(false);
+    }
+  }
+
+  async function handleDeleteHistory() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
+    setDeleteHistoryLoading(true);
+    try {
+      const repo = createWorkoutRepository(supabase);
+      const count = await repo.deleteWorkoutHistory(session.user.id, {
+        dateFrom: deleteHistoryFrom.trim() || undefined,
+        dateTo: deleteHistoryTo.trim() || undefined,
+        exerciseId: deleteHistoryExerciseId ?? undefined,
+      });
+      setShowDeleteHistoryModal(false);
+      setDeleteHistoryFrom("");
+      setDeleteHistoryTo("");
+      setDeleteHistoryExerciseId(null);
+      Alert.alert("Historial eliminado", `${count} elemento(s) eliminado(s).`);
+    } finally {
+      setDeleteHistoryLoading(false);
+    }
   }
 
   async function handleSave() {
@@ -258,6 +397,36 @@ export default function SettingsScreen() {
           </View>
           <View style={styles.prefRow}>
             <View style={{ flex: 1 }}>
+              <Text style={styles.prefLabel}>Registrar récords personales</Text>
+              <Text style={styles.prefSub}>Muestra el badge PR al igualar o superar un récord</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => handleTrackPersonalRecords(!trackPersonalRecords)}
+              accessibilityRole="switch"
+              accessibilityLabel="Registrar récords personales"
+              accessibilityState={{ checked: trackPersonalRecords }}
+              style={{ width: 44, height: 26, borderRadius: 13, backgroundColor: trackPersonalRecords ? colors.primary : colors.border, justifyContent: "center", paddingHorizontal: 2 }}
+            >
+              <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: colors.background, alignSelf: trackPersonalRecords ? "flex-end" : "flex-start", shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 2, elevation: 2 }} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.prefRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.prefLabel}>Marcar series como completadas</Text>
+              <Text style={styles.prefSub}>Muestra el checkbox de completado en cada serie</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => handleMarkSetsComplete(!markSetsComplete)}
+              accessibilityRole="switch"
+              accessibilityLabel="Marcar series como completadas"
+              accessibilityState={{ checked: markSetsComplete }}
+              style={{ width: 44, height: 26, borderRadius: 13, backgroundColor: markSetsComplete ? colors.primary : colors.border, justifyContent: "center", paddingHorizontal: 2 }}
+            >
+              <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: colors.background, alignSelf: markSetsComplete ? "flex-end" : "flex-start", shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 2, elevation: 2 }} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.prefRow}>
+            <View style={{ flex: 1 }}>
               <Text style={styles.prefLabel}>Auto-pasar a siguiente serie</Text>
               <Text style={styles.prefSub}>Navegar automáticamente al completar</Text>
             </View>
@@ -285,6 +454,88 @@ export default function SettingsScreen() {
               placeholderTextColor="#94a3b8"
             />
           </View>
+          <View style={styles.prefRow}>
+            <View style={{ flex: 1, marginRight: 12 }}>
+              <Text style={styles.prefLabel}>Límite de reps para récords estimados</Text>
+              <Text style={styles.prefSub}>Excluye series de muchas reps del 1RM estimado (recomendado: 10-12)</Text>
+            </View>
+            <TextInput
+              style={[styles.input, { width: 70, textAlign: "center", marginBottom: 0 }]}
+              keyboardType="number-pad"
+              value={estimatedRecordsRepLimit}
+              onChangeText={handleEstimatedRecordsRepLimit}
+              placeholder="Sin límite"
+              placeholderTextColor="#94a3b8"
+            />
+          </View>
+        </View>
+
+        {/* Appearance */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Apariencia</Text>
+          <View style={styles.prefRow}>
+            <View>
+              <Text style={styles.prefLabel}>Tema</Text>
+              <Text style={styles.prefSub}>Claro, oscuro o según el sistema</Text>
+            </View>
+            <View style={styles.unitToggle}>
+              {(["light", "dark", "system"] as const).map((m) => (
+                <TouchableOpacity
+                  key={m}
+                  onPress={() => handleThemeModeChange(m)}
+                  accessibilityLabel={m === "light" ? "Tema claro" : m === "dark" ? "Tema oscuro" : "Tema del sistema"}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: themeMode === m }}
+                  style={[styles.unitBtn, themeMode === m && styles.unitBtnActive]}
+                >
+                  <Text style={[styles.unitBtnText, themeMode === m && styles.unitBtnTextActive]}>
+                    {m === "light" ? "Claro" : m === "dark" ? "Oscuro" : "Sistema"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+
+        {/* Data / Backup */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Datos</Text>
+          <TouchableOpacity onPress={handleRecalcPRs} disabled={recalcStatus === "running"} style={[styles.btn, styles.btnOutline]}>
+            {recalcStatus === "running" ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <>
+                <Ionicons name="trophy-outline" size={16} color={colors.textSecondary} />
+                <Text style={styles.btnOutlineText}>
+                  {recalcStatus === "done" ? "¡PRs recalculados!" : recalcStatus === "error" ? "Error — reintentar" : "Recalcular récords personales"}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleFullBackup} disabled={fullBackupLoading} style={[styles.btn, styles.btnOutline]}>
+            {fullBackupLoading ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <>
+                <Ionicons name="save-outline" size={16} color={colors.textSecondary} />
+                <Text style={styles.btnOutlineText}>Copia de seguridad completa (.fitnotes)</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => { setRestorePaste(""); setRestoreParsed(null); setShowRestoreModal(true); }} style={[styles.btn, styles.btnOutline]}>
+            <Ionicons name="cloud-upload-outline" size={16} color={colors.textSecondary} />
+            <Text style={styles.btnOutlineText}>Restaurar copia de seguridad</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleExportBodyTrackerCSV} disabled={bodyExportLoading} style={[styles.btn, styles.btnOutline]}>
+            {bodyExportLoading ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <>
+                <Ionicons name="body-outline" size={16} color={colors.textSecondary} />
+                <Text style={styles.btnOutlineText}>Exportar medidas corporales (CSV)</Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* Tools */}
@@ -359,6 +610,12 @@ export default function SettingsScreen() {
         <View style={[styles.section, styles.dangerSection]}>
           <Text style={[styles.sectionTitle, { color: "#ef4444" }]}>Zona de peligro</Text>
           <TouchableOpacity
+            onPress={() => { setDeleteHistoryFrom(""); setDeleteHistoryTo(""); setDeleteHistoryExerciseId(null); setShowDeleteHistoryModal(true); }}
+            style={[styles.btn, styles.btnDanger]}
+          >
+            <Text style={styles.btnDangerText}>Eliminar historial de entrenamientos</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             onPress={() =>
               Alert.alert(
                 "Eliminar cuenta",
@@ -431,6 +688,115 @@ export default function SettingsScreen() {
             </ScrollView>
           </SafeAreaView>
         </KeyboardAvoidingView>
+      </Modal>
+      {/* Restore backup modal */}
+      <Modal visible={showRestoreModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowRestoreModal(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
+              <Text style={{ flex: 1, fontSize: 17, fontWeight: "700", color: "#0f172a" }}>Restaurar copia de seguridad</Text>
+              <TouchableOpacity onPress={() => setShowRestoreModal(false)} accessibilityLabel="Cerrar modal">
+                <Ionicons name="close" size={22} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }} keyboardShouldPersistTaps="handled">
+              <Text style={{ fontSize: 13, color: "#64748b", lineHeight: 18 }}>
+                Pega el contenido de un archivo .fitnotes exportado previamente. Esto reemplazará TODOS tus datos actuales.
+              </Text>
+              <TextInput
+                style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, padding: 14, fontSize: 11, minHeight: 200, textAlignVertical: "top", fontFamily: "monospace", color: "#0f172a" }}
+                placeholder="Pega aquí el contenido del archivo .fitnotes…"
+                placeholderTextColor="#cbd5e1"
+                multiline
+                value={restorePaste}
+                onChangeText={handleRestorePasteChange}
+              />
+              {restorePaste.length > 0 && !restoreParsed && (
+                <Text style={{ fontSize: 12, color: "#ef4444" }}>Archivo inválido o formato no reconocido.</Text>
+              )}
+              {restoreParsed && (
+                <Text style={{ fontSize: 12, color: "#6366f1" }}>
+                  Backup válido — {restoreParsed.workouts.length} entrenamientos, {restoreParsed.sets.length} series, {restoreParsed.exercises.length} ejercicios.
+                </Text>
+              )}
+              <TouchableOpacity
+                onPress={handleExecuteRestore}
+                disabled={restoreLoading || !restoreParsed}
+                style={{ backgroundColor: "#ef4444", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: restoreLoading || !restoreParsed ? 0.5 : 1 }}
+              >
+                {restoreLoading
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>Restaurar y reemplazar datos</Text>
+                }
+              </TouchableOpacity>
+            </ScrollView>
+          </SafeAreaView>
+        </KeyboardAvoidingView>
+      </Modal>
+      {/* Delete workout history modal */}
+      <Modal visible={showDeleteHistoryModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowDeleteHistoryModal(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
+            <Text style={{ flex: 1, fontSize: 17, fontWeight: "700", color: "#0f172a" }}>Eliminar historial de entrenamientos</Text>
+            <TouchableOpacity onPress={() => setShowDeleteHistoryModal(false)} accessibilityLabel="Cerrar modal">
+              <Ionicons name="close" size={22} color="#64748b" />
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
+            <Text style={{ fontSize: 13, color: "#64748b", lineHeight: 18 }}>
+              Deja los filtros vacíos para eliminar todo el historial, o acótalo por fecha y/o ejercicio. Esta acción no se puede deshacer.
+            </Text>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Desde</Text>
+                <TextInput style={styles.input} value={deleteHistoryFrom} onChangeText={setDeleteHistoryFrom} placeholder="AAAA-MM-DD" placeholderTextColor="#94a3b8" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Hasta</Text>
+                <TextInput style={styles.input} value={deleteHistoryTo} onChangeText={setDeleteHistoryTo} placeholder="AAAA-MM-DD" placeholderTextColor="#94a3b8" />
+              </View>
+            </View>
+            <View>
+              <Text style={styles.label}>Ejercicio (opcional)</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 6 }}>
+                <TouchableOpacity
+                  onPress={() => setDeleteHistoryExerciseId(null)}
+                  style={[styles.unitBtn, { borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8 }, deleteHistoryExerciseId === null && styles.unitBtnActive]}
+                >
+                  <Text style={[styles.unitBtnText, deleteHistoryExerciseId === null && styles.unitBtnTextActive]}>Todos</Text>
+                </TouchableOpacity>
+                {exerciseOptions.map((ex) => (
+                  <TouchableOpacity
+                    key={ex.id}
+                    onPress={() => setDeleteHistoryExerciseId(ex.id)}
+                    style={[styles.unitBtn, { borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8 }, deleteHistoryExerciseId === ex.id && styles.unitBtnActive]}
+                  >
+                    <Text style={[styles.unitBtnText, deleteHistoryExerciseId === ex.id && styles.unitBtnTextActive]}>{ex.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+            <TouchableOpacity
+              onPress={() =>
+                Alert.alert(
+                  "Eliminar historial",
+                  "¿Seguro que quieres eliminar el historial seleccionado? No se puede deshacer.",
+                  [
+                    { text: "Cancelar", style: "cancel" },
+                    { text: "Eliminar", style: "destructive", onPress: handleDeleteHistory },
+                  ]
+                )
+              }
+              disabled={deleteHistoryLoading}
+              style={{ backgroundColor: "#ef4444", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: deleteHistoryLoading ? 0.5 : 1 }}
+            >
+              {deleteHistoryLoading
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>Eliminar historial</Text>
+              }
+            </TouchableOpacity>
+          </ScrollView>
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );

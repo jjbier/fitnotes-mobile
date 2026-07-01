@@ -81,6 +81,8 @@ export default function TrainingScreen() {
   const [weightUnit, setWeightUnit] = useState<"kg" | "lb">("kg");
   const [globalWeightIncrement, setGlobalWeightIncrement] = useState<number>(2.5);
   const [autoSelectNextSet, setAutoSelectNextSet] = useState(true);
+  const [trackPersonalRecords, setTrackPersonalRecords] = useState(true);
+  const [markSetsComplete, setMarkSetsComplete] = useState(true);
   const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
   const [lastSessionSets, setLastSessionSets] = useState<LastSet[]>([]);
   const [showLastSession, setShowLastSession] = useState(false);
@@ -153,6 +155,8 @@ export default function TrainingScreen() {
         setWeightUnit((session.user.user_metadata?.weight_unit as "kg" | "lb" | undefined) ?? "kg");
         setGlobalWeightIncrement((session.user.user_metadata?.default_weight_increment as number | undefined) ?? 2.5);
         setAutoSelectNextSet((session.user.user_metadata?.auto_select_next_set as boolean | undefined) ?? true);
+        setTrackPersonalRecords((session.user.user_metadata?.track_personal_records as boolean | undefined) ?? true);
+        setMarkSetsComplete((session.user.user_metadata?.mark_sets_complete as boolean | undefined) ?? true);
         const globalRest = (session.user.user_metadata?.default_rest_seconds as number | undefined) ?? 90;
         const restoredDuration = savedTimer?.seconds ?? globalRest;
         setTimerDuration(restoredDuration);
@@ -592,13 +596,13 @@ export default function TrainingScreen() {
       </View>
 
       {/* PR + última sesión */}
-      {(exercisePR || lastSessionSets.length > 0) && (
+      {((trackPersonalRecords && exercisePR) || lastSessionSets.length > 0) && (
         <>
           <TouchableOpacity
             onPress={() => setShowLastSession((v) => !v)}
             style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#f1f5f9", gap: 8, backgroundColor: "#fafafa" }}
           >
-            {exercisePR && (
+            {trackPersonalRecords && exercisePR && (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "#fef3c7", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
                 <Ionicons name="trophy-outline" size={11} color="#d97706" />
                 <Text style={{ fontSize: 11, fontWeight: "700", color: "#d97706" }}>
@@ -669,7 +673,7 @@ export default function TrainingScreen() {
             {showDistance && <Text style={{ width: 80, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>km</Text>}
             {showTime && <Text style={{ width: 72, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>sec</Text>}
             <View style={{ flex: 1 }} />
-            {exerciseSets.some((s) => !s.is_complete) && (
+            {markSetsComplete && exerciseSets.some((s) => !s.is_complete) && (
               <TouchableOpacity
                 onPress={async () => {
                   if (!workoutExercise) return;
@@ -801,7 +805,7 @@ export default function TrainingScreen() {
                       <View style={{ flex: 1 }} />
 
                       {/* Per-set PR trophy */}
-                      {s.weight != null && s.reps != null && prByReps[s.reps] != null && s.weight >= prByReps[s.reps]! && (
+                      {trackPersonalRecords && s.weight != null && s.reps != null && prByReps[s.reps] != null && s.weight >= prByReps[s.reps]! && (
                         <Ionicons name="trophy" size={13} color="#d97706" />
                       )}
 
@@ -820,13 +824,15 @@ export default function TrainingScreen() {
                       </TouchableOpacity>
 
                       {/* Complete */}
-                      <TouchableOpacity
-                        onPress={() => handleToggleComplete(s.id, s.is_complete)}
-                        style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: s.is_complete ? "#6366f1" : "#cbd5e1", backgroundColor: s.is_complete ? "#6366f1" : "transparent", alignItems: "center", justifyContent: "center" }}
-                        accessibilityLabel={s.is_complete ? "Desmarcar serie" : "Marcar serie completa"}
-                      >
-                        {s.is_complete && <Ionicons name="checkmark" size={14} color="white" />}
-                      </TouchableOpacity>
+                      {markSetsComplete && (
+                        <TouchableOpacity
+                          onPress={() => handleToggleComplete(s.id, s.is_complete)}
+                          style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: s.is_complete ? "#6366f1" : "#cbd5e1", backgroundColor: s.is_complete ? "#6366f1" : "transparent", alignItems: "center", justifyContent: "center" }}
+                          accessibilityLabel={s.is_complete ? "Desmarcar serie" : "Marcar serie completa"}
+                        >
+                          {s.is_complete && <Ionicons name="checkmark" size={14} color="white" />}
+                        </TouchableOpacity>
+                      )}
 
                       {/* Drag handle */}
                       <TouchableOpacity onLongPress={drag} delayLongPress={150} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Reordenar serie">

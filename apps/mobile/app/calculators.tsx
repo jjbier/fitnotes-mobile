@@ -20,6 +20,54 @@ import {
   calculatePlates,
 } from "@fitnotes/core";
 import { useTheme } from "../lib/theme";
+import { supabase } from "../lib/supabase";
+import { createExerciseRepository, createProgressRepository, createWorkoutRepository } from "@fitnotes/database";
+
+function useExerciseOptions() {
+  const [exercises, setExercises] = useState<{ id: string; name: string }[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  function ensureLoaded() {
+    if (loaded) return;
+    setLoaded(true);
+    const repo = createExerciseRepository(supabase);
+    repo.getExercises().then(({ data }) => {
+      if (data) setExercises(data.map((e) => ({ id: e.id, name: e.name })).sort((a, b) => a.name.localeCompare(b.name)));
+    });
+  }
+  return { exercises, ensureLoaded };
+}
+
+async function addSetToTodayWorkout(exerciseId: string, weight: number, reps: number | undefined): Promise<boolean> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) return false;
+  const workoutRepo = createWorkoutRepository(supabase);
+  const today = new Date().toISOString().split("T")[0]!;
+
+  let workout = (await workoutRepo.getWorkoutByDate(today)).data;
+  if (!workout) {
+    const { data } = await workoutRepo.createWorkout({ date: today }, session.user.id);
+    workout = data ?? null;
+  }
+  if (!workout) return false;
+
+  const { data: wes } = await workoutRepo.getWorkoutExercises(workout.id);
+  let we = wes?.find((w) => w.exercise_id === exerciseId);
+  if (!we) {
+    const { data } = await workoutRepo.addExercise(
+      { workout_id: workout.id, exercise_id: exerciseId, order_index: wes?.length ?? 0 },
+      session.user.id
+    );
+    we = data ?? undefined;
+  }
+  if (!we) return false;
+
+  const { data: existingSets } = await workoutRepo.getSets(we.id);
+  const { error } = await workoutRepo.createSet(
+    { workout_exercise_id: we.id, weight, reps, order_index: existingSets?.length ?? 0 },
+    session.user.id
+  );
+  return !error;
+}
 
 type Tab = "1rm" | "set" | "plates" | "bmi";
 
@@ -128,9 +176,39 @@ const INCREMENTS = [0.5, 1, 1.25, 2.5, 5];
 function SetCalculator() {
   const [baseWeight, setBaseWeight] = useState("");
   const [incrementIdx, setIncrementIdx] = useState(3); // 2.5
+  const [showMaxPicker, setShowMaxPicker] = useState(false);
+  const [maxExerciseId, setMaxExerciseId] = useState("");
+  const [maxLoading, setMaxLoading] = useState(false);
+  const { exercises, ensureLoaded } = useExerciseOptions();
+  const [addExerciseId, setAddExerciseId] = useState("");
+  const [addReps, setAddReps] = useState("5");
+  const [addedPct, setAddedPct] = useState<number | null>(null);
 
   const base = parseFloat(baseWeight);
   const inc = INCREMENTS[incrementIdx]!;
+
+  async function handleSelectMax() {
+    if (!maxExerciseId) return;
+    setMaxLoading(true);
+    const repo = createProgressRepository(supabase);
+    const { data } = await repo.getPersonalRecords(maxExerciseId);
+    if (data && data.length > 0) {
+      const best = data.reduce((b, pr) => (pr.weight > b.weight ? pr : b), data[0]!);
+      setBaseWeight(String(best.weight));
+    }
+    setMaxLoading(false);
+    setShowMaxPicker(false);
+  }
+
+  async function handleAdd(pct: number, weight: number) {
+    if (!addExerciseId) return;
+    const reps = parseInt(addReps, 10) || undefined;
+    const ok = await addSetToTodayWorkout(addExerciseId, weight, reps);
+    if (ok) {
+      setAddedPct(pct);
+      setTimeout(() => setAddedPct((p) => (p === pct ? null : p)), 1500);
+    }
+  }
 
   return (
     <View style={styles.card}>
@@ -149,6 +227,10 @@ function SetCalculator() {
         />
       </View>
 
+      <TouchableOpacity onPress={() => { ensureLoaded(); setShowMaxPicker(true); }} style={{ alignSelf: "flex-start" }}>
+        <Text style={{ fontSize: 12, color: "#6366f1", fontWeight: "500" }}>Seleccionar máximo desde PRs…</Text>
+      </TouchableOpacity>
+
       <Text style={[styles.label, { marginTop: 12 }]}>Redondear a (kg)</Text>
       <View style={styles.chipRow}>
         {INCREMENTS.map((v, i) => (
@@ -163,18 +245,94 @@ function SetCalculator() {
       </View>
 
       {base > 0 && (
-        <View style={{ marginTop: 16, gap: 6 }}>
-          {PERCENTAGES.map((pct) => {
-            const setW = calculateSetWeight(base, pct, inc);
-            return (
-              <View key={pct} style={styles.pctRow}>
-                <Text style={styles.pctLabel}>{pct}%</Text>
-                <Text style={styles.pctValue}>{setW.toFixed(1)} kg</Text>
-              </View>
-            );
-          })}
-        </View>
+        <>
+          <View style={{ marginTop: 16, borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 10, padding: 10, gap: 8 }}>
+            <Text style={styles.label}>Añadir a entrenamiento de hoy</Text>
+            <TouchableOpacity onPress={ensureLoaded}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                {exercises.length === 0 ? (
+                  <Text style={{ fontSize: 12, color: "#94a3b8" }}>Toca para cargar ejercicios…</Text>
+                ) : (
+                  exercises.map((ex) => (
+                    <TouchableOpacity
+                      key={ex.id}
+                      onPress={() => setAddExerciseId(ex.id)}
+                      style={[styles.chip, addExerciseId === ex.id && styles.chipActive]}
+                    >
+                      <Text style={[styles.chipText, addExerciseId === ex.id && styles.chipTextActive]}>{ex.name}</Text>
+                    </TouchableOpacity>
+                  ))
+                )}
+              </ScrollView>
+            </TouchableOpacity>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={styles.label}>Reps</Text>
+              <TextInput
+                value={addReps}
+                onChangeText={setAddReps}
+                keyboardType="number-pad"
+                style={[styles.input, { width: 60, paddingVertical: 4 }]}
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
+          </View>
+          <View style={{ marginTop: 12, gap: 6 }}>
+            {PERCENTAGES.map((pct) => {
+              const setW = calculateSetWeight(base, pct, inc);
+              return (
+                <View key={pct} style={[styles.pctRow, { alignItems: "center" }]}>
+                  <Text style={styles.pctLabel}>{pct}%</Text>
+                  <Text style={styles.pctValue}>{setW.toFixed(1)} kg</Text>
+                  <TouchableOpacity
+                    onPress={() => handleAdd(pct, setW)}
+                    disabled={!addExerciseId}
+                    style={{ opacity: addExerciseId ? 1 : 0.4, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: "600", color: "#6366f1" }}>{addedPct === pct ? "Añadido ✓" : "+ Añadir"}</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+          </View>
+        </>
       )}
+
+      {/* Select Max modal */}
+      <Modal visible={showMaxPicker} animationType="slide" transparent onRequestClose={() => setShowMaxPicker(false)}>
+        <View style={{ flex: 1, backgroundColor: "#00000060", justifyContent: "flex-end" }}>
+          <View style={{ backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "70%" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", padding: 16, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
+              <Text style={{ flex: 1, fontSize: 16, fontWeight: "700", color: "#0f172a" }}>Seleccionar ejercicio</Text>
+              <TouchableOpacity onPress={() => setShowMaxPicker(false)}>
+                <Ionicons name="close" size={22} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={exercises}
+              keyExtractor={(e) => e.id}
+              contentContainerStyle={{ padding: 16, gap: 8 }}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  onPress={() => { setMaxExerciseId(item.id); }}
+                  style={[styles.pctRow, { borderColor: maxExerciseId === item.id ? "#6366f1" : "#f1f5f9" }]}
+                >
+                  <Text style={styles.pctLabel}>{item.name}</Text>
+                  {maxExerciseId === item.id && <Ionicons name="checkmark" size={16} color="#6366f1" />}
+                </TouchableOpacity>
+              )}
+            />
+            <View style={{ padding: 16 }}>
+              <TouchableOpacity
+                onPress={handleSelectMax}
+                disabled={!maxExerciseId || maxLoading}
+                style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: !maxExerciseId || maxLoading ? 0.5 : 1 }}
+              >
+                {maxLoading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>Cargar PR</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -183,12 +341,16 @@ const DEFAULT_PLATES = [25, 20, 15, 10, 5, 2.5, 1.25];
 
 function PlateCalculatorPanel() {
   const [targetWeight, setTargetWeight] = useState("");
-  const [barWeightIdx, setBarWeightIdx] = useState(2); // 20kg
-  const barOptions = [10, 15, 20, 25];
+  const [barWeight, setBarWeight] = useState("20");
+  const [customPlates, setCustomPlates] = useState(DEFAULT_PLATES.join(", "));
 
   const target = parseFloat(targetWeight);
-  const bar = barOptions[barWeightIdx]!;
-  const perSide = target > 0 ? calculatePlates(target, bar, DEFAULT_PLATES) : [];
+  const bar = parseFloat(barWeight) || 20;
+  const plates = customPlates
+    .split(",")
+    .map((s) => parseFloat(s.trim()))
+    .filter((n) => !isNaN(n) && n > 0);
+  const perSide = target > 0 ? calculatePlates(target, bar, plates) : [];
   const achieved = bar + perSide.reduce((s, p) => s + p * 2, 0);
 
   return (
@@ -196,36 +358,46 @@ function PlateCalculatorPanel() {
       <Text style={styles.cardTitle}>Calculadora de discos</Text>
       <Text style={styles.cardSubtitle}>Discos por lado para el peso objetivo</Text>
 
-      <View style={styles.inputGroup}>
-        <Text style={styles.label}>Peso objetivo (kg)</Text>
-        <TextInput
-          value={targetWeight}
-          onChangeText={setTargetWeight}
-          placeholder="ej. 140"
-          keyboardType="decimal-pad"
-          style={styles.input}
-          placeholderTextColor="#94a3b8"
-        />
+      <View style={styles.row}>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Peso objetivo (kg)</Text>
+          <TextInput
+            value={targetWeight}
+            onChangeText={setTargetWeight}
+            placeholder="ej. 140"
+            keyboardType="decimal-pad"
+            style={styles.input}
+            placeholderTextColor="#94a3b8"
+          />
+        </View>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Peso de la barra (kg)</Text>
+          <TextInput
+            value={barWeight}
+            onChangeText={setBarWeight}
+            placeholder="20"
+            keyboardType="decimal-pad"
+            style={[styles.input, { width: 90 }]}
+            placeholderTextColor="#94a3b8"
+          />
+        </View>
       </View>
 
-      <Text style={[styles.label, { marginTop: 12 }]}>Peso de la barra</Text>
-      <View style={styles.chipRow}>
-        {barOptions.map((v, i) => (
-          <TouchableOpacity
-            key={v}
-            onPress={() => setBarWeightIdx(i)}
-            style={[styles.chip, i === barWeightIdx && styles.chipActive]}
-          >
-            <Text style={[styles.chipText, i === barWeightIdx && styles.chipTextActive]}>{v} kg</Text>
-          </TouchableOpacity>
-        ))}
+      <View style={[styles.inputGroup, { marginTop: 12 }]}>
+        <Text style={styles.label}>Discos disponibles (kg, separados por coma)</Text>
+        <TextInput
+          value={customPlates}
+          onChangeText={setCustomPlates}
+          style={[styles.input, { width: "100%" }]}
+          placeholderTextColor="#94a3b8"
+        />
       </View>
 
       {target > 0 && (
         <View style={{ marginTop: 16 }}>
           {perSide.length === 0 ? (
             <Text style={{ color: "#94a3b8", fontSize: 13 }}>
-              {target <= bar ? "El objetivo está por debajo o igual al peso de la barra." : "No se puede alcanzar el objetivo con los discos estándar."}
+              {target <= bar ? "El objetivo está por debajo o igual al peso de la barra." : "No se puede alcanzar el objetivo con los discos disponibles."}
             </Text>
           ) : (
             <>

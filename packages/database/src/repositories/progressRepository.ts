@@ -8,9 +8,15 @@ export interface ChartPoint {
   maxWeight: number;
   totalVolume: number;
   maxReps: number;
+  totalReps: number;
   est1RM: number;
   maxDistance: number;
   maxTime: number;
+  totalDistance: number;
+  totalTime: number;
+  maxSpeed: number;
+  bestPace: number;
+  weightByReps: Record<number, number>;
 }
 
 export function createProgressRepository(client: Client) {
@@ -82,7 +88,8 @@ export function createProgressRepository(client: Client) {
 
       if (!setRows || setRows.length === 0) return [];
 
-      const byDate: Record<string, { maxWeight: number; totalVolume: number; maxReps: number; est1RM: number; maxDistance: number; maxTime: number }> = {};
+      type DateAgg = Omit<ChartPoint, "date">;
+      const byDate: Record<string, DateAgg> = {};
 
       for (const s of setRows) {
         const date = dateByWeId[s.workout_exercise_id];
@@ -91,16 +98,34 @@ export function createProgressRepository(client: Client) {
         const r = s.reps ?? 0;
         const dist = s.distance ?? 0;
         const time = s.time_seconds ?? 0;
-        if (!byDate[date]) byDate[date] = { maxWeight: 0, totalVolume: 0, maxReps: 0, est1RM: 0, maxDistance: 0, maxTime: 0 };
+        if (!byDate[date]) {
+          byDate[date] = {
+            maxWeight: 0, totalVolume: 0, maxReps: 0, totalReps: 0, est1RM: 0,
+            maxDistance: 0, maxTime: 0, totalDistance: 0, totalTime: 0,
+            maxSpeed: 0, bestPace: 0, weightByReps: {},
+          };
+        }
         const entry = byDate[date]!;
         if (w > entry.maxWeight) entry.maxWeight = w;
         entry.totalVolume += w * r;
         if (r > entry.maxReps) entry.maxReps = r;
+        entry.totalReps += r;
+        entry.totalDistance += dist;
+        entry.totalTime += time;
         if (dist > entry.maxDistance) entry.maxDistance = dist;
         if (time > entry.maxTime) entry.maxTime = time;
         if (w > 0 && r > 0 && r < 37) {
           const orm = w * (36 / (37 - r));
           if (orm > entry.est1RM) entry.est1RM = orm;
+          if (r > 0 && (entry.weightByReps[r] == null || w > entry.weightByReps[r]!)) {
+            entry.weightByReps[r] = w;
+          }
+        }
+        if (dist > 0 && time > 0) {
+          const speed = (dist / time) * 3600;
+          if (speed > entry.maxSpeed) entry.maxSpeed = speed;
+          const pace = time / dist;
+          if (entry.bestPace === 0 || pace < entry.bestPace) entry.bestPace = pace;
         }
       }
 

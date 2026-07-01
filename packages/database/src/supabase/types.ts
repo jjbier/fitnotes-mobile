@@ -61,6 +61,7 @@ export type Database = {
           is_default: boolean
           is_enabled: boolean
           name: string
+          order_index: number
           unit: string
           user_id: string
         }
@@ -72,6 +73,7 @@ export type Database = {
           is_default?: boolean
           is_enabled?: boolean
           name: string
+          order_index?: number
           unit: string
           user_id: string
         }
@@ -83,6 +85,7 @@ export type Database = {
           is_default?: boolean
           is_enabled?: boolean
           name?: string
+          order_index?: number
           unit?: string
           user_id?: string
         }
@@ -117,6 +120,50 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      exercise_goals: {
+        Row: {
+          achieved_at: string | null
+          created_at: string
+          exercise_id: string
+          id: string
+          notes: string | null
+          target_date: string | null
+          target_reps: number | null
+          target_weight: number | null
+          user_id: string
+        }
+        Insert: {
+          achieved_at?: string | null
+          created_at?: string
+          exercise_id: string
+          id?: string
+          notes?: string | null
+          target_date?: string | null
+          target_reps?: number | null
+          target_weight?: number | null
+          user_id: string
+        }
+        Update: {
+          achieved_at?: string | null
+          created_at?: string
+          exercise_id?: string
+          id?: string
+          notes?: string | null
+          target_date?: string | null
+          target_reps?: number | null
+          target_weight?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exercise_goals_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       exercises: {
         Row: {
@@ -511,10 +558,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      delete_user: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      delete_user: { Args: never; Returns: undefined }
     }
     Enums: {
       exercise_type:
@@ -662,4 +706,3 @@ export const Constants = {
     },
   },
 } as const
-

@@ -1,4 +1,17 @@
 import { useColorScheme } from "react-native";
+import { create } from "zustand";
+
+export type ThemeMode = "light" | "dark" | "system";
+
+interface ThemeModeState {
+  mode: ThemeMode;
+  setMode: (mode: ThemeMode) => void;
+}
+
+export const useThemeModeStore = create<ThemeModeState>((set) => ({
+  mode: "system",
+  setMode: (mode) => set({ mode }),
+}));
 
 export const Colors = {
   light: {
@@ -113,5 +126,7 @@ export type ThemeColors = { [K in keyof typeof Colors.light]: string };
 
 export function useTheme(): ThemeColors {
   const scheme = useColorScheme();
-  return scheme === "dark" ? Colors.dark : Colors.light;
+  const mode = useThemeModeStore((s) => s.mode);
+  const resolved = mode === "system" ? scheme : mode;
+  return resolved === "dark" ? Colors.dark : Colors.light;
 }
