@@ -1,6 +1,6 @@
 # Architecture — FitNotes App
 
-_Last updated: 2026-06-28_
+_Last updated: 2026-07-01_
 
 ## Monorepo layout
 
@@ -41,6 +41,10 @@ fitnotes-app/
 | `useRef` para fetch stale en predefined sets | Race condition al cambiar ejercicio rápido en modal |
 | `useTheme()` desde `lib/theme.ts` | Dark mode via useColorScheme — NO hardcodear colores hex |
 | Tab bar usa `useColorScheme()` directo | Layouts no pueden llamar hooks de la misma forma que componentes |
+| `useThemeModeStore` (zustand, fuera de core) en `lib/theme.ts` | Override manual light/dark/system sobre `useColorScheme()`, sincronizado con `user_metadata.theme_preference` |
+| Home Screen Settings sin migración DB | Categorías ocultas = lista de IDs client-side (localStorage web / user_metadata mobile) — evita tocar RLS/schema para un ajuste puramente visual |
+| Backup/restore mobile sin document-picker nativo | Reutiliza patrón ya usado por import CSV: export vía `Share.share`, restore vía modal de pegado de texto — evita instalar `expo-document-picker` |
+| Rest timer sound vía `expo-av` (no `expo-audio`) | SDK 52: `expo-audio` aún beta/inestable en esa versión; `expo-av` es la opción estable para playback simple |
 
 ## Base de datos (Supabase — ref: `fbhjiwtriqrxibqwsyqj`)
 
@@ -56,12 +60,15 @@ Tablas: `categories`, `exercises`, `workouts`, `workout_exercises`, `sets`,
 - `routine_day_exercises.group_id`: UUID compartido entre ejercicios del mismo superset
 - `routine_day_exercises.group_name`: nombre personalizable del grupo (nullable)
 - `workout_exercises.group_id` + `group_name`: propagados desde rutina al logear
+- `body_measurements.order_index`: reorden drag&drop (migración 006)
+- `exercise_goals`: tabla de objetivos por ejercicio, gestionada por `goalsRepository`
 - Función RPC: `delete_user()` — SECURITY DEFINER
 
-## Migraciones aplicadas (001–005)
+## Migraciones aplicadas (001–006)
 
 1. Schema inicial + RLS + triggers
 2. Función delete_user RPC
 3. weight_increment, default_rest_seconds en exercises; group_id en workout_exercises y routine_day_exercises; group_name en workout_exercises
 4. default_chart en exercises
 5. group_name en routine_day_exercises
+6. order_index en body_measurements (backfill vía ROW_NUMBER)

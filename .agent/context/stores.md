@@ -1,6 +1,6 @@
 # Stores — @fitnotes/core
 
-_Last updated: 2026-06-23_
+_Last updated: 2026-07-01_
 
 Zustand 5 + Immer. Importados via `@fitnotes/core`. Estado en memoria — Supabase es la fuente de verdad.
 
@@ -72,3 +72,23 @@ loadPredefinedSets / savePredefinedSets
 ```
 
 **Nota:** `logRoutineWorkout()` está implementado directamente en `routines/[id].tsx`, no en el store.
+
+## useBodyTrackerStore
+
+```ts
+// State
+measurements: BodyMeasurement[]
+latestEntries: Record<measurementId, BodyMeasurementEntry>
+chartData: Record<measurementId, BodyMeasurementEntry[]>
+isLoading: boolean
+
+// Actions
+loadMeasurements(measurements)
+addMeasurement / updateMeasurement / deleteMeasurement
+setLatestEntry(entry)
+loadChartData(measurementId, entries)
+addEntry / deleteEntry
+```
+
+## Fuera de core: useThemeModeStore (mobile)
+`apps/mobile/lib/theme.ts` — store zustand simple (`mode: "light"|"dark"|"system"`) NO en `@fitnotes/core` porque solo aplica a mobile. Ver `apps-mobile.md`.

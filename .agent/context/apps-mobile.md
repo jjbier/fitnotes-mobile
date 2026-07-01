@@ -8,7 +8,9 @@ _Last updated: 2026-07-01_
 - `metro.config.js` → `watchFolders: [monorepoRoot]`, `nodeModulesPaths`, `withNativeWind`, **custom resolveRequest .js→.ts**
 - `.npmrc` raíz → `public-hoist-pattern` para Babel — requerido para `assembleRelease`
 - `lib/supabase.ts` → `createClient` con **FileStorage** (expo-file-system) como auth storage — NO AsyncStorage
-- `lib/theme.ts` → `useTheme()` + `Colors.light` / `Colors.dark` — dark mode vía `useColorScheme()`
+- `lib/theme.ts` → `useTheme()` + `Colors.light` / `Colors.dark` + **`useThemeModeStore`** (zustand: `mode: "light"|"dark"|"system"`) — `useTheme()` resuelve `mode === "system" ? useColorScheme() : mode`
+- Deps nativas añadidas 2026-07-01 (via `npx expo install`, autolinking sin cambios extra): `expo-av@~15.0.2` (sonido rest timer), `expo-sharing@~13.0.1` + `react-native-view-shot@~4.0.3` (exportar imagen de gráficos)
+- `assets/sounds/timer-end.mp3` — sonido del rest timer (generado con ffmpeg, dos beeps ~1.15s)
 
 ## Supabase en mobile
 ```typescript
@@ -31,6 +33,18 @@ const theme = useTheme();
 ```
 - Tab bar: `useColorScheme()` directo en `(tabs)/_layout.tsx` (no useTheme — es layout)
 - StatusBar: `<StatusBar style="auto" />` ya configurado en `_layout.tsx`
+- **Selector manual de tema**: `useThemeModeStore.getState().setMode("light"|"dark"|"system")` en Ajustes; `_layout.tsx` inicializa el store desde `user_metadata.theme_preference` en `getSession()` y `onAuthStateChange`
+
+## user_metadata — claves usadas (Supabase Auth)
+```
+weight_unit, default_weight_increment, calendar_week_start, auto_select_next_set,
+track_personal_records, mark_sets_complete, default_rest_seconds,
+estimated_records_rep_limit, display_name, theme_preference,
+rest_timer_sound_enabled, rest_timer_volume (0-100),
+show_set_count_home, hidden_category_ids (string[]),
+calendar_show_day_panel, calendar_show_category_dots
+```
+Todas se leen con `session.user.user_metadata?.clave` y se escriben con `supabase.auth.updateUser({ data: { clave: valor } })`.
 
 ## Sync cross-device
 - `SyncContext` → `refetchSignal` counter, incrementado por `_layout.tsx` tras pull
@@ -41,7 +55,8 @@ const theme = useTheme();
 
 ## Rest Timer (workout/[exerciseId].tsx)
 - Solo arranque manual — NO se inicia automáticamente al añadir/completar series
-- Fin de tiempo: `Vibration.vibrate([0, 400, 150, 400, 150, 400])` + `Haptics.notificationAsync(Success)`
+- Fin de tiempo: `Vibration.vibrate([0, 400, 150, 400, 150, 400])` + `Haptics.notificationAsync(Success)` + **sonido opcional** (`expo-av`, `Audio.Sound` precargado en un `useEffect` con `require("../../assets/sounds/timer-end.mp3")`, `setVolumeAsync` + `replayAsync()` si `rest_timer_sound_enabled`)
+- Recuerda última duración usada: `last-timer-duration.json` (expo-file-system), fallback a `user_metadata.default_rest_seconds`
 - **Sin** push notifications (`expo-notifications` eliminado del flujo del timer)
 
 ## Accessibility
@@ -62,14 +77,15 @@ app/
 │   ├── progress.tsx             PRs expandibles + 1RM estimado
 │   ├── tools.tsx                ← TAB "RUTINAS" — lista/crear/editar/copiar/eliminar
 │   └── settings.tsx             perfil, kg/lb, Herramientas→calculadoras, body-tracker, sign-out, delete
-├── workout/[exerciseId].tsx     sets CRUD — todos los ExerciseTypes — RestTimer manual+vibración
+├── workout/[exerciseId].tsx     sets CRUD — todos los ExerciseTypes — RestTimer manual+vibración+sonido
+├── workout-detail/[workoutId].tsx  detalle completo de un workout por fecha arbitraria (solo lectura)
 ├── routines/[id].tsx            días + ejercicios, edit mode, drag&drop, predefined sets, supersets+nombres, log
-├── calculators.tsx              1RM / Set% / Plate calculators
-├── body-tracker/index.tsx       CRUD medidas + entradas
+├── calculators.tsx              1RM / Set% (Add-to-Workout + Select Max) / Plate (configurable) / IMC
+├── body-tracker/index.tsx       CRUD medidas + entradas, tap en gráfica → medidas relacionadas
 ├── exercises/[categoryId].tsx
 ├── search/index.tsx             búsqueda global con historial reciente
 ├── goals/index.tsx              objetivos por ejercicio
-└── exercise-history/[exerciseId].tsx  historial completo + gráfico LineChart
+└── exercise-history/[exerciseId].tsx  historial + gráfico LineChart + export imagen (view-shot) + link a workout-detail
 ```
 
 ## Supersets — flujo completo
@@ -90,7 +106,15 @@ if (psLoadingForRef.current !== rdeId) return; // descartar si cambió ejercicio
 ## Drag & drop
 - `react-native-draggable-flatlist@4.0.3`
 - `GestureHandlerRootView` en `app/_layout.tsx`
-- `NestableScrollContainer` + `NestableDraggableFlatList` en `routines/[id].tsx`
+- `NestableScrollContainer` + `NestableDraggableFlatList` en `routines/[id].tsx`, `body-tracker/index.tsx` (tab Track) y `(tabs)/index.tsx` (lista de ejercicios del workout activo — reorder por `onLongPress={drag}` en icono `reorder-three-outline`, deshabilitado en modo selección múltiple)
+
+## Home ("Hoy") — multi-select y reorder
+- `(tabs)/index.tsx`: botón `checkbox-outline` en el header activa `selectMode` — checkboxes por ejercicio, barra "N seleccionado(s) — Eliminar seleccionados"
+- Reorder: `reorderExercises` (store, `useWorkoutStore`) + `workoutRepository.reorderExercises` (persistencia), mismo patrón que la tira de navegación horizontal de `workout/[exerciseId].tsx`
+- Timer del workout: pausa/reanudar manual (`timerState: "idle"|"running"|"paused"`, acumula segundos en un ref al pausar)
+
+## LineChart.tsx — onPointPress
+- Prop `onPointPress?: (dataIndex: number) => void` — se llama con el índice en el array `data` completo (ya corregido el offset de `data.slice(-20)`), usado en `body-tracker/index.tsx` para mostrar el resto de medidas registradas ese día
 
 ## Android build
 

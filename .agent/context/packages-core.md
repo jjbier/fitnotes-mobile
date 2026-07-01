@@ -1,6 +1,6 @@
 # packages/core — @fitnotes/core
 
-_Last updated: 2026-06-23_
+_Last updated: 2026-07-01_
 
 **Regla absoluta:** cero imports de `react`, `next`, `expo`, `react-native`. Solo TypeScript puro + zustand + zod + immer.
 
@@ -41,11 +41,15 @@ groupWorkoutsByMonth(workouts)  // Record<"Month YYYY", Workout[]>
 getExerciseFields(type)         // → { showWeight, showReps, showDistance, showTime }
 ```
 
-## Tests (144 total)
+## Tests (203 total)
 
 - `exerciseStore.test.ts` — CRUD ejercicios y categorías
 - `workoutStore.test.ts` — workout lifecycle, sets, agrupaciones
 - `exerciseTypeCrud.test.ts` — CRUD para los 5 ExerciseTypes base
-- `progressStore.test.ts` — PRs y 1RM
 - `routineStore.test.ts` — rutinas y días
-- `utils.test.ts` — calculate1RM, formatWorkoutDate, etc.
+- `calculations.test.ts` — calculate1RM, calculatePlates, etc.
+- `dateUtils.test.ts` — formatWorkoutDate, getWeekRange, etc.
+- `schemas.test.ts` — validación Zod
+
+## Nota — `ChartPoint` duplicado
+`progressStore.ts` mantiene su propia interfaz `ChartPoint` (debe coincidir campo a campo con la de `packages/database/src/repositories/progressRepository.ts`: `totalReps`, `totalDistance`, `totalTime`, `maxSpeed`, `bestPace`, `weightByReps`). Al añadir un campo a una, añadirlo también a la otra o falla el type-check.

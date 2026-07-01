@@ -15,13 +15,16 @@ createServerClient(cookieStore)    // Server Components / Route Handlers
 
 | Repositorio | Métodos destacados |
 |---|---|
-| `workoutRepository` | getWorkoutByDate, createWorkout, addExercise(+group_id+group_name), getSets, createSet, updateSet, deleteSet |
+| `workoutRepository` | getWorkoutByDate, createWorkout, addExercise(+group_id+group_name), getSets, createSet, updateSet, deleteSet, exportAllCSV, **deleteWorkoutHistory(userId, {dateFrom, dateTo, exerciseId})** |
 | `exerciseRepository` | getCategories, getExercises, createExercise, toggleFavorite |
 | `routineRepository` | copyRoutine (deep), updateRoutine, updateDayExercise, **updateDayGroupName**, reorderDays, reorderExercises, savePredefinedSets |
-| `progressRepository` | getAllPersonalRecords, getChartData |
-| `bodyTrackerRepository` | getMeasurements, addEntry, deleteEntry, getAllEntries |
-| `calendarRepository` | getWorkoutsForMonth, getWorkoutSummary |
+| `progressRepository` | getAllPersonalRecords, getChartData (`ChartPoint` con totalReps/totalDistance/totalTime/maxSpeed/bestPace/weightByReps) |
+| `bodyTrackerRepository` | getMeasurements, addEntry, deleteEntry, getAllEntries, **exportAllCSV**, **reorderMeasurements**, **seedDefaultMeasurementsIfNeeded**, resetMeasurement |
+| `calendarRepository` | getWorkoutsForMonth, getWorkoutSummary, **getWorkoutHistoryDetailed**, **getWorkoutSetDetail**, **getWorkoutDatesForExerciseWithConditions** |
 | `goalsRepository` | getGoals, createGoal, updateGoal, deleteGoal, markAchieved |
+| **`backupRepository`** (nuevo) | `exportBackup(userId)`, `restoreBackup(userId, data, onStep?)`, `recalculatePersonalRecords(userId)`, `isBackupData(v)`. Usado por mobile (web tiene su propia versión inline en `settings/page.tsx`) |
+
+**Nota:** `ChartPoint` está duplicado en `packages/core/src/stores/progressStore.ts` — mantener ambas definiciones sincronizadas al añadir campos.
 
 ## Migraciones aplicadas en Supabase (`src/supabase/migrations/`)
 
@@ -30,6 +33,9 @@ createServerClient(cookieStore)    // Server Components / Route Handlers
 - `003_exercise_config_and_group_name.sql` — `exercises.weight_increment`, `default_rest_seconds`; `routine_day_exercises.group_id`; `workout_exercises.group_id`, `group_name`
 - `004_default_chart.sql` — `exercises.default_chart TEXT` ("weight"|"volume"|"reps")
 - `005_routine_day_exercise_group_name.sql` — `routine_day_exercises.group_name TEXT`
+- `006_body_measurement_order.sql` — `body_measurements.order_index INTEGER` (reorden drag&drop)
+
+**Tabla `exercise_goals`** existe en DB (goals por ejercicio) — presente en `types.ts`, gestionada por `goalsRepository`.
 
 ## SyncEngine (`src/sync/syncEngine.ts`)
 

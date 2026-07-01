@@ -1,6 +1,6 @@
 # Repositories — @fitnotes/database
 
-_Last updated: 2026-06-28_
+_Last updated: 2026-07-01_
 
 Todos exportados desde `packages/database/src/index.ts`. Todos usan `SupabaseClient<Database>`.
 
@@ -20,6 +20,8 @@ getSets(workoutExerciseId)
 createSet(data, userId)
 updateSet(id, data)
 deleteSet(id)
+exportAllCSV()
+deleteWorkoutHistory(userId, { dateFrom?, dateTo?, exerciseId? })  // filtra por rango/ejercicio; limpia workouts vacíos si filtra por ejercicio; sin filtros = borra todo
 ```
 
 ## exerciseRepository
@@ -65,7 +67,9 @@ getRoutineStats(routineIds)                      // { lastUsed, sessionCount } p
 ```ts
 getPersonalRecords(exerciseId)
 getAllPersonalRecords()
-getChartData(exerciseId)  // → ChartPoint[] { date, maxWeight, totalVolume, maxReps }
+getChartData(exerciseId)  // → ChartPoint[] { date, maxWeight, totalVolume, maxReps,
+                          //   totalReps, totalDistance, totalTime, maxSpeed, bestPace,
+                          //   weightByReps: Record<number, number> }
 ```
 
 ## bodyTrackerRepository
@@ -79,14 +83,24 @@ getEntries(measurementId, limit?)
 getAllEntries(userId)
 addEntry(data, userId)
 deleteEntry(id)
+resetMeasurement(measurementId)                  // borra todas las entradas de una medida
+reorderMeasurements(updates)                     // [{ id, order_index }]
+seedDefaultMeasurementsIfNeeded(userId)          // crea "Peso corporal"/"Grasa corporal" si el usuario no tiene medidas
+exportAllCSV()                                   // "" si no hay entradas
 ```
 
 ## calendarRepository
 
 ```ts
 getWorkoutsForMonth(year, month)
+getWorkoutCategoryColorsForMonth(year, month)    // Record<date, color[]>
+getWorkoutCategoryIdsForMonth(year, month)       // Record<date, categoryId[]>
 getWorkoutSummary(date)
 getWorkoutHistory(limit?)
+getWorkoutHistoryDetailed(limit?)                // + categories: {id,name,color}[] por workout
+getWorkoutSetDetail(workoutId)                   // workout con workout_exercises ordenados + sets completos
+getWorkoutDatesForExercise(exerciseId)
+getWorkoutDatesForExerciseWithConditions(exerciseId, minWeight?, minReps?)
 ```
 
 ## goalsRepository
@@ -97,4 +111,13 @@ createGoal(data, userId)
 updateGoal(id, data)
 deleteGoal(id)
 markAchieved(id, achievedAt)
+```
+
+## backupRepository (nuevo — usado por mobile)
+
+```ts
+exportBackup(userId): Promise<BackupData>                         // todas las tablas del usuario
+restoreBackup(userId, data: BackupData, onStep?): Promise<void>    // delete FK-safe + insert chunked (500)
+recalculatePersonalRecords(userId): Promise<number>                // borra y reconstruye personal_records desde sets
+isBackupData(v): v is BackupData                                   // type guard { version: 1, exported_at, workouts: [] }
 ```
