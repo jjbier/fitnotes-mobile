@@ -56,6 +56,8 @@ export default function BodyTrackerScreen() {
   const [chartMeasurementId, setChartMeasurementId] = useState<string | null>(null);
   const [chartEntries, setChartEntries] = useState<Entry[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
+  const [tappedChartDate, setTappedChartDate] = useState<string | null>(null);
+  const [tappedDateLoading, setTappedDateLoading] = useState(false);
 
   const [measureModal, setMeasureModal] = useState(false);
   const [editMeasurement, setEditMeasurement] = useState<Measurement | null>(null);
@@ -106,9 +108,20 @@ export default function BodyTrackerScreen() {
   async function loadChart(measurementId: string) {
     setChartMeasurementId(measurementId);
     setChartLoading(true);
+    setTappedChartDate(null);
     const { data } = await repo.getEntries(measurementId, 60);
     if (data) setChartEntries((data as Entry[]).slice().reverse());
     setChartLoading(false);
+  }
+
+  async function handleChartPointPress(index: number) {
+    const entry = chartEntries[index];
+    if (!entry) return;
+    const date = entry.recorded_at.slice(0, 10);
+    setTappedChartDate(date);
+    setTappedDateLoading(true);
+    await loadHistory();
+    setTappedDateLoading(false);
   }
 
   function openLogModal(measurementId: string) {
@@ -572,8 +585,40 @@ export default function BodyTrackerScreen() {
                     <Text style={{ fontSize: 13, fontWeight: "600", color: theme.text }}>{selectedM?.name}</Text>
                     <Text style={{ fontSize: 11, color: theme.textMuted }}>{selectedM?.unit}</Text>
                   </View>
-                  <LineChart data={chartData} width={width - 64} height={200} color={theme.primary} goalValue={selectedM?.goal_value ?? undefined} />
+                  <LineChart data={chartData} width={width - 64} height={200} color={theme.primary} goalValue={selectedM?.goal_value ?? undefined} onPointPress={handleChartPointPress} />
+                  <Text style={{ fontSize: 10, color: theme.textMuted, textAlign: "center", marginTop: 2 }}>Toca un punto para ver otras medidas de ese día</Text>
                 </View>
+
+                {tappedChartDate && (() => {
+                  const dayEntries = historyEntries.filter((e) => e.recorded_at.slice(0, 10) === tappedChartDate);
+                  return (
+                    <View style={{ backgroundColor: theme.surfaceMuted, borderRadius: 12, borderWidth: 1, borderColor: theme.borderLight, padding: 12, gap: 6 }}>
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>
+                          {new Date(tappedChartDate + "T00:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}
+                        </Text>
+                        <TouchableOpacity onPress={() => setTappedChartDate(null)}>
+                          <Ionicons name="close" size={16} color={theme.textMuted} />
+                        </TouchableOpacity>
+                      </View>
+                      {tappedDateLoading ? (
+                        <ActivityIndicator size="small" color={theme.primary} />
+                      ) : dayEntries.length === 0 ? (
+                        <Text style={{ fontSize: 12, color: theme.textMuted }}>Sin otras medidas registradas ese día.</Text>
+                      ) : (
+                        dayEntries.map((e) => {
+                          const m = measurements.find((meas) => meas.id === e.measurement_id);
+                          return (
+                            <View key={e.id} style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                              <Text style={{ fontSize: 12, color: theme.text, fontWeight: e.measurement_id === chartMeasurementId ? "700" : "400" }}>{m?.name ?? e.measurement_id}</Text>
+                              <Text style={{ fontSize: 12, color: theme.textMuted }}>{e.value} {m?.unit ?? ""}</Text>
+                            </View>
+                          );
+                        })
+                      )}
+                    </View>
+                  );
+                })()}
 
                 <View style={{ flexDirection: "row", gap: 12 }}>
                   {[

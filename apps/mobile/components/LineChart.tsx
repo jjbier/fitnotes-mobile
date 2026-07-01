@@ -15,6 +15,7 @@ interface LineChartProps {
   mini?: boolean;
   goalValue?: number;
   trendData?: number[];
+  onPointPress?: (dataIndex: number) => void;
 }
 
 const PAD_TOP = 20;
@@ -35,7 +36,7 @@ function niceMin(v: number, max: number): number {
   return Math.floor(v / magnitude) * magnitude;
 }
 
-export default function LineChart({ data, width, height = 180, color = "#6366f1", mini = false, goalValue, trendData }: LineChartProps) {
+export default function LineChart({ data, width, height = 180, color = "#6366f1", mini = false, goalValue, trendData, onPointPress }: LineChartProps) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
   if (!data || data.length === 0) return null;
@@ -193,7 +194,10 @@ export default function LineChart({ data, width, height = 180, color = "#6366f1"
               x={Math.max(padLeft, bx)} y={padTop}
               width={segW} height={chartH}
               fill="transparent"
-              onPress={() => setSelectedIdx(selectedIdx === i ? null : i)}
+              onPress={() => {
+                setSelectedIdx(selectedIdx === i ? null : i);
+                onPointPress?.(data.length - points.length + i);
+              }}
             />
           );
         })}

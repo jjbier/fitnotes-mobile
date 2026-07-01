@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import { SafeAreaView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, FlatList, ScrollView, Vibration, useWindowDimensions } from "react-native";
 import * as FileSystem from "expo-file-system";
+import { Audio } from "expo-av";
 import { useTheme } from "../../lib/theme";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -110,6 +111,9 @@ export default function TrainingScreen() {
   const [timerRemaining, setTimerRemaining] = useState(90);
   const [timerRunning, setTimerRunning] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [timerSoundEnabled, setTimerSoundEnabled] = useState(true);
+  const [timerVolume, setTimerVolume] = useState(80);
+  const timerSoundRef = useRef<Audio.Sound | null>(null);
 
   const repo = useMemo(() => createWorkoutRepository(supabase), []);
   const progressRepo = useMemo(() => createProgressRepository(supabase), []);
@@ -157,12 +161,21 @@ export default function TrainingScreen() {
         setAutoSelectNextSet((session.user.user_metadata?.auto_select_next_set as boolean | undefined) ?? true);
         setTrackPersonalRecords((session.user.user_metadata?.track_personal_records as boolean | undefined) ?? true);
         setMarkSetsComplete((session.user.user_metadata?.mark_sets_complete as boolean | undefined) ?? true);
+        setTimerSoundEnabled((session.user.user_metadata?.rest_timer_sound_enabled as boolean | undefined) ?? true);
+        setTimerVolume((session.user.user_metadata?.rest_timer_volume as number | undefined) ?? 80);
         const globalRest = (session.user.user_metadata?.default_rest_seconds as number | undefined) ?? 90;
         const restoredDuration = savedTimer?.seconds ?? globalRest;
         setTimerDuration(restoredDuration);
         setTimerRemaining(restoredDuration);
       }
     });
+  }, []);
+
+  useEffect(() => {
+    Audio.Sound.createAsync(require("../../assets/sounds/timer-end.mp3"), { shouldPlay: false })
+      .then(({ sound }) => { timerSoundRef.current = sound; })
+      .catch(() => {});
+    return () => { void timerSoundRef.current?.unloadAsync(); };
   }, []);
 
   useEffect(() => {
@@ -221,6 +234,10 @@ export default function TrainingScreen() {
             setTimerRunning(false);
             Vibration.vibrate([0, 400, 150, 400, 150, 400]);
             void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            if (timerSoundEnabled && timerSoundRef.current) {
+              void timerSoundRef.current.setVolumeAsync(Math.min(1, Math.max(0, timerVolume / 100)));
+              void timerSoundRef.current.replayAsync();
+            }
             return 0;
           }
           return prev - 1;

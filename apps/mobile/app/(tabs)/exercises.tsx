@@ -86,6 +86,8 @@ export default function ExercisesScreen() {
   const [editCatName, setEditCatName] = useState("");
   const [editCatColor, setEditCatColor] = useState(PRESET_COLORS[0]!);
   const [catEditSaving, setCatEditSaving] = useState(false);
+  const [hiddenCategoryIds, setHiddenCategoryIds] = useState<string[]>([]);
+  const [showHiddenCategories, setShowHiddenCategories] = useState(false);
 
   const repo = useMemo(() => createExerciseRepository(supabase), []);
   const { refetchSignal } = useSyncStatus();
@@ -93,7 +95,10 @@ export default function ExercisesScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) setUserId(session.user.id);
+    if (session?.user) {
+      setUserId(session.user.id);
+      setHiddenCategoryIds((session.user.user_metadata?.hidden_category_ids as string[] | undefined) ?? []);
+    }
     const [catRes, exRes, statsRes] = await Promise.all([
       repo.getCategories(),
       repo.getExercises(),
@@ -459,15 +464,27 @@ export default function ExercisesScreen() {
                   onPress={() => router.push({ pathname: "/exercises/[categoryId]", params: { categoryId: "favorites" } } as never)}
                 />
               )}
-              {categories.map((cat) => (
-                <CategoryCard
-                  key={cat.id}
-                  name={cat.name}
-                  color={cat.color}
-                  count={exercises.filter((e) => e.category_id === cat.id).length}
-                  onPress={() => router.push({ pathname: "/exercises/[categoryId]", params: { categoryId: cat.id } } as never)}
-                />
-              ))}
+              {categories
+                .filter((cat) => showHiddenCategories || !hiddenCategoryIds.includes(cat.id))
+                .map((cat) => (
+                  <CategoryCard
+                    key={cat.id}
+                    name={cat.name}
+                    color={cat.color}
+                    count={exercises.filter((e) => e.category_id === cat.id).length}
+                    onPress={() => router.push({ pathname: "/exercises/[categoryId]", params: { categoryId: cat.id } } as never)}
+                  />
+                ))}
+              {hiddenCategoryIds.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setShowHiddenCategories((v) => !v)}
+                  style={{ alignSelf: "center", marginTop: 8, paddingVertical: 6, paddingHorizontal: 14 }}
+                >
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                    {showHiddenCategories ? "Ocultar categorías ocultas" : `Mostrar ${hiddenCategoryIds.length} categoría(s) oculta(s)`}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </>
           )}
         </ScrollView>

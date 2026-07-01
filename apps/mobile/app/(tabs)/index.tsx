@@ -37,6 +37,7 @@ export default function HomeScreen() {
   const loadExercises = useExerciseStore((s) => s.loadExercises);
 
   const [userId, setUserId] = useState("");
+  const [showSetCountHome, setShowSetCountHome] = useState(true);
   const [currentDate, setCurrentDate] = useState(today);
   const [workoutComment, setWorkoutCommentLocal] = useState("");
   const [timerDisplay, setTimerDisplay] = useState(0);
@@ -92,7 +93,10 @@ export default function HomeScreen() {
     async function init() {
       setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) setUserId(session.user.id);
+      if (session?.user) {
+        setUserId(session.user.id);
+        setShowSetCountHome((session.user.user_metadata?.show_set_count_home as boolean | undefined) ?? true);
+      }
 
       const [recentRes, catRes, exRes] = await Promise.all([
         repo.getWorkouts(60),
@@ -623,13 +627,15 @@ export default function HomeScreen() {
                           >
                             <View style={{ flex: 1 }}>
                               <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>{exName}</Text>
-                              <Text style={{ fontSize: 12, color: allDone ? "#16a34a" : "#94a3b8", marginTop: 2 }}>
-                                {totalCount === 0
-                                  ? "Sin series"
-                                  : allDone
-                                  ? `${totalCount} series completadas`
-                                  : `${completedCount}/${totalCount} series`}
-                              </Text>
+                              {showSetCountHome && (
+                                <Text style={{ fontSize: 12, color: allDone ? "#16a34a" : "#94a3b8", marginTop: 2 }}>
+                                  {totalCount === 0
+                                    ? "Sin series"
+                                    : allDone
+                                    ? `${totalCount} series completadas`
+                                    : `${completedCount}/${totalCount} series`}
+                                </Text>
+                              )}
                             </View>
                             {allDone
                               ? <Ionicons name="checkmark-circle" size={20} color="#22c55e" />

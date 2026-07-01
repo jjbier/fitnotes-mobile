@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "../../lib/theme";
 import {
   SafeAreaView, Text, View, TouchableOpacity,
@@ -7,6 +7,8 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import ViewShot from "react-native-view-shot";
+import * as Sharing from "expo-sharing";
 import { ExerciseType, getExerciseFields, useExerciseStore, calculate1RM, estimateRepMax, todayISO } from "@fitnotes/core";
 import { createExerciseRepository, createProgressRepository, createWorkoutRepository, type ChartPoint } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
@@ -105,6 +107,26 @@ export default function ExerciseHistoryScreen() {
   const [showTrend, setShowTrend] = useState(false);
   const [estRepLimit, setEstRepLimit] = useState<number | undefined>(undefined);
   const [userId, setUserId] = useState("");
+  const [exportingImage, setExportingImage] = useState(false);
+  const chartShotRef = useRef<ViewShot>(null);
+
+  async function handleExportImage() {
+    if (!chartShotRef.current?.capture) return;
+    setExportingImage(true);
+    try {
+      const uri = await chartShotRef.current.capture();
+      const available = await Sharing.isAvailableAsync();
+      if (available) {
+        await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: "Compartir gráfico de progreso" });
+      } else {
+        Alert.alert("No disponible", "Compartir no está disponible en este dispositivo.");
+      }
+    } catch {
+      Alert.alert("Error", "No se pudo generar la imagen del gráfico.");
+    } finally {
+      setExportingImage(false);
+    }
+  }
   const [copyingSetId, setCopyingSetId] = useState<string | null>(null);
   const [copiedSetIds, setCopiedSetIds] = useState<Set<string>>(new Set());
   const [statsPeriod, setStatsPeriod] = useState<"workout" | "week" | "month" | "year" | "all" | "custom">("all");
@@ -440,9 +462,16 @@ export default function ExerciseHistoryScreen() {
                     {(() => {
                       const vol = visibleSets.filter((s) => s.is_complete && !s.is_warmup).reduce((acc, s) => acc + (s.weight && s.reps ? s.weight * s.reps : 0), 0);
                       return vol > 0 ? (
-                        <Text style={{ fontSize: 11, color: "#6366f1", fontWeight: "600" }}>{vol.toLocaleString()} {unit}</Text>
+                        <Text style={{ fontSize: 11, color: "#6366f1", fontWeight: "600", marginRight: 10 }}>{vol.toLocaleString()} {unit}</Text>
                       ) : null;
                     })()}
+                    <TouchableOpacity
+                      onPress={() => router.push(`/workout-detail/${session.workout_id}` as never)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel="Ver entrenamiento completo"
+                    >
+                      <Ionicons name="list-outline" size={16} color="#94a3b8" />
+                    </TouchableOpacity>
                   </View>
                   {session.comment ? (
                     <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }} numberOfLines={1}>{session.comment}</Text>
@@ -643,21 +672,43 @@ export default function ExerciseHistoryScreen() {
             )}
 
             {/* Chart */}
-            <View style={{ backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: "#f1f5f9", padding: 16 }}>
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 8 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#0f172a" }}>
-                  {availableMetrics.find((m) => m.key === metric)?.label}
-                </Text>
-                <Text style={{ fontSize: 11, color: "#94a3b8" }}>{chartUnit}</Text>
+            <ViewShot ref={chartShotRef} options={{ format: "png", quality: 0.95 }}>
+              <View style={{ backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: "#f1f5f9", padding: 16 }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 8 }}>
+                  <View>
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#0f172a" }}>
+                      {storeExercise?.name ?? name}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: "#94a3b8" }}>{availableMetrics.find((m) => m.key === metric)?.label}</Text>
+                  </View>
+                  <Text style={{ fontSize: 11, color: "#94a3b8" }}>{chartUnit}</Text>
+                </View>
+                {chartData.length === 0 ? (
+                  <Text style={{ fontSize: 13, color: "#94a3b8", textAlign: "center", paddingVertical: 24 }}>
+                    Sin sesiones a {repTarget} reps aún.
+                  </Text>
+                ) : (
+                  <LineChart data={chartData} width={width - 64} height={200} trendData={trendValues ?? undefined} />
+                )}
               </View>
-              {chartData.length === 0 ? (
-                <Text style={{ fontSize: 13, color: "#94a3b8", textAlign: "center", paddingVertical: 24 }}>
-                  Sin sesiones a {repTarget} reps aún.
-                </Text>
-              ) : (
-                <LineChart data={chartData} width={width - 64} height={200} trendData={trendValues ?? undefined} />
-              )}
-            </View>
+            </ViewShot>
+
+            {chartData.length > 0 && (
+              <TouchableOpacity
+                onPress={handleExportImage}
+                disabled={exportingImage}
+                style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingVertical: 10, opacity: exportingImage ? 0.5 : 1 }}
+              >
+                {exportingImage ? (
+                  <ActivityIndicator size="small" color="#6366f1" />
+                ) : (
+                  <>
+                    <Ionicons name="share-outline" size={15} color="#6366f1" />
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#6366f1" }}>Compartir imagen del gráfico</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
 
             {/* Summary stats */}
             {(() => {

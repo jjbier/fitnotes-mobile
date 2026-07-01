@@ -42,6 +42,8 @@ export default function CalendarScreen() {
   const [filteredExDates, setFilteredExDates] = useState<Set<string> | null>(null);
   const [filterLoading, setFilterLoading] = useState(false);
   const [weekStart, setWeekStart] = useState<0 | 1>(1);
+  const [showDayPanel, setShowDayPanel] = useState(true);
+  const [showCategoryDots, setShowCategoryDots] = useState(true);
 
   const storeExercises = useExerciseStore((s) => s.exercises);
   const storeCategories = useExerciseStore((s) => s.categories);
@@ -110,6 +112,8 @@ export default function CalendarScreen() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         setWeekStart((session.user.user_metadata?.calendar_week_start as 0 | 1 | undefined) ?? 1);
+        setShowDayPanel((session.user.user_metadata?.calendar_show_day_panel as boolean | undefined) ?? true);
+        setShowCategoryDots((session.user.user_metadata?.calendar_show_category_dots as boolean | undefined) ?? true);
       }
       if (storeExercises.length === 0) {
         const [catRes, exRes] = await Promise.all([exRepo.getCategories(), exRepo.getExercises()]);
@@ -149,6 +153,22 @@ export default function CalendarScreen() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listView]);
+
+  function toggleShowDayPanel() {
+    setShowDayPanel((v) => {
+      const next = !v;
+      void supabase.auth.updateUser({ data: { calendar_show_day_panel: next } });
+      return next;
+    });
+  }
+
+  function toggleShowCategoryDots() {
+    setShowCategoryDots((v) => {
+      const next = !v;
+      void supabase.auth.updateUser({ data: { calendar_show_category_dots: next } });
+      return next;
+    });
+  }
 
   async function handleSelectDate(dateStr: string) {
     const newSelected = selectedDate === dateStr ? null : dateStr;
@@ -293,6 +313,24 @@ export default function CalendarScreen() {
             <Text style={{ fontSize: 12, color: theme.textMuted }}>Limpiar</Text>
           </TouchableOpacity>
         )}
+        {!listView && (
+          <>
+            <TouchableOpacity
+              onPress={toggleShowCategoryDots}
+              accessibilityLabel={showCategoryDots ? "Mostrar indicador único" : "Mostrar puntos de categoría"}
+              style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: showCategoryDots ? theme.surface : "transparent" }}
+            >
+              <Ionicons name={showCategoryDots ? "ellipsis-horizontal" : "ellipse"} size={14} color={theme.textSecondary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={toggleShowDayPanel}
+              accessibilityLabel={showDayPanel ? "Ocultar panel del día" : "Mostrar panel del día"}
+              style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: showDayPanel ? theme.surface : "transparent" }}
+            >
+              <Ionicons name={showDayPanel ? "chevron-down" : "chevron-up"} size={14} color={theme.textSecondary} />
+            </TouchableOpacity>
+          </>
+        )}
         <TouchableOpacity onPress={() => setListView((v) => !v)} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: listView ? theme.primary : "transparent" }}>
           <Text style={{ fontSize: 12, fontWeight: "500", color: listView ? "#fff" : theme.text }}>{listView ? "Mes" : "Lista"}</Text>
         </TouchableOpacity>
@@ -399,8 +437,10 @@ export default function CalendarScreen() {
                     const dimmed = isFiltered && hasWorkout && !matchesFilter;
                     const isToday = dateStr === today;
                     const isSelected = dateStr === selectedDate;
-                    const dots = categoryColors[dateStr] ?? (hasWorkout ? [theme.primary] : []);
-                    const visibleDots = dots.slice(0, 4);
+                    const dots = showCategoryDots
+                      ? (categoryColors[dateStr] ?? (hasWorkout ? [theme.primary] : []))
+                      : (hasWorkout ? [theme.primary] : []);
+                    const visibleDots = dots.slice(0, showCategoryDots ? 4 : 1);
                     return (
                       <TouchableOpacity
                         key={day}
@@ -433,7 +473,7 @@ export default function CalendarScreen() {
           </View>
 
           {/* Selected date panel */}
-          {selectedDate && (
+          {showDayPanel && selectedDate && (
             <View style={{ borderWidth: 1, borderColor: theme.borderLight, borderRadius: 16, padding: 14, marginTop: 8 }}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
                 <Text style={{ fontSize: 13, fontWeight: "600", color: theme.text }}>{formatWorkoutDate(selectedDate)}</Text>

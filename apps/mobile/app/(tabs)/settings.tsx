@@ -18,7 +18,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 import { useTheme, useThemeModeStore, type ThemeMode } from "../../lib/theme";
-import { createWorkoutRepository, createBackupRepository, createBodyTrackerRepository, isBackupData, type BackupData } from "@fitnotes/database";
+import { createWorkoutRepository, createBackupRepository, createBodyTrackerRepository, createExerciseRepository, isBackupData, type BackupData } from "@fitnotes/database";
 
 function parseCSVRows(csv: string) {
   const lines = csv.trim().split(/\r?\n/);
@@ -61,6 +61,8 @@ export default function SettingsScreen() {
   const [trackPersonalRecords, setTrackPersonalRecords] = useState(true);
   const [markSetsComplete, setMarkSetsComplete] = useState(true);
   const [defaultRestSeconds, setDefaultRestSeconds] = useState("90");
+  const [restTimerSoundEnabled, setRestTimerSoundEnabled] = useState(true);
+  const [restTimerVolume, setRestTimerVolume] = useState("80");
   const [estimatedRecordsRepLimit, setEstimatedRecordsRepLimit] = useState("");
   const [signOutLoading, setSignOutLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
@@ -82,6 +84,9 @@ export default function SettingsScreen() {
   const [deleteHistoryExerciseId, setDeleteHistoryExerciseId] = useState<string | null>(null);
   const [deleteHistoryLoading, setDeleteHistoryLoading] = useState(false);
   const [exerciseOptions, setExerciseOptions] = useState<{ id: string; name: string }[]>([]);
+  const [showSetCountHome, setShowSetCountHome] = useState(true);
+  const [categoryOptions, setCategoryOptions] = useState<{ id: string; name: string; color: string }[]>([]);
+  const [hiddenCategoryIds, setHiddenCategoryIds] = useState<string[]>([]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -95,12 +100,32 @@ export default function SettingsScreen() {
       setTrackPersonalRecords((session.user.user_metadata?.track_personal_records as boolean | undefined) ?? true);
       setMarkSetsComplete((session.user.user_metadata?.mark_sets_complete as boolean | undefined) ?? true);
       setDefaultRestSeconds(String((session.user.user_metadata?.default_rest_seconds as number | undefined) ?? 90));
+      setRestTimerSoundEnabled((session.user.user_metadata?.rest_timer_sound_enabled as boolean | undefined) ?? true);
+      setRestTimerVolume(String((session.user.user_metadata?.rest_timer_volume as number | undefined) ?? 80));
       setEstimatedRecordsRepLimit(String((session.user.user_metadata?.estimated_records_rep_limit as number | undefined) ?? ""));
+      setShowSetCountHome((session.user.user_metadata?.show_set_count_home as boolean | undefined) ?? true);
+      setHiddenCategoryIds((session.user.user_metadata?.hidden_category_ids as string[] | undefined) ?? []);
     });
     supabase.from("exercises").select("id, name").order("name").then(({ data }) => {
       setExerciseOptions(data ?? []);
     });
+    createExerciseRepository(supabase).getCategories().then(({ data }) => {
+      setCategoryOptions(data ?? []);
+    });
   }, []);
+
+  async function handleShowSetCountHome(val: boolean) {
+    setShowSetCountHome(val);
+    await supabase.auth.updateUser({ data: { show_set_count_home: val } });
+  }
+
+  async function handleToggleCategoryVisible(categoryId: string) {
+    const next = hiddenCategoryIds.includes(categoryId)
+      ? hiddenCategoryIds.filter((id) => id !== categoryId)
+      : [...hiddenCategoryIds, categoryId];
+    setHiddenCategoryIds(next);
+    await supabase.auth.updateUser({ data: { hidden_category_ids: next } });
+  }
 
   async function handleThemeModeChange(mode: ThemeMode) {
     setThemeMode(mode);
@@ -145,6 +170,19 @@ export default function SettingsScreen() {
     const parsed = parseInt(val);
     if (!isNaN(parsed) && parsed > 0) {
       await supabase.auth.updateUser({ data: { default_rest_seconds: parsed } });
+    }
+  }
+
+  async function handleRestTimerSoundEnabled(val: boolean) {
+    setRestTimerSoundEnabled(val);
+    await supabase.auth.updateUser({ data: { rest_timer_sound_enabled: val } });
+  }
+
+  async function handleRestTimerVolume(val: string) {
+    setRestTimerVolume(val);
+    const parsed = parseInt(val, 10);
+    if (!isNaN(parsed) && parsed >= 0 && parsed <= 100) {
+      await supabase.auth.updateUser({ data: { rest_timer_volume: parsed } });
     }
   }
 
@@ -455,6 +493,37 @@ export default function SettingsScreen() {
             />
           </View>
           <View style={styles.prefRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.prefLabel}>Sonido del rest timer</Text>
+              <Text style={styles.prefSub}>Reproduce un aviso sonoro al terminar el descanso</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => handleRestTimerSoundEnabled(!restTimerSoundEnabled)}
+              accessibilityRole="switch"
+              accessibilityLabel="Sonido del rest timer"
+              accessibilityState={{ checked: restTimerSoundEnabled }}
+              style={{ width: 44, height: 26, borderRadius: 13, backgroundColor: restTimerSoundEnabled ? colors.primary : colors.border, justifyContent: "center", paddingHorizontal: 2 }}
+            >
+              <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: colors.background, alignSelf: restTimerSoundEnabled ? "flex-end" : "flex-start", shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 2, elevation: 2 }} />
+            </TouchableOpacity>
+          </View>
+          {restTimerSoundEnabled && (
+            <View style={styles.prefRow}>
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <Text style={styles.prefLabel}>Volumen del rest timer</Text>
+                <Text style={styles.prefSub}>0-100</Text>
+              </View>
+              <TextInput
+                style={[styles.input, { width: 70, textAlign: "center", marginBottom: 0 }]}
+                keyboardType="number-pad"
+                value={restTimerVolume}
+                onChangeText={handleRestTimerVolume}
+                placeholder="80"
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
+          )}
+          <View style={styles.prefRow}>
             <View style={{ flex: 1, marginRight: 12 }}>
               <Text style={styles.prefLabel}>Límite de reps para récords estimados</Text>
               <Text style={styles.prefSub}>Excluye series de muchas reps del 1RM estimado (recomendado: 10-12)</Text>
@@ -494,6 +563,45 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+          </View>
+        </View>
+
+        {/* Home screen */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Pantalla de inicio</Text>
+          <View style={styles.prefRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.prefLabel}>Mostrar contador de series</Text>
+              <Text style={styles.prefSub}>Series completadas/totales en cada ejercicio de Inicio</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => handleShowSetCountHome(!showSetCountHome)}
+              accessibilityRole="switch"
+              accessibilityLabel="Mostrar contador de series"
+              accessibilityState={{ checked: showSetCountHome }}
+              style={{ width: 44, height: 26, borderRadius: 13, backgroundColor: showSetCountHome ? colors.primary : colors.border, justifyContent: "center", paddingHorizontal: 2 }}
+            >
+              <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: colors.background, alignSelf: showSetCountHome ? "flex-end" : "flex-start", shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 2, elevation: 2 }} />
+            </TouchableOpacity>
+          </View>
+          <Text style={[styles.prefLabel, { marginTop: 4 }]}>Categorías visibles</Text>
+          <Text style={styles.prefSub}>Las desmarcadas se ocultan al añadir ejercicios desde Inicio</Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+            {categoryOptions.map((cat) => {
+              const visible = !hiddenCategoryIds.includes(cat.id);
+              return (
+                <TouchableOpacity
+                  key={cat.id}
+                  onPress={() => handleToggleCategoryVisible(cat.id)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: visible }}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: colors.border, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, opacity: visible ? 1 : 0.4 }}
+                >
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: cat.color }} />
+                  <Text style={{ fontSize: 12, fontWeight: "500", color: colors.text }}>{cat.name}</Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 
