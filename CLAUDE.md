@@ -97,16 +97,18 @@ fitnotes-app/
 - Tabla `exercise_goals` existe en DB (goals por ejercicio)
 - `SyncEngine` — push/pull/sync con `changedTables` propagado correctamente
 
-### `apps/web` ✅ — todas las rutas conectadas a Supabase
-`/dashboard`, `/exercise`, `/exercise/[id]`, `/progress`, `/calendar`, `/routines`, `/routines/[id]`, `/body-tracker`, `/body-tracker/settings`, `/tools`, `/settings`
+### `apps/web` ✅ — todas las rutas conectadas a Supabase, estructura de navegación igualada a mobile
+`/dashboard`, `/exercise`, `/exercise/[id]`, `/exercise/history/[exerciseId]`, `/search`, `/progress`, `/calendar`, `/routines`, `/routines/[id]`, `/body-tracker`, `/body-tracker/settings`, `/tools`, `/settings`, `/workout/[date]`
 
+- **Sidebar (desktop) y MobileNav (móvil web)**: 6 secciones, idénticas a las tabs de mobile (Hoy/Calendario/Ejercicios/Progreso/Rutinas/Configuración) — `/body-tracker` y `/tools` YA NO son ítems de nav de primer nivel, se acceden desde secciones dedicadas dentro de Configuración ("Herramientas"/"Salud"), igual que en mobile
+- **`/search`** (nuevo, 2026-07-01): búsqueda global de ejercicios ordenados por entrenados-recientemente primero, con resumen de última sesión (fecha, nº series, peso/reps máx.) — accesible desde el icono de historial en `/exercise`, paridad con `search/index.tsx` de mobile
 - **Dashboard**: timer con pausa/reanudar manual (`WorkoutTimer.tsx`), contador de series opcional (Home Screen Settings)
 - **Body Tracker**: click en punto de gráfica → medidas relacionadas de esa fecha; goal_value, drag&drop, CSV export
 - **Calendario**: toggles panel inferior / puntos de categoría vs. círculo, filtros avanzados, list view con detalle expandible
-- **Progreso**: tab "Estadísticas" con selector de periodo, modos "Peso por reps"/"Progresión rep max"
+- **Progreso**: `ExerciseOverview` (panel lateral) con tabs Récords/Gráfica/Historial/Estadísticas/Objetivo — la gráfica (`ProgressChart.tsx`) ya tenía export a PNG (SVG→canvas, botón "Exportar") antes de esta revisión, equivalente a "compartir imagen" de mobile
 - **Tools**: 1RM + Set% (con "Add to Workout" y PRSelector) + Plate calculator configurable + RestTimer SVG
-- **Settings**: perfil, toggles, recalcular PRs, backup/restore `.fitnotes`, CSV, Google Drive (con rotación), eliminar historial con filtros, Home Screen Settings (contador series + categorías visibles)
-- **Accesibilidad WCAG AA**, **CSP headers**, **CI/CD** (GitHub Actions + dependabot), **E2E Playwright** (9 specs)
+- **Settings**: perfil, toggles, recalcular PRs, backup/restore `.fitnotes`, CSV, Google Drive (con rotación), eliminar historial con filtros, Home Screen Settings (contador series + categorías visibles), secciones Herramientas/Salud (enlaces a /tools y /body-tracker)
+- **Accesibilidad WCAG AA**, **CSP headers**, **CI/CD** (GitHub Actions + dependabot), **E2E Playwright** (13 specs, 66 tests)
 
 ### `apps/mobile` ✅ — APK release, feature parity con web
 
