@@ -391,6 +391,7 @@ export default function ExercisesScreen() {
         <View style={{ flex: 1, flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.inputBg, borderRadius: 12, paddingHorizontal: 12, gap: 8 }}>
           <Ionicons name="search" size={16} color={colors.textSecondary} />
           <TextInput
+            testID="exercises-search-input"
             style={{ flex: 1, paddingVertical: 12, fontSize: 14 }}
             placeholder="Buscar ejercicios…"
             value={search}

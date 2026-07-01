@@ -568,7 +568,7 @@ function PlateBlock({ weight }: { weight: number }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingTop: 12, paddingBottom: 4, gap: 4 },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 8 },
   backBtn: { padding: 4 },
   title: { fontSize: 20, fontWeight: "700", color: "#0f172a" },
   tabBar: { flexDirection: "row", paddingHorizontal: 16, gap: 6, marginBottom: 4, marginTop: 8 },

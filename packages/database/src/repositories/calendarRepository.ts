@@ -3,11 +3,20 @@ import type { Database } from "../supabase/types.js";
 
 type Client = SupabaseClient<Database>;
 
+// `new Date(year, month, 0).toISOString()` convierte a UTC — en cualquier
+// timezone con offset positivo (p.ej. Europe/Madrid, UTC+2) esto resta un día
+// al último día del mes, excluyéndolo de los rangos de fecha. `.getDate()`
+// lee el día del mes en hora local, sin pasar por UTC.
+function lastDayOfMonth(year: number, month: number): string {
+  const day = new Date(year, month, 0).getDate();
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 export function createCalendarRepository(client: Client) {
   return {
     getWorkoutsForMonth(year: number, month: number) {
       const start = `${year}-${String(month).padStart(2, "0")}-01`;
-      const end = new Date(year, month, 0).toISOString().split("T")[0]!;
+      const end = lastDayOfMonth(year, month);
       return client
         .from("workouts")
         .select("id, date, comment")
@@ -18,7 +27,7 @@ export function createCalendarRepository(client: Client) {
 
     async getWorkoutCategoryColorsForMonth(year: number, month: number): Promise<Record<string, string[]>> {
       const start = `${year}-${String(month).padStart(2, "0")}-01`;
-      const end = new Date(year, month, 0).toISOString().split("T")[0]!;
+      const end = lastDayOfMonth(year, month);
       const { data } = await client
         .from("workouts")
         .select("date, workout_exercises(exercises(categories(id, color)))")
@@ -102,7 +111,7 @@ export function createCalendarRepository(client: Client) {
 
     async getWorkoutCategoryIdsForMonth(year: number, month: number): Promise<Record<string, string[]>> {
       const start = `${year}-${String(month).padStart(2, "0")}-01`;
-      const end = new Date(year, month, 0).toISOString().split("T")[0]!;
+      const end = lastDayOfMonth(year, month);
       const { data } = await client
         .from("workouts")
         .select("date, workout_exercises(exercises(categories(id)))")

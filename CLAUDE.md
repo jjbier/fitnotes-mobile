@@ -125,7 +125,9 @@ fitnotes-app/
 cd apps/mobile/android && ./gradlew assembleRelease --no-daemon
 /opt/Android-Sdk/platform-tools/adb install -r apps/mobile/android/app/build/outputs/apk/release/app-release.apk
 ```
-Última build (2026-07-01) incluye `expo-av`/`expo-sharing`/`react-native-view-shot` — autolinking los incorporó sin cambios adicionales. **Pendiente de instalar** en dispositivo (sin ADB device conectado en la última sesión).
+Última build (2026-07-01) incluye `expo-av`/`expo-sharing`/`react-native-view-shot` + **icono de app nuevo** (checklist: clipboard blanco con 3 checkboxes marcados sobre fondo indigo `#6366f1`) — instalada correctamente en dispositivo `ZY22G9PDSV`.
+
+**Icono de app**: generado con Pillow (`apps/mobile/assets/images/icon.png` + `adaptive-icon.png` + `splash.png` + `favicon.png`, 1024×1024 salvo favicon 48×48). Como `android/` está gitignorado y ya prebuildeado, un cambio de icono en `assets/images/` **no** se aplica solo con `gradlew assembleRelease` — hay que regenerar a mano los `mipmap-*/ic_launcher*.webp` en `android/app/src/main/res/` (legacy 48-192px desde `icon.png`, `ic_launcher_round.webp` con máscara circular, `ic_launcher_foreground.webp` 108-432px desde `adaptive-icon.png` transparente) antes de compilar. Si se hace un `expo prebuild` limpio en el futuro, ya tomará los assets fuente automáticamente.
 
 ### Datos en Supabase ✅
 30 ejercicios creados: 6 por cada categoría (Tren Inferior, Pecho, Espalda, Hombros, Brazos).
@@ -137,9 +139,29 @@ cd apps/mobile/android && ./gradlew assembleRelease --no-daemon
 - `shadcn/ui` no inicializado — incompatibilidad `eslint-config-next` + ESLint v9
 - `packages/ui` vacío
 - **EAS `projectId`**: `app.json` tiene placeholder — requiere `eas init` con cuenta Expo real
-- **Detox**: cero tests automatizados en mobile
-- **E2E tests**: se saltan si no hay `PLAYWRIGHT_USER_EMAIL` + `PLAYWRIGHT_USER_PASSWORD`
+- **E2E tests (web)**: se saltan si no hay `PLAYWRIGHT_USER_EMAIL` + `PLAYWRIGHT_USER_PASSWORD`
+- **Detox (mobile)**: configurado y funcional (10 tests: smoke/navigation/interactions) — ver sección "E2E mobile (Detox)" abajo
 - Sin gaps funcionales conocidos vs. la app de referencia FitNotes (ver `docs/implementation-plan-2026-07.md`)
+
+---
+
+## E2E mobile (Detox) — 2026-07-01
+
+Configurado sobre el dispositivo Android físico conectado (`android.attached`, sin emulador/AVD). 10 tests en 3 specs: `e2e/smoke.test.js`, `e2e/navigation.test.js` (las 6 tabs), `e2e/interactions.test.js` (búsqueda de ejercicios, toggle de settings).
+
+**Gotchas encontrados al configurarlo** (útiles si hay que tocar esto de nuevo):
+- Detox publica sus artefactos Android en un **repo Maven local dentro del propio paquete npm** (`node_modules/detox/Detox-android`), NO en Maven Central (que solo tiene versiones antiguas `com.wix:detox<=0.1.1` sin relación). Hay que añadir ese path como `maven { url ... }` en `android/build.gradle` (`allprojects.repositories`) — si no, Gradle intenta resolverlo vía JitPack/sonatype y falla con timeouts confusos.
+- `jest`/`jest-circus`/`jest-mock` deben quedar en la MISMA major version (usamos `29.7.0` fijo) — pnpm puede acabar con dos copias de `jest-mock` si se instalan en momentos distintos, dando `TypeError: clearMocksOnScope is not a function`.
+- El build debug necesita **Metro corriendo** (`npx expo start`) antes de `detox test` — si no, la app tarda >45s en arrancar (o nunca conecta) porque intenta cargar el bundle JS de un Metro inexistente.
+- El diálogo nativo de Android "¿Guardar contraseña en Google?" (autofill) roba el foco de ventana y rompe Espresso tras el primer login. Hay que desactivar el autofill service del dispositivo durante los tests: `adb shell settings put secure autofill_service null` (restaurar después con el valor original, típicamente `com.google.android.gms/com.google.android.gms.autofill.service.AutofillService`).
+- `android/app/build.gradle`: añadido `testInstrumentationRunner`, `testBuildType`, y `androidTestImplementation('com.wix:detox:20.51.4')` (versión pineada, no `+`). Runner custom en `android/app/src/androidTest/java/com/fitnotes/app/DetoxTest.java`.
+- Se añadieron `testID`s puntuales donde no había ninguno: `login-email-input`, `login-password-input`, `login-submit-button`, `exercises-search-input`.
+
+```bash
+cd apps/mobile && npx expo start &                      # Metro debe estar corriendo
+npx detox test --configuration android.att.debug         # todos los specs
+npx detox test --configuration android.att.debug e2e/navigation.test.js
+```
 
 ---
 

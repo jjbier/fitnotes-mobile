@@ -64,12 +64,12 @@ export default function WorkoutDetailScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.borderLight }}>
-        <TouchableOpacity onPress={() => router.back()} accessibilityLabel="Volver" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: colors.borderLight }}>
+        <TouchableOpacity onPress={() => router.back()} accessibilityLabel="Volver" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ marginRight: 12 }}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <View style={{ flex: 1, marginLeft: 8 }}>
-          <Text style={{ fontSize: 16, fontWeight: "700", color: colors.text }}>Entrenamiento completo</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 20, fontWeight: "700", color: colors.text }}>Entrenamiento completo</Text>
           {date ? <Text style={{ fontSize: 12, color: colors.textMuted }}>{formatWorkoutDate(date)}</Text> : null}
         </View>
       </View>

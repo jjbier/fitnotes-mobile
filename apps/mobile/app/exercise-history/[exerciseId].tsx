@@ -391,12 +391,12 @@ export default function ExerciseHistoryScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.backgroundAlt }}>
       {/* Header */}
-      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.background, borderBottomWidth: 1, borderColor: colors.borderLight }}>
+      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, backgroundColor: colors.background, borderBottomWidth: 1, borderColor: colors.borderLight }}>
         <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 16, fontWeight: "600", color: colors.text }} numberOfLines={1}>{name ?? "Historial"}</Text>
+          <Text style={{ fontSize: 20, fontWeight: "700", color: colors.text }} numberOfLines={1}>{name ?? "Historial"}</Text>
           <Text style={{ fontSize: 12, color: colors.textMuted }}>
             {loading ? "Cargando…" : `${sessions.length} ${sessions.length === 1 ? "sesión" : "sesiones"}`}
           </Text>

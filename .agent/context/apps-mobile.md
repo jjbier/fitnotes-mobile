@@ -128,3 +128,4 @@ Fixes permanentes:
 - `app/build.gradle`: `implementation("androidx.core:core-splashscreen:1.0.1")`
 - `react-native.config.js`: override `expo` packageImportPath
 - NO `@react-native-async-storage/async-storage` (usa FileStorage)
+- **Detox** (ver CLAUDE.md "E2E mobile (Detox)"): `android/build.gradle` — repo maven local `node_modules/detox/Detox-android`; `app/build.gradle` — `testInstrumentationRunner`, `testBuildType`, `androidTestImplementation('com.wix:detox:20.51.4')` (versión pineada, no `+`); `app/src/androidTest/java/com/fitnotes/app/DetoxTest.java` (runner custom) — todo esto vive en `android/` (gitignorado) y hay que reaplicarlo tras cualquier `expo prebuild` limpio

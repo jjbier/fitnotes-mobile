@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator, Alert, TextInput, Share, Modal, FlatList } from "react-native";
 import { NestableScrollContainer, NestableDraggableFlatList, ScaleDecorator, type RenderItemParams } from "react-native-draggable-flatlist";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useWorkoutStore, useExerciseStore, formatWorkoutDate, todayISO, ExerciseType } from "@fitnotes/core";
 import type { WorkoutExercise } from "@fitnotes/core";
@@ -14,6 +14,7 @@ import { useTheme } from "../../lib/theme";
 export default function HomeScreen() {
   const colors = useTheme();
   const router = useRouter();
+  const params = useLocalSearchParams<{ date?: string }>();
   const today = todayISO();
 
   const activeWorkout = useWorkoutStore((s) => s.activeWorkout);
@@ -38,7 +39,7 @@ export default function HomeScreen() {
 
   const [userId, setUserId] = useState("");
   const [showSetCountHome, setShowSetCountHome] = useState(true);
-  const [currentDate, setCurrentDate] = useState(today);
+  const [currentDate, setCurrentDate] = useState(params.date || today);
   const [workoutComment, setWorkoutCommentLocal] = useState("");
   const [timerDisplay, setTimerDisplay] = useState(0);
   const [timerState, setTimerState] = useState<"idle" | "running" | "paused">("idle");
@@ -120,7 +121,7 @@ export default function HomeScreen() {
       const summaryMap: Record<string, { exerciseCount: number; volume: number }> = {};
       for (const s of summaries) summaryMap[s.id] = { exerciseCount: s.exerciseCount, volume: s.volume };
       setRecentSummaries(summaryMap);
-      await loadWorkoutForDate(today);
+      await loadWorkoutForDate(params.date || today);
       setLoading(false);
     }
     init();
@@ -132,6 +133,15 @@ export default function HomeScreen() {
     loadWorkoutForDate(currentDate);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refetchSignal]);
+
+  // Navegación desde Calendario ("Ver →") — la tab ya montada solo recibe params nuevos
+  useEffect(() => {
+    if (params.date && params.date !== currentDate) {
+      setCurrentDate(params.date);
+      loadWorkoutForDate(params.date);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.date]);
 
   // Sync local comment with store
   useEffect(() => {

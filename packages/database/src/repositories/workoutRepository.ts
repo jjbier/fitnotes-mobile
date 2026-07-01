@@ -13,11 +13,16 @@ export function createWorkoutRepository(client: Client) {
     // ─── Workouts ──────────────────────────────────────────────────────────────
 
     async getWorkoutByDate(date: string) {
-      return client
+      // No hay constraint UNIQUE(user_id, date) en DB — .maybeSingle() lanzaría error
+      // si alguna vez hay más de una fila para la fecha (p.ej. doble clic en "Iniciar
+      // entrenamiento" bajo latencia). Tomamos la más antigua y toleramos duplicados.
+      const { data, error } = await client
         .from("workouts")
         .select("*")
         .eq("date", date)
-        .maybeSingle();
+        .order("created_at", { ascending: true })
+        .limit(1);
+      return { data: data?.[0] ?? null, error };
     },
 
     async getWorkouts(limit = 30) {

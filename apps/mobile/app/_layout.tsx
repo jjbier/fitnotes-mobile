@@ -175,8 +175,12 @@ export default function RootLayout() {
           />
           <Stack.Screen name="exercises/[categoryId]" options={{ headerTitle: "Exercises" }} />
           <Stack.Screen name="routines/[id]" options={{ headerTitle: "Routine" }} />
-          <Stack.Screen name="body-tracker/index" options={{ headerTitle: "Medidas corporales" }} />
+          <Stack.Screen name="body-tracker/index" options={{ headerShown: false }} />
           <Stack.Screen name="search/index" options={{ headerShown: false }} />
+          <Stack.Screen name="exercise-history/[exerciseId]" options={{ headerShown: false }} />
+          <Stack.Screen name="workout-detail/[workoutId]" options={{ headerShown: false }} />
+          <Stack.Screen name="calculators" options={{ headerShown: false }} />
+          <Stack.Screen name="goals/index" options={{ headerShown: false }} />
         </Stack>
         {syncStatus !== "idle" && (
           <View style={[styles.syncBanner, syncStatus === "error" && styles.syncBannerError]}>

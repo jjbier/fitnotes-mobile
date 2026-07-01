@@ -36,6 +36,7 @@ export default function LoginScreen() {
           <View style={{ gap: 6 }}>
             <Text style={{ fontSize: 14, fontWeight: "500", color: theme.text }}>Correo electrónico</Text>
             <TextInput
+              testID="login-email-input"
               style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 12, backgroundColor: theme.inputBg, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, color: theme.text }}
               value={email}
               onChangeText={setEmail}
@@ -49,6 +50,7 @@ export default function LoginScreen() {
           <View style={{ gap: 6 }}>
             <Text style={{ fontSize: 14, fontWeight: "500", color: theme.text }}>Contraseña</Text>
             <TextInput
+              testID="login-password-input"
               style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 12, backgroundColor: theme.inputBg, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, color: theme.text }}
               value={password}
               onChangeText={setPassword}
@@ -59,6 +61,7 @@ export default function LoginScreen() {
           </View>
 
           <TouchableOpacity
+            testID="login-submit-button"
             onPress={handleSignIn}
             disabled={loading}
             style={{ marginTop: 8, backgroundColor: theme.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: loading ? 0.6 : 1 }}
