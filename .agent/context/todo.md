@@ -1,6 +1,16 @@
 # Trabajo pendiente
 
-_Last updated: 2026-07-01_
+_Last updated: 2026-07-02_
+
+## Completado ✅ 2026-07-02 — paridad visual/funcional web↔mobile + bugs reales
+- Web: nav restructurada a 6 secciones (igual que mobile), nueva ruta `/search` (búsqueda global)
+- Web: Dashboard reconstruido con franja semanal+racha, lista de ejercicios progress-bar+drag&drop+multi-select, resumen al finalizar (`FinishSummaryModal`), aplicado también a `/workout/[date]`
+- Web: `ConfirmDialog` propio, `EmptyState` reutilizable, iconos unicode→`lucide-react`, radios de borde aumentados (paridad visual con mobile)
+- Web: **fix bug preexistente crítico** — Tailwind v4 sin `@theme` no generaba CSS para `bg-primary`/`text-muted-foreground`/etc. desde el scaffold inicial del proyecto; no lo detectaban los tests (comprueban DOM, no colores)
+- Core: `formatWorkoutDate` traducido al español (afecta a web y mobile)
+- Mobile: fix Alert.alert de rutinas (límite de 3 botones en Android ocultaba "Eliminar"), FAB Ejercicios "Nueva rutina"→"Nueva categoría"
+- Test: specs de Playwright actualizados al nuevo ConfirmDialog (dialog.accept() nativo → clic real en alertdialog)
+- Verificado en vivo: Detox (mobile) + Playwright completo (web, 66 tests) + capturas de pantalla en dispositivo físico
 
 ## Completado ✅ (Phases 0–7 + pulido + sync + UX fixes + Fases 0–5 plan de paridad FitNotes)
 
@@ -44,8 +54,7 @@ _Last updated: 2026-07-01_
 
 ## Pendiente real (bloqueado externamente)
 - **EAS `projectId`**: `app.json` tiene placeholder — `eas init` requiere cuenta Expo del usuario
-- **Detox**: cero tests automatizados en mobile
-- Instalar APK reconstruido (con expo-av/expo-sharing/react-native-view-shot) en dispositivo — sin ADB device conectado en la última sesión
+- Cuenta de test Supabase compartida y frágil ante fechas relativas — algunos specs de Playwright/Detox pueden fallar por datos, no por código (ver CLAUDE.md)
 
 ## Descartado
 - `shadcn/ui` — incompatibilidad eslint-config-next + ESLint v9

@@ -1,6 +1,6 @@
 # packages/core — @fitnotes/core
 
-_Last updated: 2026-07-01_
+_Last updated: 2026-07-02_
 
 **Regla absoluta:** cero imports de `react`, `next`, `expo`, `react-native`. Solo TypeScript puro + zustand + zod + immer.
 
@@ -34,7 +34,7 @@ calculateSetWeight(base, pct, increment)
 calculatePlates(target, bar, plates)
 calculatePace(distKm, timeS)    // s/km
 calculateSpeed(distKm, timeS)   // km/h
-formatWorkoutDate(dateStr)      // "Mon, June 16, 2026"
+formatWorkoutDate(dateStr)      // "Lun, 16 de junio de 2026" — día/mes en español (arrays hardcodeados, NO Intl — evita problemas de soporte ICU en Hermes/RN)
 todayISO()                      // "YYYY-MM-DD"
 getWeekRange(dateStr)           // { start, end } lun→dom
 groupWorkoutsByMonth(workouts)  // Record<"Month YYYY", Workout[]>

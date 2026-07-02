@@ -1,6 +1,6 @@
 # apps/mobile — Expo SDK 52
 
-_Last updated: 2026-07-01_
+_Last updated: 2026-07-02_
 
 ## Config
 - `app.json` → scheme `fitnotes`, typedRoutes enabled. **expo-sqlite plugin ELIMINADO** (causaba crash). EAS `projectId` es placeholder — requiere `eas init`
@@ -73,7 +73,7 @@ app/
 │   ├── _layout.tsx              6 tabs: Hoy/Calendario/Ejercicios/Progreso/Rutinas/Configuración
 │   ├── index.tsx                Hoy — workout por fecha, delete ejercicio, refetchSignal
 │   ├── calendar.tsx             grid + lista, swipe entre meses, refetchSignal ✅
-│   ├── exercises.tsx            browse + speed dial FAB (crear ejercicio / nueva rutina)
+│   ├── exercises.tsx            browse + speed dial FAB (Nuevo ejercicio / **Nueva categoría** — modal standalone, ya NO "Nueva rutina": no pertenecía a esta pantalla)
 │   ├── progress.tsx             PRs expandibles + 1RM estimado
 │   ├── tools.tsx                ← TAB "RUTINAS" — lista/crear/editar/copiar/eliminar
 │   └── settings.tsx             perfil, kg/lb, Herramientas→calculadoras, body-tracker, sign-out, delete
@@ -87,6 +87,9 @@ app/
 ├── goals/index.tsx              objetivos por ejercicio
 └── exercise-history/[exerciseId].tsx  historial + gráfico LineChart + export imagen (view-shot) + link a workout-detail
 ```
+
+## Rutinas — menú por rutina (`(tabs)/tools.tsx`)
+El menú de opciones (Editar/Copiar/Eliminar) usa un **`Modal` propio**, NO `Alert.alert`: Android solo soporta 3 botones nativos en `Alert.alert` (positive/negative/neutral) — con 4 (Cancelar/Editar/Copiar/Eliminar) el 4º se descartaba en silencio y "Eliminar" nunca aparecía. Mismo patrón para cualquier menú con >3 acciones. Verificado en vivo con Detox contra dispositivo físico (único bug de esta clase encontrado tras auditar los ~76 `Alert.alert()` de la app).
 
 ## Supersets — flujo completo
 
@@ -122,6 +125,10 @@ if (psLoadingForRef.current !== rdeId) return; // descartar si cambió ejercicio
 cd apps/mobile/android && ./gradlew assembleRelease --no-daemon
 /opt/Android-Sdk/platform-tools/adb install app/build/outputs/apk/release/app-release.apk
 ```
+
+**Gotchas de build/release:**
+- **Gradle no detecta cambios en `packages/core`/`packages/database`** como input de `createBundleReleaseJsAndAssets` — si se edita un paquete compartido y se corre `assembleRelease`, esa tarea puede quedar UP-TO-DATE con el bundle JS viejo. Forzar: `./gradlew createBundleReleaseJsAndAssets --rerun-tasks --no-daemon` antes de `assembleRelease`. Verificar con `unzip -p app-release.apk assets/index.android.bundle | grep -a "<string-a-buscar>"` (es bytecode Hermes, usar `grep -a`).
+- **Detox pisa la release**: `android.debug` y `android.release` comparten `applicationId: com.fitnotes.app` (sin `applicationIdSuffix`) — instalar la build debug de Detox para testear sobrescribe la release ya instalada, y esa build debug necesita Metro corriendo para cargar el JS (si no, pantalla en blanco / "Unable to load script"). **Reinstalar la release al terminar de testear con Detox.**
 
 Fixes permanentes:
 - `gradle.properties`: `android.kotlinVersion=1.9.24`

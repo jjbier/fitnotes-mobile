@@ -1,6 +1,6 @@
 # Architecture — FitNotes App
 
-_Last updated: 2026-07-01_
+_Last updated: 2026-07-02_
 
 ## Monorepo layout
 
@@ -45,6 +45,10 @@ fitnotes-app/
 | Home Screen Settings sin migración DB | Categorías ocultas = lista de IDs client-side (localStorage web / user_metadata mobile) — evita tocar RLS/schema para un ajuste puramente visual |
 | Backup/restore mobile sin document-picker nativo | Reutiliza patrón ya usado por import CSV: export vía `Share.share`, restore vía modal de pegado de texto — evita instalar `expo-document-picker` |
 | Rest timer sound vía `expo-av` (no `expo-audio`) | SDK 52: `expo-audio` aún beta/inestable en esa versión; `expo-av` es la opción estable para playback simple |
+| `@theme inline` en `apps/web/app/globals.css` (2026-07-02) | Tailwind v4 no genera utilidades para colores custom (`bg-primary`, etc.) sin registrarlos en `@theme` — bug presente desde el scaffold, pasó desapercibido porque los tests E2E comprueban DOM/roles, no CSS computado |
+| `formatWorkoutDate` con arrays hardcodeados (no `Intl.DateTimeFormat`) | Hermes (RN/mobile) puede tener soporte ICU incompleto — arrays evitan depender de `Intl` en un util compartido con mobile |
+| `ConfirmDialog` (React) en vez de `window.confirm()` en web | Paridad visual con mobile (Alert.alert estilizado); rompe cualquier test E2E que use `page.once("dialog", ...)` — hay que clicar el botón del `alertdialog` |
+| `Modal` propio en vez de `Alert.alert` para menús >3 opciones (mobile) | Android limita `Alert.alert` a 3 botones nativos; un 4º se descarta en silencio sin error |
 
 ## Base de datos (Supabase — ref: `fbhjiwtriqrxibqwsyqj`)
 
