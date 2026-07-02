@@ -34,6 +34,8 @@ export default function RoutinesScreen() {
   const [copyName, setCopyName] = useState("");
   const [copying, setCopying] = useState(false);
 
+  const [menuTarget, setMenuTarget] = useState<{ id: string; name: string; notes: string } | null>(null);
+
   const [routineStats, setRoutineStats] = useState<Record<string, { lastUsed: string | null; sessionCount: number }>>({});
 
   const repo = useMemo(() => createRoutineRepository(supabase), []);
@@ -69,13 +71,11 @@ export default function RoutinesScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refetchSignal]);
 
+  // Nota: Alert.alert en Android solo soporta 3 botones (positive/negative/
+  // neutral) — con 4 botones (Cancelar/Editar/Copiar/Eliminar) el 4º se
+  // descartaba en silencio y "Eliminar" nunca aparecía. Usamos un Modal propio.
   function openMenu(id: string, name: string, notes: string) {
-    Alert.alert(name, undefined, [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Editar", onPress: () => { setEditSource({ id, name, notes }); setEditName(name); setEditNotes(notes); } },
-      { text: "Copiar", onPress: () => { setCopySource({ id, name }); setCopyName(`Copia de ${name}`); } },
-      { text: "Eliminar", style: "destructive", onPress: () => confirmDelete(id, name) },
-    ]);
+    setMenuTarget({ id, name, notes });
   }
 
   function confirmDelete(id: string, name: string) {
@@ -160,8 +160,10 @@ export default function RoutinesScreen() {
                   })()}
                 </View>
                 <TouchableOpacity
+                  testID={`routine-menu-${r.name}`}
                   onPress={() => openMenu(r.id, r.name, r.notes ?? "")}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 4 }}
+                  accessibilityLabel={`Opciones de ${r.name}`}
                 >
                   <Ionicons name="ellipsis-vertical" size={18} color={theme.textMuted} />
                 </TouchableOpacity>
@@ -174,11 +176,79 @@ export default function RoutinesScreen() {
 
       {/* FAB */}
       <TouchableOpacity
+        testID="routine-fab-add"
         onPress={() => setShowCreate(true)}
+        accessibilityLabel="Nueva rutina"
         style={{ position: "absolute", bottom: 32, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: theme.primary, alignItems: "center", justifyContent: "center", shadowColor: theme.primary, shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 }}
       >
         <Ionicons name="add" size={28} color="white" />
       </TouchableOpacity>
+
+      {/* Menú de acciones de la rutina (Editar/Copiar/Eliminar) */}
+      <Modal
+        visible={menuTarget !== null}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setMenuTarget(null)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setMenuTarget(null)}
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }}
+        >
+          <View style={{ backgroundColor: theme.surfaceCard, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 8, paddingBottom: 32 }}>
+            {menuTarget && (
+              <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textMuted, textAlign: "center", paddingVertical: 10 }}>
+                {menuTarget.name}
+              </Text>
+            )}
+            <TouchableOpacity
+              onPress={() => {
+                if (!menuTarget) return;
+                setEditSource(menuTarget);
+                setEditName(menuTarget.name);
+                setEditNotes(menuTarget.notes);
+                setMenuTarget(null);
+              }}
+              style={{ paddingVertical: 16, paddingHorizontal: 24, flexDirection: "row", alignItems: "center", gap: 12 }}
+            >
+              <Ionicons name="create-outline" size={20} color={theme.text} />
+              <Text style={{ fontSize: 15, color: theme.text }}>Editar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                if (!menuTarget) return;
+                setCopySource(menuTarget);
+                setCopyName(`Copia de ${menuTarget.name}`);
+                setMenuTarget(null);
+              }}
+              style={{ paddingVertical: 16, paddingHorizontal: 24, flexDirection: "row", alignItems: "center", gap: 12 }}
+            >
+              <Ionicons name="copy-outline" size={20} color={theme.text} />
+              <Text style={{ fontSize: 15, color: theme.text }}>Copiar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                if (!menuTarget) return;
+                const { id, name } = menuTarget;
+                setMenuTarget(null);
+                confirmDelete(id, name);
+              }}
+              style={{ paddingVertical: 16, paddingHorizontal: 24, flexDirection: "row", alignItems: "center", gap: 12 }}
+            >
+              <Ionicons name="trash-outline" size={20} color={theme.danger} />
+              <Text style={{ fontSize: 15, color: theme.danger }}>Eliminar</Text>
+            </TouchableOpacity>
+            <View style={{ height: 1, backgroundColor: theme.borderLight, marginVertical: 4 }} />
+            <TouchableOpacity
+              onPress={() => setMenuTarget(null)}
+              style={{ paddingVertical: 16, paddingHorizontal: 24, alignItems: "center" }}
+            >
+              <Text style={{ fontSize: 15, fontWeight: "600", color: theme.textMuted }}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Edit modal */}
       <Modal visible={editSource !== null} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setEditSource(null)}>
@@ -261,6 +331,7 @@ export default function RoutinesScreen() {
           <View style={{ padding: 20, gap: 16 }}>
             <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>Nueva rutina</Text>
             <TextInput
+              testID="routine-name-input"
               style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: theme.text, backgroundColor: theme.inputBg }}
               placeholder="Nombre de la rutina"
               placeholderTextColor={theme.textMuted}
@@ -280,7 +351,7 @@ export default function RoutinesScreen() {
               <TouchableOpacity onPress={() => setShowCreate(false)} style={{ flex: 1, borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingVertical: 12, alignItems: "center" }}>
                 <Text style={{ fontSize: 14, fontWeight: "500", color: theme.text }}>Cancelar</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleCreate} style={{ flex: 1, backgroundColor: theme.primary, borderRadius: 12, paddingVertical: 12, alignItems: "center" }}>
+              <TouchableOpacity testID="routine-create-submit" onPress={handleCreate} style={{ flex: 1, backgroundColor: theme.primary, borderRadius: 12, paddingVertical: 12, alignItems: "center" }}>
                 <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Crear</Text>
               </TouchableOpacity>
             </View>
