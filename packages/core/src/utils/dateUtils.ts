@@ -1,9 +1,9 @@
 import type { Workout } from "../types/index.js";
 
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const DAYS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"] as const;
 const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ] as const;
 
 /** Format a workout date string (YYYY-MM-DD) for display. */
@@ -13,7 +13,7 @@ export function formatWorkoutDate(dateStr: string): string {
   const date = new Date(year, month - 1, day);
   const dayName = DAYS[date.getDay()];
   const monthName = MONTHS[date.getMonth()];
-  return `${dayName}, ${monthName} ${day}, ${year}`;
+  return `${dayName}, ${day} de ${monthName} de ${year}`;
 }
 
 /** Returns the Monday–Sunday ISO date strings for the week containing the given date. */
@@ -45,7 +45,8 @@ export function groupWorkoutsByMonth(
   for (const workout of workouts) {
     const [year, month] = workout.date.split("-").map(Number);
     if (!year || !month) continue;
-    const key = `${MONTHS[month - 1]} ${year}`;
+    const monthName = MONTHS[month - 1]!;
+    const key = `${monthName.charAt(0).toUpperCase()}${monthName.slice(1)} ${year}`;
     if (!groups[key]) groups[key] = [];
     groups[key]!.push(workout);
   }

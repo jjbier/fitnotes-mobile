@@ -13,17 +13,17 @@ import type { Workout } from "../types/index.js";
 describe("formatWorkoutDate", () => {
   it("formats a Monday correctly", () => {
     // 2024-01-01 is a Monday
-    expect(formatWorkoutDate("2024-01-01")).toBe("Mon, January 1, 2024");
+    expect(formatWorkoutDate("2024-01-01")).toBe("Lun, 1 de enero de 2024");
   });
 
   it("formats a Saturday correctly", () => {
     // 2024-06-15 is a Saturday
-    expect(formatWorkoutDate("2024-06-15")).toBe("Sat, June 15, 2024");
+    expect(formatWorkoutDate("2024-06-15")).toBe("Sáb, 15 de junio de 2024");
   });
 
   it("formats a Sunday correctly", () => {
     // 2024-12-22 is a Sunday
-    expect(formatWorkoutDate("2024-12-22")).toBe("Sun, December 22, 2024");
+    expect(formatWorkoutDate("2024-12-22")).toBe("Dom, 22 de diciembre de 2024");
   });
 
   it("returns the input string unchanged for invalid format", () => {
@@ -90,8 +90,8 @@ describe("groupWorkoutsByMonth", () => {
     ];
     const groups = groupWorkoutsByMonth(workouts);
     expect(Object.keys(groups)).toHaveLength(2);
-    expect(groups["January 2024"]).toHaveLength(2);
-    expect(groups["February 2024"]).toHaveLength(1);
+    expect(groups["Enero 2024"]).toHaveLength(2);
+    expect(groups["Febrero 2024"]).toHaveLength(1);
   });
 
   it("returns empty object for empty input", () => {
