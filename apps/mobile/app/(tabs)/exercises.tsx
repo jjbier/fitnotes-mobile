@@ -80,6 +80,10 @@ export default function ExercisesScreen() {
   const [newCatColor, setNewCatColor] = useState(PRESET_COLORS[0]!);
   const [catSaving, setCatSaving] = useState(false);
 
+  // Standalone "Nueva categoría" modal (accesible desde el FAB, sin pasar por
+  // el formulario de ejercicio)
+  const [showCategoryOnlyModal, setShowCategoryOnlyModal] = useState(false);
+
   // Category management modal
   const [showCatModal, setShowCatModal] = useState(false);
   const [editingCatId, setEditingCatId] = useState<string | null>(null);
@@ -187,6 +191,19 @@ export default function ExercisesScreen() {
     setNewCatName("");
     setNewCatColor(PRESET_COLORS[0]!);
     setCatSaving(false);
+  }
+
+  async function handleCreateCategoryStandalone() {
+    if (!newCatName.trim()) return;
+    setCatSaving(true);
+    const { data, error } = await repo.createCategory({ name: newCatName.trim(), color: newCatColor }, userId);
+    if (error) { Alert.alert("Error", error.message); setCatSaving(false); return; }
+    const cat: Category = { id: data.id, name: data.name, color: data.color, order_index: data.order_index };
+    addCategory(cat);
+    setNewCatName("");
+    setNewCatColor(PRESET_COLORS[0]!);
+    setCatSaving(false);
+    setShowCategoryOnlyModal(false);
   }
 
   async function doSave(andNew: boolean, convertFactor?: number) {
@@ -502,12 +519,17 @@ export default function ExercisesScreen() {
       {showFabMenu && (
         <View style={{ position: "absolute", bottom: 100, right: 24, gap: 12, alignItems: "flex-end" }}>
           <TouchableOpacity
-            onPress={() => { setShowFabMenu(false); router.push("/tools?create=1"); }}
+            onPress={() => {
+              setShowFabMenu(false);
+              setNewCatName("");
+              setNewCatColor(PRESET_COLORS[0]!);
+              setShowCategoryOnlyModal(true);
+            }}
             style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#fff", borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 8, elevation: 4 }}
           >
-            <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>Nueva rutina</Text>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>Nueva categoría</Text>
             <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#6366f1", alignItems: "center", justifyContent: "center" }}>
-              <Ionicons name="clipboard-outline" size={18} color="white" />
+              <Ionicons name="pricetag-outline" size={18} color="white" />
             </View>
           </TouchableOpacity>
           <TouchableOpacity
@@ -528,6 +550,51 @@ export default function ExercisesScreen() {
       >
         <Ionicons name={showFabMenu ? "close" : "add"} size={28} color="white" />
       </TouchableOpacity>
+
+      {/* Standalone "Nueva categoría" modal */}
+      <Modal visible={showCategoryOnlyModal} animationType="fade" transparent onRequestClose={() => setShowCategoryOnlyModal(false)}>
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", padding: 24 }}
+          activeOpacity={1}
+          onPress={() => setShowCategoryOnlyModal(false)}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+            <View style={{ backgroundColor: "#fff", borderRadius: 16, padding: 20, gap: 16 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>Nueva categoría</Text>
+                <TouchableOpacity onPress={() => setShowCategoryOnlyModal(false)} accessibilityLabel="Cerrar">
+                  <Ionicons name="close" size={24} color="#64748b" />
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 }}
+                placeholder="Nombre de la categoría"
+                value={newCatName}
+                onChangeText={setNewCatName}
+                autoFocus
+              />
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {PRESET_COLORS.map((c) => (
+                  <TouchableOpacity
+                    key={c}
+                    onPress={() => setNewCatColor(c)}
+                    style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: c, borderWidth: 2.5, borderColor: newCatColor === c ? "#0f172a" : "transparent" }}
+                  />
+                ))}
+              </View>
+              <TouchableOpacity
+                onPress={handleCreateCategoryStandalone}
+                disabled={catSaving || !newCatName.trim()}
+                style={{ backgroundColor: "#6366f1", borderRadius: 10, paddingVertical: 12, alignItems: "center", opacity: catSaving || !newCatName.trim() ? 0.5 : 1 }}
+              >
+                <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>
+                  {catSaving ? "Creando…" : "Crear categoría"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Create / Edit Exercise Modal */}
       <Modal visible={showModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowModal(false)}>
