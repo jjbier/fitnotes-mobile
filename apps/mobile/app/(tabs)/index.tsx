@@ -3,7 +3,7 @@ import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicat
 import { NestableScrollContainer, NestableDraggableFlatList, ScaleDecorator, type RenderItemParams } from "react-native-draggable-flatlist";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useWorkoutStore, useExerciseStore, formatWorkoutDate, todayISO, ExerciseType } from "@fitnotes/core";
+import { useWorkoutStore, useExerciseStore, usePreferencesStore, formatWorkoutDate, todayISO, ExerciseType } from "@fitnotes/core";
 import type { WorkoutExercise } from "@fitnotes/core";
 import { createWorkoutRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
@@ -38,7 +38,6 @@ export default function HomeScreen() {
   const exercises = useExerciseStore((s) => s.exercises);
   const loadExercises = useExerciseStore((s) => s.loadExercises);
 
-  const [showSetCountHome, setShowSetCountHome] = useState(true);
   const [currentDate, setCurrentDate] = useState(params.date || today);
   const [workoutComment, setWorkoutCommentLocal] = useState("");
   const [timerDisplay, setTimerDisplay] = useState(0);
@@ -62,6 +61,7 @@ export default function HomeScreen() {
   const { status: syncStatus, pendingCount, refetchSignal } = useSyncStatus();
 
   const { workoutRepo: repo, exerciseRepo: exRepo, routineRepo, userId } = useRepositories();
+  const showSetCountHome = usePreferencesStore((s) => s.preferences.show_set_count_home);
   // shareWorkout sigue requiriendo red (fuera de alcance offline) — usa el repo remoto directamente.
   const remoteWorkoutRepo = useMemo(() => createWorkoutRepository(supabase), []);
 
@@ -93,11 +93,6 @@ export default function HomeScreen() {
   useEffect(() => {
     async function init() {
       setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setShowSetCountHome((session.user.user_metadata?.show_set_count_home as boolean | undefined) ?? true);
-      }
-
       const [recentRes, catRes, exRes] = await Promise.all([
         repo.getWorkouts(60),
         exercises.length > 0 ? Promise.resolve({ data: null }) : exRepo.getCategories(),

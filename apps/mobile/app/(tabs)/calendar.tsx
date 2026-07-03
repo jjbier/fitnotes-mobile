@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Dimensions, PanResponder, SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator, Modal, TextInput } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { formatWorkoutDate, useExerciseStore, ExerciseType } from "@fitnotes/core";
+import { formatWorkoutDate, useExerciseStore, usePreferencesStore, ExerciseType } from "@fitnotes/core";
 import { createCalendarRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../lib/theme";
@@ -42,9 +42,11 @@ export default function CalendarScreen() {
   const [filterMinReps, setFilterMinReps] = useState("");
   const [filteredExDates, setFilteredExDates] = useState<Set<string> | null>(null);
   const [filterLoading, setFilterLoading] = useState(false);
-  const [weekStart, setWeekStart] = useState<0 | 1>(1);
-  const [showDayPanel, setShowDayPanel] = useState(true);
-  const [showCategoryDots, setShowCategoryDots] = useState(true);
+
+  const weekStart = usePreferencesStore((s) => s.preferences.calendar_week_start);
+  const showDayPanel = usePreferencesStore((s) => s.preferences.calendar_show_day_panel);
+  const showCategoryDots = usePreferencesStore((s) => s.preferences.calendar_show_category_dots);
+  const setPreferenceInStore = usePreferencesStore((s) => s.setPreference);
 
   const storeExercises = useExerciseStore((s) => s.exercises);
   const storeCategories = useExerciseStore((s) => s.categories);
@@ -91,7 +93,7 @@ export default function CalendarScreen() {
   const { refetchSignal } = useSyncStatus();
 
   const repo = useMemo(() => createCalendarRepository(supabase), []);
-  const { exerciseRepo: exRepo } = useRepositories();
+  const { exerciseRepo: exRepo, preferencesRepo, isGuest } = useRepositories();
   const today = now.toISOString().split("T")[0]!;
 
   const loadMonth = useCallback(async (y: number, m: number) => {
@@ -110,12 +112,6 @@ export default function CalendarScreen() {
 
   useEffect(() => {
     async function boot() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setWeekStart((session.user.user_metadata?.calendar_week_start as 0 | 1 | undefined) ?? 1);
-        setShowDayPanel((session.user.user_metadata?.calendar_show_day_panel as boolean | undefined) ?? true);
-        setShowCategoryDots((session.user.user_metadata?.calendar_show_category_dots as boolean | undefined) ?? true);
-      }
       if (storeExercises.length === 0) {
         const [catRes, exRes] = await Promise.all([exRepo.getCategories(), exRepo.getExercises()]);
         if (catRes.data && exRes.data) {
@@ -156,19 +152,17 @@ export default function CalendarScreen() {
   }, [listView]);
 
   function toggleShowDayPanel() {
-    setShowDayPanel((v) => {
-      const next = !v;
-      void supabase.auth.updateUser({ data: { calendar_show_day_panel: next } });
-      return next;
-    });
+    const next = !showDayPanel;
+    setPreferenceInStore("calendar_show_day_panel", next);
+    void preferencesRepo.set("calendar_show_day_panel", next);
+    if (!isGuest) void supabase.auth.updateUser({ data: { calendar_show_day_panel: next } });
   }
 
   function toggleShowCategoryDots() {
-    setShowCategoryDots((v) => {
-      const next = !v;
-      void supabase.auth.updateUser({ data: { calendar_show_category_dots: next } });
-      return next;
-    });
+    const next = !showCategoryDots;
+    setPreferenceInStore("calendar_show_category_dots", next);
+    void preferencesRepo.set("calendar_show_category_dots", next);
+    if (!isGuest) void supabase.auth.updateUser({ data: { calendar_show_category_dots: next } });
   }
 
   async function handleSelectDate(dateStr: string) {

@@ -7,6 +7,7 @@ export { useExerciseStore } from "./stores/exerciseStore.js";
 export { useProgressStore } from "./stores/progressStore.js";
 export { useRoutineStore } from "./stores/routineStore.js";
 export { useBodyTrackerStore } from "./stores/bodyTrackerStore.js";
+export { usePreferencesStore } from "./stores/preferencesStore.js";
 
 // Utils
 export * from "./utils/calculations.js";

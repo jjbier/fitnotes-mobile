@@ -1,3 +1,5 @@
+export * from "./preferences.js";
+
 export enum ExerciseType {
   // Base types
   WEIGHT_REPS = "WEIGHT_REPS",

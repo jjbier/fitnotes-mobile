@@ -9,7 +9,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import ViewShot from "react-native-view-shot";
 import * as Sharing from "expo-sharing";
-import { ExerciseType, getExerciseFields, useExerciseStore, calculate1RM, estimateRepMax, todayISO } from "@fitnotes/core";
+import { ExerciseType, getExerciseFields, useExerciseStore, usePreferencesStore, calculate1RM, estimateRepMax, todayISO } from "@fitnotes/core";
 import { createExerciseRepository, createProgressRepository, type ChartPoint } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import LineChart, { type ChartDataPoint } from "../../components/LineChart";
@@ -106,7 +106,8 @@ export default function ExerciseHistoryScreen() {
   const [metric, setMetric] = useState<Metric>((storeExercise?.default_chart ?? "weight") as Metric);
   const [repTarget, setRepTarget] = useState(5);
   const [showTrend, setShowTrend] = useState(false);
-  const [estRepLimit, setEstRepLimit] = useState<number | undefined>(undefined);
+  const estimatedRecordsRepLimit = usePreferencesStore((s) => s.preferences.estimated_records_rep_limit);
+  const estRepLimit = estimatedRecordsRepLimit && estimatedRecordsRepLimit > 0 ? estimatedRecordsRepLimit : undefined;
   const [exportingImage, setExportingImage] = useState(false);
   const chartShotRef = useRef<ViewShot>(null);
 
@@ -153,13 +154,6 @@ export default function ExerciseHistoryScreen() {
 
   const exerciseType = (type ?? ExerciseType.WEIGHT_REPS) as ExerciseType;
   const unit = weightUnit ?? "kg";
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const v = session?.user?.user_metadata?.estimated_records_rep_limit as number | undefined;
-      setEstRepLimit(v && v > 0 ? v : undefined);
-    });
-  }, []);
 
   async function handleCopyToToday(set: SetRow) {
     setCopyingSetId(set.id);

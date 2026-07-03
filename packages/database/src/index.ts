@@ -41,3 +41,5 @@ export { createLocalGoalsRepository } from "./local/repositories/localGoalsRepos
 export type { LocalGoalsRepository } from "./local/repositories/localGoalsRepository.js";
 export { createLocalProgressRepository } from "./local/repositories/localProgressRepository.js";
 export type { LocalProgressRepository } from "./local/repositories/localProgressRepository.js";
+export { createLocalPreferencesRepository } from "./local/repositories/localPreferencesRepository.js";
+export type { LocalPreferencesRepository } from "./local/repositories/localPreferencesRepository.js";

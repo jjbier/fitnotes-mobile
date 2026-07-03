@@ -9,7 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import DraggableFlatList, { ScaleDecorator } from "react-native-draggable-flatlist";
 import type { RenderItemParams } from "react-native-draggable-flatlist";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { useExerciseStore, useWorkoutStore, filterExercises, ExerciseType } from "@fitnotes/core";
+import { useExerciseStore, useWorkoutStore, usePreferencesStore, filterExercises, ExerciseType } from "@fitnotes/core";
 import { createExerciseRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import type { Category, Exercise } from "@fitnotes/core";
@@ -90,7 +90,7 @@ export default function ExercisesScreen() {
   const [editCatName, setEditCatName] = useState("");
   const [editCatColor, setEditCatColor] = useState(PRESET_COLORS[0]!);
   const [catEditSaving, setCatEditSaving] = useState(false);
-  const [hiddenCategoryIds, setHiddenCategoryIds] = useState<string[]>([]);
+  const hiddenCategoryIds = usePreferencesStore((s) => s.preferences.hidden_category_ids);
   const [showHiddenCategories, setShowHiddenCategories] = useState(false);
 
   const { exerciseRepo: repo, userId } = useRepositories();
@@ -99,10 +99,6 @@ export default function ExercisesScreen() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-      setHiddenCategoryIds((session.user.user_metadata?.hidden_category_ids as string[] | undefined) ?? []);
-    }
     const [catRes, exRes, statsRes] = await Promise.all([
       repo.getCategories(),
       repo.getExercises(),

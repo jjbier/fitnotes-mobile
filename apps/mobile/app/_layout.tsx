@@ -12,10 +12,11 @@ import { getSyncEngine } from "../lib/sync";
 import { useNetworkStatus } from "../lib/netinfo";
 import { SyncContext } from "../contexts/SyncContext";
 import type { SyncStatus } from "@fitnotes/database";
-import { useExerciseStore, useRoutineStore, ExerciseType } from "@fitnotes/core";
+import { useExerciseStore, useRoutineStore, usePreferencesStore, ExerciseType, type UserPreferences } from "@fitnotes/core";
 import {
   createLocalExerciseRepository,
   createLocalRoutineRepository,
+  createLocalPreferencesRepository,
   claimGuestIdentity,
   setActiveIdentity,
 } from "@fitnotes/database";
@@ -24,9 +25,50 @@ import type { Session } from "@supabase/supabase-js";
 import { RepositoryProvider, useRepositories } from "../contexts/RepositoryContext";
 import { getLocalDb } from "../lib/db/client";
 
-function applyThemeFromSession(session: Session | null) {
-  const pref = (session?.user.user_metadata?.theme_preference as ThemeMode | undefined) ?? "system";
-  useThemeModeStore.getState().setMode(pref);
+// Claves de UserPreferences que también viven en `user_metadata` de Supabase
+// (mecanismo de sync entre dispositivos para cuentas reales — ver localPreferencesRepository).
+const METADATA_PREFERENCE_KEYS = [
+  "theme_preference",
+  "display_name",
+  "weight_unit",
+  "default_weight_increment",
+  "calendar_week_start",
+  "auto_select_next_set",
+  "track_personal_records",
+  "mark_sets_complete",
+  "default_rest_seconds",
+  "rest_timer_sound_enabled",
+  "rest_timer_volume",
+  "estimated_records_rep_limit",
+  "show_set_count_home",
+  "hidden_category_ids",
+  "calendar_show_day_panel",
+  "calendar_show_category_dots",
+] as const satisfies readonly (keyof UserPreferences)[];
+
+// En modo invitado no hay `user_metadata` que leer — la tabla local (ya
+// hidratada por RepositoryContext) sigue siendo el fallback y no se toca.
+// Con cuenta real, el valor remoto gana sobre el local (refleja cambios
+// hechos desde otro dispositivo) y se persiste local para futuras lecturas.
+async function hydratePreferencesFromSession(session: Session | null) {
+  if (!session) return;
+  const metadata = session.user.user_metadata as Record<string, unknown> | undefined;
+  if (!metadata) return;
+
+  const remoteSubset: Partial<UserPreferences> = {};
+  for (const key of METADATA_PREFERENCE_KEYS) {
+    if (metadata[key] !== undefined) {
+      (remoteSubset as Record<string, unknown>)[key] = metadata[key];
+    }
+  }
+  if (metadata.theme_preference !== undefined) {
+    useThemeModeStore.getState().setMode(metadata.theme_preference as ThemeMode);
+  }
+  if (Object.keys(remoteSubset).length === 0) return;
+
+  const db = await getLocalDb();
+  await createLocalPreferencesRepository(db).setMany(remoteSubset);
+  usePreferencesStore.getState().loadPreferences(remoteSubset);
 }
 
 const styles = StyleSheet.create({
@@ -164,7 +206,7 @@ function AppContent() {
     // plano — en ese caso preferimos dejar la identidad como estaba y que el
     // sync falle silenciosamente hasta que el usuario vuelva a iniciar sesión.
     async (session: Session | null, isExplicitSignOut: boolean) => {
-      applyThemeFromSession(session);
+      await hydratePreferencesFromSession(session);
       if (session && session.user.id !== userId) {
         if (isGuest) {
           const db = await getLocalDb();

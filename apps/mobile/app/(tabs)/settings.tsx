@@ -18,6 +18,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 import { useTheme, useThemeModeStore, type ThemeMode } from "../../lib/theme";
+import { usePreferencesStore, type UserPreferences } from "@fitnotes/core";
 import { createWorkoutRepository, createBackupRepository, createBodyTrackerRepository, isBackupData, type BackupData } from "@fitnotes/database";
 import { useRepositories } from "../../contexts/RepositoryContext";
 import { useSyncStatus } from "../../contexts/SyncContext";
@@ -53,7 +54,7 @@ function parseCSVRows(csv: string) {
 export default function SettingsScreen() {
   const colors = useTheme();
   const router = useRouter();
-  const { exerciseRepo, isGuest } = useRepositories();
+  const { exerciseRepo, preferencesRepo, isGuest } = useRepositories();
   const { pendingCount } = useSyncStatus();
 
   /** Backup/CSV/recalcular PRs/restaurar/eliminar historial siguen siendo remote-only (fuera de alcance offline) — requieren cuenta real. */
@@ -64,17 +65,39 @@ export default function SettingsScreen() {
     }
     return true;
   }
+
+  // Preferencias: siempre resueltas (invitado o cuenta real) desde la DB
+  // local — ver localPreferencesRepository. Con cuenta real, cada escritura
+  // también actualiza `user_metadata` en segundo plano (sync entre dispositivos).
+  const preferences = usePreferencesStore((s) => s.preferences);
+  const preferencesLoaded = usePreferencesStore((s) => s.loaded);
+  const setPreferenceInStore = usePreferencesStore((s) => s.setPreference);
+  const {
+    weight_unit: weightUnit,
+    calendar_week_start: calendarWeekStart,
+    auto_select_next_set: autoSelectNextSet,
+    track_personal_records: trackPersonalRecords,
+    mark_sets_complete: markSetsComplete,
+    rest_timer_sound_enabled: restTimerSoundEnabled,
+    show_set_count_home: showSetCountHome,
+    hidden_category_ids: hiddenCategoryIds,
+  } = preferences;
+
+  async function persistPreference<K extends keyof UserPreferences>(key: K, value: UserPreferences[K]) {
+    setPreferenceInStore(key, value);
+    await preferencesRepo.set(key, value);
+    if (!isGuest) {
+      void supabase.auth.updateUser({ data: { [key]: value } });
+    }
+  }
+
   const [email, setEmail] = useState("");
+  // Campos de texto libre: estado local para permitir valores intermedios
+  // inválidos mientras se escribe, sincronizado desde `preferences` al cargar.
   const [displayName, setDisplayName] = useState("");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [weightUnit, setWeightUnit] = useState<"kg" | "lb">("kg");
   const [defaultWeightIncrement, setDefaultWeightIncrement] = useState("2.5");
-  const [calendarWeekStart, setCalendarWeekStart] = useState<0 | 1>(1);
-  const [autoSelectNextSet, setAutoSelectNextSet] = useState(true);
-  const [trackPersonalRecords, setTrackPersonalRecords] = useState(true);
-  const [markSetsComplete, setMarkSetsComplete] = useState(true);
   const [defaultRestSeconds, setDefaultRestSeconds] = useState("90");
-  const [restTimerSoundEnabled, setRestTimerSoundEnabled] = useState(true);
   const [restTimerVolume, setRestTimerVolume] = useState("80");
   const [estimatedRecordsRepLimit, setEstimatedRecordsRepLimit] = useState("");
   const [signOutLoading, setSignOutLoading] = useState(false);
@@ -97,27 +120,11 @@ export default function SettingsScreen() {
   const [deleteHistoryExerciseId, setDeleteHistoryExerciseId] = useState<string | null>(null);
   const [deleteHistoryLoading, setDeleteHistoryLoading] = useState(false);
   const [exerciseOptions, setExerciseOptions] = useState<{ id: string; name: string }[]>([]);
-  const [showSetCountHome, setShowSetCountHome] = useState(true);
   const [categoryOptions, setCategoryOptions] = useState<{ id: string; name: string; color: string }[]>([]);
-  const [hiddenCategoryIds, setHiddenCategoryIds] = useState<string[]>([]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session?.user) return;
-      setEmail(session.user.email ?? "");
-      setDisplayName((session.user.user_metadata?.display_name as string | undefined) ?? "");
-      setWeightUnit((session.user.user_metadata?.weight_unit as "kg" | "lb" | undefined) ?? "kg");
-      setDefaultWeightIncrement(String((session.user.user_metadata?.default_weight_increment as number | undefined) ?? 2.5));
-      setCalendarWeekStart((session.user.user_metadata?.calendar_week_start as 0 | 1 | undefined) ?? 1);
-      setAutoSelectNextSet((session.user.user_metadata?.auto_select_next_set as boolean | undefined) ?? true);
-      setTrackPersonalRecords((session.user.user_metadata?.track_personal_records as boolean | undefined) ?? true);
-      setMarkSetsComplete((session.user.user_metadata?.mark_sets_complete as boolean | undefined) ?? true);
-      setDefaultRestSeconds(String((session.user.user_metadata?.default_rest_seconds as number | undefined) ?? 90));
-      setRestTimerSoundEnabled((session.user.user_metadata?.rest_timer_sound_enabled as boolean | undefined) ?? true);
-      setRestTimerVolume(String((session.user.user_metadata?.rest_timer_volume as number | undefined) ?? 80));
-      setEstimatedRecordsRepLimit(String((session.user.user_metadata?.estimated_records_rep_limit as number | undefined) ?? ""));
-      setShowSetCountHome((session.user.user_metadata?.show_set_count_home as boolean | undefined) ?? true);
-      setHiddenCategoryIds((session.user.user_metadata?.hidden_category_ids as string[] | undefined) ?? []);
+      setEmail(session?.user.email ?? "");
     });
     supabase.from("exercises").select("id, name").order("name").then(({ data }) => {
       setExerciseOptions(data ?? []);
@@ -127,82 +134,84 @@ export default function SettingsScreen() {
     });
   }, []);
 
+  useEffect(() => {
+    if (!preferencesLoaded) return;
+    setDisplayName(preferences.display_name);
+    setDefaultWeightIncrement(String(preferences.default_weight_increment));
+    setDefaultRestSeconds(String(preferences.default_rest_seconds));
+    setRestTimerVolume(String(preferences.rest_timer_volume));
+    setEstimatedRecordsRepLimit(preferences.estimated_records_rep_limit != null ? String(preferences.estimated_records_rep_limit) : "");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preferencesLoaded]);
+
   async function handleShowSetCountHome(val: boolean) {
-    setShowSetCountHome(val);
-    await supabase.auth.updateUser({ data: { show_set_count_home: val } });
+    await persistPreference("show_set_count_home", val);
   }
 
   async function handleToggleCategoryVisible(categoryId: string) {
     const next = hiddenCategoryIds.includes(categoryId)
       ? hiddenCategoryIds.filter((id) => id !== categoryId)
       : [...hiddenCategoryIds, categoryId];
-    setHiddenCategoryIds(next);
-    await supabase.auth.updateUser({ data: { hidden_category_ids: next } });
+    await persistPreference("hidden_category_ids", next);
   }
 
   async function handleThemeModeChange(mode: ThemeMode) {
     setThemeMode(mode);
-    await supabase.auth.updateUser({ data: { theme_preference: mode } });
+    await persistPreference("theme_preference", mode);
   }
 
   async function handleWeightUnitChange(unit: "kg" | "lb") {
-    setWeightUnit(unit);
-    await supabase.auth.updateUser({ data: { weight_unit: unit } });
+    await persistPreference("weight_unit", unit);
   }
 
   async function handleDefaultIncrementChange(val: string) {
     setDefaultWeightIncrement(val);
     const parsed = parseFloat(val);
     if (!isNaN(parsed) && parsed > 0) {
-      await supabase.auth.updateUser({ data: { default_weight_increment: parsed } });
+      await persistPreference("default_weight_increment", parsed);
     }
   }
 
   async function handleCalendarWeekStart(val: 0 | 1) {
-    setCalendarWeekStart(val);
-    await supabase.auth.updateUser({ data: { calendar_week_start: val } });
+    await persistPreference("calendar_week_start", val);
   }
 
   async function handleAutoSelectNextSet(val: boolean) {
-    setAutoSelectNextSet(val);
-    await supabase.auth.updateUser({ data: { auto_select_next_set: val } });
+    await persistPreference("auto_select_next_set", val);
   }
 
   async function handleTrackPersonalRecords(val: boolean) {
-    setTrackPersonalRecords(val);
-    await supabase.auth.updateUser({ data: { track_personal_records: val } });
+    await persistPreference("track_personal_records", val);
   }
 
   async function handleMarkSetsComplete(val: boolean) {
-    setMarkSetsComplete(val);
-    await supabase.auth.updateUser({ data: { mark_sets_complete: val } });
+    await persistPreference("mark_sets_complete", val);
   }
 
   async function handleDefaultRestSeconds(val: string) {
     setDefaultRestSeconds(val);
     const parsed = parseInt(val);
     if (!isNaN(parsed) && parsed > 0) {
-      await supabase.auth.updateUser({ data: { default_rest_seconds: parsed } });
+      await persistPreference("default_rest_seconds", parsed);
     }
   }
 
   async function handleRestTimerSoundEnabled(val: boolean) {
-    setRestTimerSoundEnabled(val);
-    await supabase.auth.updateUser({ data: { rest_timer_sound_enabled: val } });
+    await persistPreference("rest_timer_sound_enabled", val);
   }
 
   async function handleRestTimerVolume(val: string) {
     setRestTimerVolume(val);
     const parsed = parseInt(val, 10);
     if (!isNaN(parsed) && parsed >= 0 && parsed <= 100) {
-      await supabase.auth.updateUser({ data: { rest_timer_volume: parsed } });
+      await persistPreference("rest_timer_volume", parsed);
     }
   }
 
   async function handleEstimatedRecordsRepLimit(val: string) {
     setEstimatedRecordsRepLimit(val);
     const parsed = parseInt(val);
-    await supabase.auth.updateUser({ data: { estimated_records_rep_limit: !isNaN(parsed) && parsed > 0 ? parsed : null } });
+    await persistPreference("estimated_records_rep_limit", !isNaN(parsed) && parsed > 0 ? parsed : null);
   }
 
   async function handleExportCSV() {
@@ -334,10 +343,8 @@ export default function SettingsScreen() {
 
   async function handleSave() {
     setSaveStatus("saving");
-    const { error } = await supabase.auth.updateUser({
-      data: { display_name: displayName },
-    });
-    setSaveStatus(error ? "error" : "saved");
+    await persistPreference("display_name", displayName);
+    setSaveStatus("saved");
     setTimeout(() => setSaveStatus("idle"), 2000);
   }
 

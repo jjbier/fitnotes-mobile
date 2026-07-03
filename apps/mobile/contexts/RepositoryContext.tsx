@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, useMemo, type ReactNode } from "react";
 import { View, ActivityIndicator, Text, StyleSheet } from "react-native";
+import { usePreferencesStore } from "@fitnotes/core";
+import { useThemeModeStore } from "../lib/theme";
 import type {
   SqlExecutor,
   LocalWorkoutRepository,
@@ -8,6 +10,7 @@ import type {
   LocalBodyTrackerRepository,
   LocalGoalsRepository,
   LocalProgressRepository,
+  LocalPreferencesRepository,
 } from "@fitnotes/database";
 import {
   createLocalWorkoutRepository,
@@ -16,6 +19,7 @@ import {
   createLocalBodyTrackerRepository,
   createLocalGoalsRepository,
   createLocalProgressRepository,
+  createLocalPreferencesRepository,
   getOrCreateLocalIdentity,
   setActiveIdentity,
 } from "@fitnotes/database";
@@ -33,6 +37,7 @@ interface RepositoryContextValue {
   bodyTrackerRepo: LocalBodyTrackerRepository;
   goalsRepo: LocalGoalsRepository;
   progressRepo: LocalProgressRepository;
+  preferencesRepo: LocalPreferencesRepository;
   userId: string;
   isGuest: boolean;
   /** Vuelve a leer `local_identity` — llamar tras un claim. */
@@ -122,6 +127,7 @@ function RepositoryProviderReady({
   const bodyTrackerRepo = useMemo(() => createLocalBodyTrackerRepository(db), [db]);
   const goalsRepo = useMemo(() => createLocalGoalsRepository(db), [db]);
   const progressRepo = useMemo(() => createLocalProgressRepository(db), [db]);
+  const preferencesRepo = useMemo(() => createLocalPreferencesRepository(db), [db]);
   const [identity, setIdentity] = useState<{ userId: string; isGuest: boolean } | null>(null);
 
   const refreshIdentity = useMemo(
@@ -135,6 +141,18 @@ function RepositoryProviderReady({
   useEffect(() => {
     refreshIdentity();
   }, [refreshIdentity]);
+
+  // Hidrata el store de preferencias (y el tema, que vive en su propio store
+  // por depender de `useColorScheme` de RN) desde la DB local — vuelve a
+  // correr tras un wipe (cambio de `db`), igual que la identidad. Si hay una
+  // cuenta real con sesión activa, `_layout.tsx` pisa esto después con el
+  // valor de `user_metadata` (remoto gana, para reflejar otros dispositivos).
+  useEffect(() => {
+    preferencesRepo.getAll().then((prefs) => {
+      usePreferencesStore.getState().loadPreferences(prefs);
+      useThemeModeStore.getState().setMode(prefs.theme_preference);
+    });
+  }, [preferencesRepo]);
 
   if (!identity) {
     return (
@@ -154,6 +172,7 @@ function RepositoryProviderReady({
         bodyTrackerRepo,
         goalsRepo,
         progressRepo,
+        preferencesRepo,
         userId: identity.userId,
         isGuest: identity.isGuest,
         refreshIdentity,

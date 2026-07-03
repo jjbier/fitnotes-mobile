@@ -8,7 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
 import DraggableFlatList, { ScaleDecorator, NestableScrollContainer, NestableDraggableFlatList, type RenderItemParams } from "react-native-draggable-flatlist";
-import { useWorkoutStore, useExerciseStore, ExerciseType, calculate1RM } from "@fitnotes/core";
+import { useWorkoutStore, useExerciseStore, usePreferencesStore, ExerciseType, calculate1RM } from "@fitnotes/core";
 import { createProgressRepository, createExerciseRepository } from "@fitnotes/database";
 import type { WorkoutExercise } from "@fitnotes/core";
 import { supabase } from "../../lib/supabase";
@@ -79,11 +79,14 @@ export default function TrainingScreen() {
   useKeepAwake();
 
   const [saving, setSaving] = useState(false);
-  const [weightUnit, setWeightUnit] = useState<"kg" | "lb">("kg");
-  const [globalWeightIncrement, setGlobalWeightIncrement] = useState<number>(2.5);
-  const [autoSelectNextSet, setAutoSelectNextSet] = useState(true);
-  const [trackPersonalRecords, setTrackPersonalRecords] = useState(true);
-  const [markSetsComplete, setMarkSetsComplete] = useState(true);
+  const weightUnit = usePreferencesStore((s) => s.preferences.weight_unit);
+  const globalWeightIncrement = usePreferencesStore((s) => s.preferences.default_weight_increment);
+  const autoSelectNextSet = usePreferencesStore((s) => s.preferences.auto_select_next_set);
+  const trackPersonalRecords = usePreferencesStore((s) => s.preferences.track_personal_records);
+  const markSetsComplete = usePreferencesStore((s) => s.preferences.mark_sets_complete);
+  const timerSoundEnabled = usePreferencesStore((s) => s.preferences.rest_timer_sound_enabled);
+  const timerVolume = usePreferencesStore((s) => s.preferences.rest_timer_volume);
+  const defaultRestSeconds = usePreferencesStore((s) => s.preferences.default_rest_seconds);
   const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
   const [lastSessionSets, setLastSessionSets] = useState<LastSet[]>([]);
   const [showLastSession, setShowLastSession] = useState(false);
@@ -111,8 +114,6 @@ export default function TrainingScreen() {
   const [timerRemaining, setTimerRemaining] = useState(90);
   const [timerRunning, setTimerRunning] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [timerSoundEnabled, setTimerSoundEnabled] = useState(true);
-  const [timerVolume, setTimerVolume] = useState(80);
   const timerSoundRef = useRef<Audio.Sound | null>(null);
 
   const { workoutRepo: repo, progressRepo, userId } = useRepositories();
@@ -150,24 +151,15 @@ export default function TrainingScreen() {
 
   useEffect(() => {
     const timerFile = (FileSystem.documentDirectory ?? "") + "last-timer-duration.json";
-    Promise.all([
-      supabase.auth.getSession(),
-      FileSystem.readAsStringAsync(timerFile).then((s) => JSON.parse(s) as { seconds: number }).catch(() => null),
-    ]).then(([{ data: { session } }, savedTimer]) => {
-      if (session?.user) {
-        setWeightUnit((session.user.user_metadata?.weight_unit as "kg" | "lb" | undefined) ?? "kg");
-        setGlobalWeightIncrement((session.user.user_metadata?.default_weight_increment as number | undefined) ?? 2.5);
-        setAutoSelectNextSet((session.user.user_metadata?.auto_select_next_set as boolean | undefined) ?? true);
-        setTrackPersonalRecords((session.user.user_metadata?.track_personal_records as boolean | undefined) ?? true);
-        setMarkSetsComplete((session.user.user_metadata?.mark_sets_complete as boolean | undefined) ?? true);
-        setTimerSoundEnabled((session.user.user_metadata?.rest_timer_sound_enabled as boolean | undefined) ?? true);
-        setTimerVolume((session.user.user_metadata?.rest_timer_volume as number | undefined) ?? 80);
-        const globalRest = (session.user.user_metadata?.default_rest_seconds as number | undefined) ?? 90;
-        const restoredDuration = savedTimer?.seconds ?? globalRest;
+    FileSystem.readAsStringAsync(timerFile)
+      .then((s) => JSON.parse(s) as { seconds: number })
+      .catch(() => null)
+      .then((savedTimer) => {
+        const restoredDuration = savedTimer?.seconds ?? defaultRestSeconds;
         setTimerDuration(restoredDuration);
         setTimerRemaining(restoredDuration);
-      }
-    });
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
