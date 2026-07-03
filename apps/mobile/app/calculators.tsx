@@ -20,8 +20,6 @@ import {
   calculatePlates,
 } from "@fitnotes/core";
 import { useTheme } from "../lib/theme";
-import { supabase } from "../lib/supabase";
-import { createProgressRepository } from "@fitnotes/database";
 import type { LocalWorkoutRepository } from "@fitnotes/database";
 import { useRepositories } from "../contexts/RepositoryContext";
 
@@ -179,7 +177,7 @@ const PERCENTAGES = [50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
 const INCREMENTS = [0.5, 1, 1.25, 2.5, 5];
 
 function SetCalculator() {
-  const { workoutRepo, userId } = useRepositories();
+  const { workoutRepo, progressRepo, userId } = useRepositories();
   const [baseWeight, setBaseWeight] = useState("");
   const [incrementIdx, setIncrementIdx] = useState(3); // 2.5
   const [showMaxPicker, setShowMaxPicker] = useState(false);
@@ -196,8 +194,7 @@ function SetCalculator() {
   async function handleSelectMax() {
     if (!maxExerciseId) return;
     setMaxLoading(true);
-    const repo = createProgressRepository(supabase);
-    const { data } = await repo.getPersonalRecords(maxExerciseId);
+    const { data } = await progressRepo.getPersonalRecords(maxExerciseId);
     if (data && data.length > 0) {
       const best = data.reduce((b, pr) => (pr.weight > b.weight ? pr : b), data[0]!);
       setBaseWeight(String(best.weight));

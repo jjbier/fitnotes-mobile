@@ -115,4 +115,108 @@ describe("localWorkoutRepository", () => {
     expect(copiedSets[0]!.weight).toBe(50);
     expect(copiedSets[0]!.is_complete).toBe(false);
   });
+
+  describe("personal records (Fase 6 offline)", () => {
+    async function personalRecordsFor(exerciseId: string) {
+      return db.getAllAsync<{ id: string; exercise_id: string; reps: number; weight: number; user_id: string }>(
+        "SELECT id, exercise_id, reps, weight, user_id FROM personal_records WHERE exercise_id = ? AND _deleted = 0",
+        [exerciseId]
+      );
+    }
+
+    it("creates a PR when weight/reps were set via separate prior updateSet calls before marking complete", async () => {
+      const { data: workout } = await repo.createWorkout({ date: "2026-07-24" }, USER_ID);
+      const { data: we } = await repo.addExercise({ workout_id: workout!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+      const { data: set } = await repo.createSet({ workout_exercise_id: we!.id, order_index: 0 }, USER_ID);
+
+      await repo.updateSet(set!.id, { weight: 80 });
+      await repo.updateSet(set!.id, { reps: 8 });
+      await repo.updateSet(set!.id, { is_complete: true });
+
+      const prs = await personalRecordsFor("ex-1");
+      expect(prs).toEqual([expect.objectContaining({ reps: 8, weight: 80, user_id: USER_ID })]);
+    });
+
+    it("completing a set with a weight creates a new PR and queues an insert op", async () => {
+      const { data: workout } = await repo.createWorkout({ date: "2026-07-17" }, USER_ID);
+      const { data: we } = await repo.addExercise({ workout_id: workout!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+      const { data: set } = await repo.createSet({ workout_exercise_id: we!.id, order_index: 0 }, USER_ID);
+
+      await repo.updateSet(set!.id, { is_complete: true, weight: 80, reps: 8 });
+
+      const prs = await personalRecordsFor("ex-1");
+      expect(prs).toEqual([expect.objectContaining({ reps: 8, weight: 80, user_id: USER_ID })]);
+      const ops = await pendingOpsFor(db, "personal_records");
+      expect(ops).toEqual([{ row_id: prs[0]!.id, op_type: "insert" }]);
+    });
+
+    it("a lower or equal weight for the same reps does not create a new PR", async () => {
+      const { data: workout } = await repo.createWorkout({ date: "2026-07-18" }, USER_ID);
+      const { data: we } = await repo.addExercise({ workout_id: workout!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+      const { data: set1 } = await repo.createSet({ workout_exercise_id: we!.id, order_index: 0 }, USER_ID);
+      await repo.updateSet(set1!.id, { is_complete: true, weight: 100, reps: 5 });
+
+      const { data: set2 } = await repo.createSet({ workout_exercise_id: we!.id, order_index: 1 }, USER_ID);
+      await repo.updateSet(set2!.id, { is_complete: true, weight: 100, reps: 5 });
+      const { data: set3 } = await repo.createSet({ workout_exercise_id: we!.id, order_index: 2 }, USER_ID);
+      await repo.updateSet(set3!.id, { is_complete: true, weight: 90, reps: 5 });
+
+      const prs = await personalRecordsFor("ex-1");
+      expect(prs).toHaveLength(1);
+      expect(prs[0]!.weight).toBe(100);
+    });
+
+    it("a higher weight for the same reps creates an additional PR row", async () => {
+      const { data: workout } = await repo.createWorkout({ date: "2026-07-19" }, USER_ID);
+      const { data: we } = await repo.addExercise({ workout_id: workout!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+      const { data: set1 } = await repo.createSet({ workout_exercise_id: we!.id, order_index: 0 }, USER_ID);
+      await repo.updateSet(set1!.id, { is_complete: true, weight: 80, reps: 8 });
+      const { data: set2 } = await repo.createSet({ workout_exercise_id: we!.id, order_index: 1 }, USER_ID);
+      await repo.updateSet(set2!.id, { is_complete: true, weight: 85, reps: 8 });
+
+      const prs = await personalRecordsFor("ex-1");
+      expect(prs.map((r) => r.weight).sort()).toEqual([80, 85]);
+    });
+
+    it("different rep counts are independent records", async () => {
+      const { data: workout } = await repo.createWorkout({ date: "2026-07-20" }, USER_ID);
+      const { data: we } = await repo.addExercise({ workout_id: workout!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+      const { data: set1 } = await repo.createSet({ workout_exercise_id: we!.id, order_index: 0 }, USER_ID);
+      await repo.updateSet(set1!.id, { is_complete: true, weight: 60, reps: 12 });
+      const { data: set2 } = await repo.createSet({ workout_exercise_id: we!.id, order_index: 1 }, USER_ID);
+      await repo.updateSet(set2!.id, { is_complete: true, weight: 100, reps: 5 });
+
+      const prs = await personalRecordsFor("ex-1");
+      expect(prs).toHaveLength(2);
+    });
+
+    it("does not create a PR while the set is incomplete", async () => {
+      const { data: workout } = await repo.createWorkout({ date: "2026-07-21" }, USER_ID);
+      const { data: we } = await repo.addExercise({ workout_id: workout!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+      await repo.createSet({ workout_exercise_id: we!.id, order_index: 0, weight: 200, reps: 1 }, USER_ID);
+
+      const prs = await personalRecordsFor("ex-1");
+      expect(prs).toEqual([]);
+    });
+
+    it("does not create a PR when weight or reps is missing even if marked complete", async () => {
+      const { data: workout } = await repo.createWorkout({ date: "2026-07-22" }, USER_ID);
+      const { data: we } = await repo.addExercise({ workout_id: workout!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+      const { data: set } = await repo.createSet({ workout_exercise_id: we!.id, order_index: 0, reps: 8 }, USER_ID);
+      await repo.updateSet(set!.id, { is_complete: true });
+
+      const prs = await personalRecordsFor("ex-1");
+      expect(prs).toEqual([]);
+    });
+
+    it("does not filter warmup sets, matching the SQL trigger", async () => {
+      const { data: workout } = await repo.createWorkout({ date: "2026-07-23" }, USER_ID);
+      const { data: we } = await repo.addExercise({ workout_id: workout!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+      const { data: set } = await repo.createSet({ workout_exercise_id: we!.id, order_index: 0 }, USER_ID);
+      await repo.updateSet(set!.id, { is_complete: true, is_warmup: true, weight: 40, reps: 10 });
+
+      const prs = await personalRecordsFor("ex-1");
+      expect(prs).toEqual([expect.objectContaining({ reps: 10, weight: 40 })]);
+    });
+  });
 });

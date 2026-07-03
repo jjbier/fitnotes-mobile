@@ -115,8 +115,8 @@ export default function TrainingScreen() {
   const [timerVolume, setTimerVolume] = useState(80);
   const timerSoundRef = useRef<Audio.Sound | null>(null);
 
-  const { workoutRepo: repo, userId } = useRepositories();
-  const progressRepo = useMemo(() => createProgressRepository(supabase), []);
+  const { workoutRepo: repo, progressRepo, userId } = useRepositories();
+  const remoteProgressRepo = useMemo(() => createProgressRepository(supabase), []);
   const exerciseRepo = useMemo(() => createExerciseRepository(supabase), []);
 
   const workoutExercise = workoutExercises.find((we) => we.exercise_id === exerciseId);
@@ -140,7 +140,7 @@ export default function TrainingScreen() {
     }
     if (tab === "chart" && !chartLoaded && !chartLoading2) {
       setChartLoading2(true);
-      progressRepo.getChartData(exerciseId ?? "").then((points) => {
+      remoteProgressRepo.getChartData(exerciseId ?? "").then((points) => {
         setChartPoints(points);
         setChartLoaded(true);
         setChartLoading2(false);

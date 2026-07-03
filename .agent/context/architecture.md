@@ -55,6 +55,7 @@ fitnotes-app/
 | Tombstones (`_deleted=1`) en vez de borrado físico local | Un pull concurrente no puede "resucitar" una fila que el usuario borró offline antes de que el delete se pushee |
 | SIN `PRAGMA foreign_keys` en SQLite local | Las cascadas de la FK remota (`ON DELETE CASCADE`/`SET NULL`) se replican a mano en cada `deleteXxx` del repo local — evita comportamiento sutil dependiente de la conexión SQLite |
 | `RepositoryContext`/`useRepositories()` en vez de `createXxxRepository(supabase)` ad-hoc por pantalla | DI centralizada — todas las pantallas leen/escriben contra los repos locales; los remotos quedan para el `SyncEngine` y analíticas fuera de alcance offline |
+| `computePersonalRecordUpdate()` en `packages/core` (Fase 6 offline) | Réplica pura y testeable del trigger SQL `update_personal_record`, invocada desde `localWorkoutRepository.updateSet` — un workout de invitado genera sus PRs sin depender de sync |
 
 ## Base de datos (Supabase — ref: `fbhjiwtriqrxibqwsyqj`)
 

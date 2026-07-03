@@ -17,16 +17,16 @@ _Last updated: 2026-07-03_
 - Deps nativas añadidas 2026-07 (plan offline): `expo-sqlite@~15.1.4`, `expo-crypto@~14.0.2`, `@react-native-community/netinfo@11.4.1`
 - `assets/sounds/timer-end.mp3` — sonido del rest timer (generado con ffmpeg, dos beeps ~1.15s)
 
-## Repos locales / DI + identidad (offline, Fases 1–5 — ver `offline-sync.md` para el detalle completo)
+## Repos locales / DI + identidad (offline, Fases 1–6 — ver `offline-sync.md` para el detalle completo)
 ```typescript
 // Pantallas: SIEMPRE useRepositories(), NUNCA instanciar createXxxRepository(supabase) para CRUD
 // ni llamar a getSession() para obtener un userId de escritura.
-const { workoutRepo, exerciseRepo, routineRepo, bodyTrackerRepo, goalsRepo, userId, isGuest } = useRepositories();
+const { workoutRepo, exerciseRepo, routineRepo, bodyTrackerRepo, goalsRepo, progressRepo, userId, isGuest } = useRepositories();
 // Excepción: métodos analíticos fuera de alcance offline (getExerciseStats, getExerciseHistory,
-// convertExerciseWeights, getRoutineStats, backup/CSV) — ahí sí se instancia un repo remoto aparte ("split-repo"):
+// convertExerciseWeights, getRoutineStats, getChartData, backup/CSV) — ahí sí se instancia un repo remoto aparte ("split-repo"):
 const remoteExerciseRepo = useMemo(() => createExerciseRepository(supabase), []);
 ```
-Estado: workouts/sets (Fase 2), ejercicios/categorías/rutinas (Fase 4), body tracker/goals (Fase 5) — todos migrados a `useRepositories()` en todas las pantallas. `userId` resuelve siempre a un id (invitado o cuenta real, vía `local_identity`); `isGuest` distingue si hay cuenta vinculada. Cuenta ya no es obligatoria — ver "Cuenta opcional" abajo.
+Estado: workouts/sets (Fase 2), ejercicios/categorías/rutinas (Fase 4), body tracker/goals (Fase 5), personal records + progreso semanal/mejores series (Fase 6) — todos migrados a `useRepositories()` en todas las pantallas. `userId` resuelve siempre a un id (invitado o cuenta real, vía `local_identity`); `isGuest` distingue si hay cuenta vinculada. Cuenta ya no es obligatoria — ver "Cuenta opcional" abajo.
 
 ## Cuenta opcional (Fase 5 offline)
 La app arranca siempre en `(tabs)` sin pedir login — `_layout.tsx` ya no tiene auth guard. "Crear cuenta"/"Iniciar sesión para sincronizar" son acciones desde Configuración (Perfil), no una pantalla inicial obligatoria. Detalle completo (claim, identidad invitado, wipe en sign-out, guard de seguridad contra el bug de `force-stop`) en `offline-sync.md`. Backup/CSV, recalcular PRs, restaurar y eliminar historial siguen requiriendo cuenta real — `settings.tsx` usa un helper `requireAccount()` que alerta antes de cada acción.

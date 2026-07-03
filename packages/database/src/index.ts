@@ -39,3 +39,5 @@ export { createLocalBodyTrackerRepository } from "./local/repositories/localBody
 export type { LocalBodyTrackerRepository } from "./local/repositories/localBodyTrackerRepository.js";
 export { createLocalGoalsRepository } from "./local/repositories/localGoalsRepository.js";
 export type { LocalGoalsRepository } from "./local/repositories/localGoalsRepository.js";
+export { createLocalProgressRepository } from "./local/repositories/localProgressRepository.js";
+export type { LocalProgressRepository } from "./local/repositories/localProgressRepository.js";

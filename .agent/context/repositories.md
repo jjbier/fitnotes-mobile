@@ -2,7 +2,7 @@
 
 _Last updated: 2026-07-03_
 
-Todos exportados desde `packages/database/src/index.ts`. Todos usan `SupabaseClient<Database>` (repos **remotos**, esta página). Mobile los usa solo para el `SyncEngine` y para los métodos analíticos fuera de alcance offline — el CRUD de pantallas usa los **repos locales** (`createLocalWorkoutRepository`, `createLocalExerciseRepository`, `createLocalRoutineRepository`, vía `useRepositories()`), que espejan el mismo nombre de método sobre SQLite. Ver `.agent/context/offline-sync.md` para el detalle de los locales y qué métodos de cada tabla de abajo siguen siendo remote-only (`getExerciseStats`, `getExerciseHistory`, `convertExerciseWeights`, `getRoutineStats`, CSV/backup).
+Todos exportados desde `packages/database/src/index.ts`. Todos usan `SupabaseClient<Database>` (repos **remotos**, esta página). Mobile los usa solo para el `SyncEngine` y para los métodos analíticos fuera de alcance offline — el CRUD de pantallas usa los **repos locales** (`createLocalWorkoutRepository`, `createLocalExerciseRepository`, `createLocalRoutineRepository`, `createLocalBodyTrackerRepository`, `createLocalGoalsRepository`, `createLocalProgressRepository`, vía `useRepositories()`), que espejan el mismo nombre de método sobre SQLite. Ver `.agent/context/offline-sync.md` para el detalle de los locales y qué métodos de cada tabla de abajo siguen siendo remote-only (`getExerciseStats`, `getExerciseHistory`, `convertExerciseWeights`, `getRoutineStats`, `getChartData`, CSV/backup).
 
 ## workoutRepository
 
@@ -65,11 +65,13 @@ getRoutineStats(routineIds)                      // { lastUsed, sessionCount } p
 ## progressRepository
 
 ```ts
-getPersonalRecords(exerciseId)
-getAllPersonalRecords()
+getPersonalRecords(exerciseId)     // también local (createLocalProgressRepository) — alimentado por localWorkoutRepository.updateSet
+getAllPersonalRecords()            // también local
+getWeeklyTraining(weekStart)       // { exerciseId, setCount, volume }[] — también local (Fase 6)
+getBestSetsByExercise(exerciseIds) // Record<exerciseId, {maxReps,maxDistance,maxTime}> — también local (Fase 6)
 getChartData(exerciseId)  // → ChartPoint[] { date, maxWeight, totalVolume, maxReps,
                           //   totalReps, totalDistance, totalTime, maxSpeed, bestPace,
-                          //   weightByReps: Record<number, number> }
+                          //   weightByReps: Record<number, number> } — remote-only, fuera de alcance offline
 ```
 
 ## bodyTrackerRepository

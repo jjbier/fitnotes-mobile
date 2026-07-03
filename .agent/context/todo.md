@@ -2,6 +2,18 @@
 
 _Last updated: 2026-07-03_
 
+## Completado ✅ 2026-07-03 — plan offline mobile, Fase 6 de 6: personal records offline
+
+Última fase del plan offline (`offline-sync.md`) — con esto el plan de 6 fases queda completo, mobile es 100% offline salvo backup/CSV/restaurar/eliminar historial/estadísticas avanzadas.
+
+- `computePersonalRecordUpdate()` (`packages/core/src/utils/personalRecords.ts`) — réplica pura del trigger SQL `update_personal_record`: nuevo PR si `weight > max actual para (exercise_id, reps)`, sin filtrar `is_warmup` (igual que el trigger, deliberado)
+- `localWorkoutRepository.updateSet` genera PRs localmente en la misma transacción (`maybeRecordPersonalRecord`) — un workout de invitado ya actualiza sus PRs sin esperar a claim+sync
+- `localProgressRepository` (nuevo repo local, 6º): `getPersonalRecords`/`getAllPersonalRecords` (alimentados por lo anterior) + `getWeeklyTraining`/`getBestSetsByExercise` migrados también (JOIN/GROUP BY simples sobre tablas ya locales) — no estaban en el plan original de la Fase 6, pero sin ellos el resumen semanal del tab Progreso y el auto-check de goals sin PR de peso habrían quedado rotos en modo invitado
+- `RepositoryContext` expone `progressRepo`; migradas `(tabs)/progress.tsx`, `goals/index.tsx`, `calculators.tsx` al repo local; `workout/[exerciseId].tsx` usa split-repo (local para el badge de PR, remoto solo para `getChartData`)
+- `packages/core`: 215 tests (+9), `packages/database`: 82 tests (+12: 8 en localWorkoutRepository, 5 en localProgressRepository menos el solape con existentes)
+- Limitación aceptada: un PR generado offline y el mismo PR regenerado por el trigger SQL remoto al pushear el set pueden convivir como dos filas distintas — sin dedup entre ambos mecanismos
+- Pendiente: repetir la verificación manual en dispositivo físico (la pasada de 2026-07-03 fue anterior a esta fase)
+
 ## Completado ✅ 2026-07-03 — plan offline mobile, Fase 5 de 6: cuenta opcional
 
 Rediseño pedido por el usuario a mitad del plan original: la app debía funcionar 100% offline **sin cuenta**, activando la sincronización solo al crear/vincular una cuenta. Sustituye lo que iban a ser las Fases 5 (body tracker/goals) y 7 (bootstrap) del plan original, que se fusionaron en esta única Fase 5 rediseñada — el plan pasó de 7 a 6 fases totales. Detalle completo en `offline-sync.md`.
@@ -84,10 +96,11 @@ Plan completo: `.agent/context/offline-sync.md`. Solo mobile (web no cambia).
 - **EAS `projectId`**: `app.json` tiene placeholder — `eas init` requiere cuenta Expo del usuario
 - Cuenta de test Supabase compartida y frágil ante fechas relativas — algunos specs de Playwright/Detox pueden fallar por datos, no por código (ver CLAUDE.md)
 
-## Pendiente — plan offline mobile (Fase 6 de 6, ver `offline-sync.md`)
-- Fase 6: réplica en JS del trigger SQL de personal records — más urgente ahora que antes: un workout registrado como invitado no dispara el trigger remoto hasta que hay claim+sync, así que hoy los PRs no se actualizan en absoluto sin cuenta
+## Pendiente — plan offline mobile (completo, Fases 0–6 — ver `offline-sync.md`)
+- Duplicado de PRs tras claim+sync: PR generado offline (JS) + el mismo PR regenerado por el trigger SQL remoto al pushear el set — sin dedup entre ambos mecanismos, aceptado
 - Preferencias vía `user_metadata` (tema, unidades, toggles) sin fallback local en modo invitado — decidir si se resuelve o se acepta como limitación permanente
 - Bug sin fix: sesión Supabase no sobrevive a `force-stop` en mobile — ya no bloquea el arranque (cuenta opcional), pero deja el sync parado en silencio hasta volver a iniciar sesión
+- Verificación manual en dispositivo físico de la Fase 6 pendiente de repetir (la pasada de 2026-07-03 documentada en `offline-sync.md` es anterior a esta fase)
 
 ## Descartado
 - `shadcn/ui` — incompatibilidad eslint-config-next + ESLint v9

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   SafeAreaView, ScrollView, Text, View, TouchableOpacity,
   ActivityIndicator, Alert, Modal, TextInput, KeyboardAvoidingView, Platform,
@@ -6,8 +6,7 @@ import {
 import { useNavigation, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useExerciseStore, useProgressStore, calculate1RM, ExerciseType } from "@fitnotes/core";
-import { createProgressRepository, type ExerciseGoalRow } from "@fitnotes/database";
-import { supabase } from "../../lib/supabase";
+import { type ExerciseGoalRow } from "@fitnotes/database";
 import type { Exercise } from "@fitnotes/core";
 import DateInput from "../../components/DateInput";
 import { useTheme } from "../../lib/theme";
@@ -39,8 +38,7 @@ export default function GoalsScreen() {
   const [saving, setSaving] = useState(false);
   const [exSearch, setExSearch] = useState("");
 
-  const { exerciseRepo: exRepo, goalsRepo, userId } = useRepositories();
-  const progressRepo = useMemo(() => createProgressRepository(supabase), []);
+  const { exerciseRepo: exRepo, goalsRepo, progressRepo, userId } = useRepositories();
 
   useEffect(() => {
     navigation.setOptions({ headerTitle: "Objetivos" });

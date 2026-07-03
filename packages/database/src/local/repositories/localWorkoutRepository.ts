@@ -1,4 +1,4 @@
-import { generateUUID } from "@fitnotes/core";
+import { generateUUID, computePersonalRecordUpdate } from "@fitnotes/core";
 import type { SqlExecutor } from "../sqlExecutor.js";
 import { enqueuePendingOp } from "../pendingOps.js";
 import type { Database } from "../../supabase/types.js";
@@ -7,6 +7,55 @@ import { nowIso, toBool, fromBool, type RawRow, type RepoError } from "./shared.
 type WorkoutRow = Database["public"]["Tables"]["workouts"]["Row"];
 type WorkoutExerciseRow = Database["public"]["Tables"]["workout_exercises"]["Row"];
 type SetRow = Database["public"]["Tables"]["sets"]["Row"];
+type PersonalRecordRow = Database["public"]["Tables"]["personal_records"]["Row"];
+
+/**
+ * Réplica local del trigger SQL `update_personal_record` (ver
+ * packages/core/src/utils/personalRecords.ts) — corre dentro de la misma
+ * transacción que el UPDATE del set para que un workout de invitado también
+ * genere sus PRs sin depender de sync. Solo INSERT (nunca overwrite), igual
+ * que el trigger: un `(exercise_id, reps)` puede acumular varias filas de
+ * histórico, la más reciente con mayor peso es "la" PR vigente.
+ */
+async function maybeRecordPersonalRecord(db: SqlExecutor, setRow: RawRow): Promise<void> {
+  const isComplete = toBool(setRow.is_complete);
+  const weight = (setRow.weight as number | null) ?? null;
+  const reps = (setRow.reps as number | null) ?? null;
+  if (!isComplete || weight == null || reps == null) return;
+
+  const we = await db.getFirstAsync<{ exercise_id: string; user_id: string }>(
+    `SELECT exercise_id, user_id FROM workout_exercises WHERE id = ?`,
+    [setRow.workout_exercise_id as string]
+  );
+  if (!we) return;
+
+  const current = await db.getFirstAsync<{ maxWeight: number | null }>(
+    `SELECT MAX(weight) as maxWeight FROM personal_records WHERE exercise_id = ? AND user_id = ? AND reps = ? AND _deleted = 0`,
+    [we.exercise_id, we.user_id, reps]
+  );
+
+  const update = computePersonalRecordUpdate({ isComplete, weight, reps }, current?.maxWeight ?? null);
+  if (!update) return;
+
+  const id = generateUUID();
+  const ts = nowIso();
+  const prRow: PersonalRecordRow = {
+    id,
+    user_id: we.user_id,
+    exercise_id: we.exercise_id,
+    weight: update.weight,
+    reps: update.reps,
+    achieved_at: ts,
+    created_at: ts,
+    updated_at: ts,
+  };
+  await db.runAsync(
+    `INSERT INTO personal_records (id, user_id, exercise_id, weight, reps, achieved_at, created_at, updated_at, _dirty, _deleted)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0)`,
+    [prRow.id, prRow.user_id, prRow.exercise_id, prRow.weight, prRow.reps, prRow.achieved_at, prRow.created_at, prRow.updated_at]
+  );
+  await enqueuePendingOp(db, "personal_records", id, "insert", prRow);
+}
 
 function mapWorkoutRow(row: RawRow): WorkoutRow {
   return {
@@ -449,6 +498,7 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
       }
     ): Promise<{ data: SetRow | null; error: RepoError | null }> {
       const ts = nowIso();
+      let row: RawRow | null = null;
       await db.withTransactionAsync(async () => {
         const cols: string[] = [];
         const params: unknown[] = [];
@@ -460,8 +510,10 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
         params.push(ts, id);
         await db.runAsync(`UPDATE sets SET ${cols.join(", ")} WHERE id = ?`, params);
         await enqueuePendingOp(db, "sets", id, "update", { ...data, updated_at: ts });
+
+        row = await db.getFirstAsync<RawRow>(`SELECT * FROM sets WHERE id = ?`, [id]);
+        if (row) await maybeRecordPersonalRecord(db, row);
       });
-      const row = await db.getFirstAsync<RawRow>(`SELECT * FROM sets WHERE id = ?`, [id]);
       return { data: row ? mapSetRow(row) : null, error: null };
     },
 
