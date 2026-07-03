@@ -525,6 +525,7 @@ export default function ExercisesScreen() {
               setNewCatColor(PRESET_COLORS[0]!);
               setShowCategoryOnlyModal(true);
             }}
+            testID="exercises-fab-new-category"
             style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#fff", borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 8, elevation: 4 }}
           >
             <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>Nueva categoría</Text>
@@ -534,6 +535,7 @@ export default function ExercisesScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => { setShowFabMenu(false); openCreateModal(); }}
+            testID="exercises-fab-new-exercise"
             style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#fff", borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 8, elevation: 4 }}
           >
             <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>Nuevo ejercicio</Text>
@@ -545,6 +547,7 @@ export default function ExercisesScreen() {
       )}
       <TouchableOpacity
         onPress={() => setShowFabMenu((v) => !v)}
+        testID="exercises-fab-add"
         style={{ position: "absolute", bottom: 32, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: "#6366f1", alignItems: "center", justifyContent: "center", shadowColor: "#6366f1", shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 }}
         accessibilityLabel={showFabMenu ? "Cerrar menú" : "Abrir menú"}
       >
@@ -894,6 +897,7 @@ const CategoryCard = memo(function CategoryCard({ name, color, count, onPress }:
   return (
     <TouchableOpacity
       onPress={onPress}
+      testID={`category-card-${name}`}
       style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 12, backgroundColor: "#fff", paddingHorizontal: 16, paddingVertical: 14, gap: 12, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 }}
     >
       <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: color }} />

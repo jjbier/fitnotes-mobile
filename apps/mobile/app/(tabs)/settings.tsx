@@ -489,6 +489,7 @@ export default function SettingsScreen() {
             </View>
             <TouchableOpacity
               onPress={() => handleTrackPersonalRecords(!trackPersonalRecords)}
+              testID="toggle-track-personal-records"
               accessibilityRole="switch"
               accessibilityLabel="Registrar récords personales"
               accessibilityState={{ checked: trackPersonalRecords }}

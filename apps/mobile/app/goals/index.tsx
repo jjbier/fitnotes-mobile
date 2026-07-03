@@ -213,6 +213,7 @@ export default function GoalsScreen() {
         <Text style={{ flex: 1, fontSize: 20, fontWeight: "700", color: "#0f172a" }}>Objetivos</Text>
         <TouchableOpacity
           onPress={openCreate}
+          testID="goals-add-button"
           style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#6366f1", alignItems: "center", justifyContent: "center" }}
         >
           <Ionicons name="add" size={22} color="#fff" />

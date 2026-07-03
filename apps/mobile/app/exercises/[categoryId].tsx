@@ -283,6 +283,7 @@ export default function ExerciseCategoryScreen() {
         {!isFavorites && (
           <TouchableOpacity
             onPress={openAddModal}
+            testID="exercise-add-button"
             style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: theme.primary, alignItems: "center", justifyContent: "center" }}
           >
             <Ionicons name="add" size={22} color="white" />
@@ -316,6 +317,7 @@ export default function ExerciseCategoryScreen() {
                     ? router.push(`/workout/${ex.id}` as never)
                     : router.push({ pathname: "/exercise-history/[exerciseId]", params: { exerciseId: ex.id, name: ex.name, type: ex.type, weightUnit: ex.weight_unit } } as never)
                   }
+                  testID={`exercise-row-${ex.name}`}
                   style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: theme.borderLight, borderRadius: 12, backgroundColor: theme.surfaceCard, paddingHorizontal: 14, paddingVertical: 12, gap: 10, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 }}
                 >
                   <View style={{ flex: 1 }}>
@@ -326,13 +328,28 @@ export default function ExerciseCategoryScreen() {
                     {statsLine && <Text style={{ fontSize: 11, color: theme.textDisabled, marginTop: 2 }}>{statsLine}</Text>}
                   </View>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-                    <TouchableOpacity onPress={() => handleToggleFavorite(ex.id, ex.is_favorite)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <TouchableOpacity
+                      onPress={() => handleToggleFavorite(ex.id, ex.is_favorite)}
+                      testID={`exercise-favorite-${ex.name}`}
+                      accessibilityLabel={ex.is_favorite ? "Quitar de favoritos" : "Añadir a favoritos"}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
                       <Ionicons name={ex.is_favorite ? "star" : "star-outline"} size={18} color={ex.is_favorite ? theme.primary : theme.textDisabled} />
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => openEditModal(ex)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <TouchableOpacity
+                      onPress={() => openEditModal(ex)}
+                      testID={`exercise-edit-${ex.name}`}
+                      accessibilityLabel="Editar ejercicio"
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
                       <Ionicons name="pencil-outline" size={16} color={theme.textMuted} />
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleDelete(ex.id, ex.name)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <TouchableOpacity
+                      onPress={() => handleDelete(ex.id, ex.name)}
+                      testID={`exercise-delete-${ex.name}`}
+                      accessibilityLabel="Eliminar ejercicio"
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
                       <Ionicons name="trash-outline" size={16} color={theme.danger} />
                     </TouchableOpacity>
                   </View>

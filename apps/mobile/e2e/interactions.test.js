@@ -26,7 +26,7 @@ describe("Interacciones por pantalla", () => {
 
   it("Configuración — alterna y restaura 'Registrar récords personales'", async () => {
     await element(by.text("Configuración")).atIndex(0).tap();
-    const toggle = element(by.label("Registrar récords personales")).atIndex(1);
+    const toggle = element(by.id("toggle-track-personal-records"));
     await waitFor(toggle).toBeVisible().withTimeout(10000);
     await toggle.tap();
     await toggle.tap(); // restaurar

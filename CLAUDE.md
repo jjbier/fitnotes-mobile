@@ -61,8 +61,7 @@ Mobile offline (plan de 7 fases → 6 tras fusionar bootstrap en Fase 5, `.agent
 - `packages/ui` vacío, sin spec
 - **EAS `projectId`**: placeholder en `app.json`, requiere `eas init` con cuenta Expo real
 - Cuenta de test Supabase (`e2e-tests@fitnotes.local`) compartida y frágil — algunos specs asumen que existen/no existen workouts en fechas relativas ("ayer", "hace 3 días"); si un spec falla por datos, revisar el estado de la cuenta antes de asumir bug de código
-- Sin gaps funcionales conocidos vs. la app de referencia (paridad web/mobile Fases 0–5); plan offline mobile completo (Fases 0–6)
-- Verificación manual en dispositivo físico del código de la Fase 6 (build previa a esta fase ya verificada 2026-07-03, ver `offline-sync.md`) — pendiente de repetir tras rebuild
+- Sin gaps funcionales conocidos vs. la app de referencia (paridad web/mobile Fases 0–5); plan offline mobile completo (Fases 0–6), verificado en dispositivo físico 2026-07-03 (ver `offline-sync.md`)
 
 ## Comandos
 ```bash
