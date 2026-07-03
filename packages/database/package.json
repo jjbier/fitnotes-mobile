@@ -12,18 +12,32 @@
   },
   "scripts": {
     "type-check": "tsc --noEmit",
-    "lint": "eslint src/"
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
+    "@fitnotes/core": "workspace:*",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.2"
   },
+  "peerDependencies": {
+    "expo-sqlite": "*"
+  },
+  "peerDependenciesMeta": {
+    "expo-sqlite": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@fitnotes/tsconfig": "workspace:*",
+    "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.6",
     "@typescript-eslint/eslint-plugin": "^8.61.1",
     "@typescript-eslint/parser": "^8.61.1",
+    "better-sqlite3": "^11.8.1",
     "eslint": "^10.5.0",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^2.0.0"
   }
 }

@@ -1,3 +1,4 @@
+import "../lib/cryptoPolyfill";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppState, View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import type { AppStateStatus } from "react-native";
@@ -14,6 +15,7 @@ import { useExerciseStore, useRoutineStore, ExerciseType } from "@fitnotes/core"
 import { createExerciseRepository, createRoutineRepository } from "@fitnotes/database";
 import { useThemeModeStore, type ThemeMode } from "../lib/theme";
 import type { Session } from "@supabase/supabase-js";
+import { RepositoryProvider } from "../contexts/RepositoryContext";
 
 function applyThemeFromSession(session: Session | null) {
   const pref = (session?.user.user_metadata?.theme_preference as ThemeMode | undefined) ?? "system";
@@ -160,6 +162,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <RepositoryProvider>
       <SyncContext.Provider value={{ status: syncStatus, pendingCount, lastSyncAt, refetchSignal }}>
         <Stack>
           <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -192,6 +195,7 @@ export default function RootLayout() {
         )}
         <StatusBar style="auto" />
       </SyncContext.Provider>
+      </RepositoryProvider>
     </GestureHandlerRootView>
   );
 }

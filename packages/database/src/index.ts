@@ -18,3 +18,13 @@ export { createGoalsRepository } from "./repositories/goalsRepository.js";
 export type { GoalsRepository, ExerciseGoalRow } from "./repositories/goalsRepository.js";
 export { createBackupRepository, isBackupData } from "./repositories/backupRepository.js";
 export type { BackupRepository, BackupData } from "./repositories/backupRepository.js";
+
+// Local (offline) database — no expo-sqlite import here, only the
+// platform-agnostic executor interface, schema and migration runner.
+export type { SqlExecutor, SqlRunResult } from "./local/sqlExecutor.js";
+export { serializeExecutor } from "./local/serializeExecutor.js";
+export { runLocalMigrations } from "./local/migrations.js";
+export { LOCAL_SCHEMA_STATEMENTS, SYNCABLE_TABLES } from "./local/schema.js";
+export type { SyncableTable } from "./local/schema.js";
+export { createLocalWorkoutRepository } from "./local/repositories/localWorkoutRepository.js";
+export type { LocalWorkoutRepository } from "./local/repositories/localWorkoutRepository.js";

@@ -8,6 +8,7 @@ import type { WorkoutExercise } from "@fitnotes/core";
 import { createWorkoutRepository, createExerciseRepository, createRoutineRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import { useSyncStatus } from "../../contexts/SyncContext";
+import { useRepositories } from "../../contexts/RepositoryContext";
 import DateInput from "../../components/DateInput";
 import { useTheme } from "../../lib/theme";
 
@@ -61,7 +62,9 @@ export default function HomeScreen() {
   const [selectedWEIds, setSelectedWEIds] = useState<Set<string>>(new Set());
   const { status: syncStatus, pendingCount, refetchSignal } = useSyncStatus();
 
-  const repo = useMemo(() => createWorkoutRepository(supabase), []);
+  const { workoutRepo: repo } = useRepositories();
+  // shareWorkout sigue requiriendo red (fuera de alcance offline) — usa el repo remoto directamente.
+  const remoteWorkoutRepo = useMemo(() => createWorkoutRepository(supabase), []);
   const exRepo = useMemo(() => createExerciseRepository(supabase), []);
   const routineRepo = useMemo(() => createRoutineRepository(supabase), []);
 
@@ -364,8 +367,7 @@ export default function HomeScreen() {
 
   async function handleMoveWorkout() {
     if (!activeWorkout?.id || !moveDate) return;
-    await repo.updateWorkout(activeWorkout.id, { comment: activeWorkout.comment });
-    await supabase.from("workouts").update({ date: moveDate }).eq("id", activeWorkout.id);
+    await repo.moveWorkout(activeWorkout.id, moveDate);
     setShowMoveModal(false);
     setCurrentDate(moveDate);
     await loadWorkoutForDate(moveDate);
@@ -373,7 +375,7 @@ export default function HomeScreen() {
 
   async function handleShareWorkout() {
     if (!activeWorkout?.id) return;
-    const text = await repo.shareWorkout(activeWorkout.id);
+    const text = await remoteWorkoutRepo.shareWorkout(activeWorkout.id);
     if (text) await Share.share({ message: text });
   }
 

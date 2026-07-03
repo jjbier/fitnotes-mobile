@@ -9,9 +9,10 @@ import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
 import DraggableFlatList, { ScaleDecorator, NestableScrollContainer, NestableDraggableFlatList, type RenderItemParams } from "react-native-draggable-flatlist";
 import { useWorkoutStore, useExerciseStore, ExerciseType, calculate1RM } from "@fitnotes/core";
-import { createWorkoutRepository, createProgressRepository, createExerciseRepository } from "@fitnotes/database";
+import { createProgressRepository, createExerciseRepository } from "@fitnotes/database";
 import type { WorkoutExercise } from "@fitnotes/core";
 import { supabase } from "../../lib/supabase";
+import { useRepositories } from "../../contexts/RepositoryContext";
 import type { Set as FitSet } from "@fitnotes/core";
 import LineChart from "../../components/LineChart";
 
@@ -115,7 +116,7 @@ export default function TrainingScreen() {
   const [timerVolume, setTimerVolume] = useState(80);
   const timerSoundRef = useRef<Audio.Sound | null>(null);
 
-  const repo = useMemo(() => createWorkoutRepository(supabase), []);
+  const { workoutRepo: repo } = useRepositories();
   const progressRepo = useMemo(() => createProgressRepository(supabase), []);
   const exerciseRepo = useMemo(() => createExerciseRepository(supabase), []);
 

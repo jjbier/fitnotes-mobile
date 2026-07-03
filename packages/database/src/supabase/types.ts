@@ -21,6 +21,7 @@ export type Database = {
           id: string
           measurement_id: string
           recorded_at: string
+          updated_at: string
           user_id: string
           value: number
         }
@@ -30,6 +31,7 @@ export type Database = {
           id?: string
           measurement_id: string
           recorded_at?: string
+          updated_at?: string
           user_id: string
           value: number
         }
@@ -39,6 +41,7 @@ export type Database = {
           id?: string
           measurement_id?: string
           recorded_at?: string
+          updated_at?: string
           user_id?: string
           value?: number
         }
@@ -63,6 +66,7 @@ export type Database = {
           name: string
           order_index: number
           unit: string
+          updated_at: string
           user_id: string
         }
         Insert: {
@@ -75,6 +79,7 @@ export type Database = {
           name: string
           order_index?: number
           unit: string
+          updated_at?: string
           user_id: string
         }
         Update: {
@@ -87,6 +92,7 @@ export type Database = {
           name?: string
           order_index?: number
           unit?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
@@ -131,6 +137,7 @@ export type Database = {
           target_date: string | null
           target_reps: number | null
           target_weight: number | null
+          updated_at: string
           user_id: string
         }
         Insert: {
@@ -142,6 +149,7 @@ export type Database = {
           target_date?: string | null
           target_reps?: number | null
           target_weight?: number | null
+          updated_at?: string
           user_id: string
         }
         Update: {
@@ -153,6 +161,7 @@ export type Database = {
           target_date?: string | null
           target_reps?: number | null
           target_weight?: number | null
+          updated_at?: string
           user_id?: string
         }
         Relationships: [
@@ -228,6 +237,7 @@ export type Database = {
           exercise_id: string
           id: string
           reps: number
+          updated_at: string
           user_id: string
           weight: number
         }
@@ -237,6 +247,7 @@ export type Database = {
           exercise_id: string
           id?: string
           reps: number
+          updated_at?: string
           user_id: string
           weight: number
         }
@@ -246,6 +257,7 @@ export type Database = {
           exercise_id?: string
           id?: string
           reps?: number
+          updated_at?: string
           user_id?: string
           weight?: number
         }
@@ -261,32 +273,38 @@ export type Database = {
       }
       predefined_sets: {
         Row: {
+          created_at: string
           distance: number | null
           id: string
           order_index: number
           reps: number | null
           routine_day_exercise_id: string
           time_seconds: number | null
+          updated_at: string
           user_id: string
           weight: number | null
         }
         Insert: {
+          created_at?: string
           distance?: number | null
           id?: string
           order_index?: number
           reps?: number | null
           routine_day_exercise_id: string
           time_seconds?: number | null
+          updated_at?: string
           user_id: string
           weight?: number | null
         }
         Update: {
+          created_at?: string
           distance?: number | null
           id?: string
           order_index?: number
           reps?: number | null
           routine_day_exercise_id?: string
           time_seconds?: number | null
+          updated_at?: string
           user_id?: string
           weight?: number | null
         }
@@ -309,6 +327,7 @@ export type Database = {
           id: string
           order_index: number
           routine_day_id: string
+          updated_at: string
           user_id: string
         }
         Insert: {
@@ -319,6 +338,7 @@ export type Database = {
           id?: string
           order_index?: number
           routine_day_id: string
+          updated_at?: string
           user_id: string
         }
         Update: {
@@ -329,6 +349,7 @@ export type Database = {
           id?: string
           order_index?: number
           routine_day_id?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: [
@@ -355,6 +376,7 @@ export type Database = {
           name: string
           order_index: number
           routine_id: string
+          updated_at: string
           user_id: string
         }
         Insert: {
@@ -363,6 +385,7 @@ export type Database = {
           name: string
           order_index?: number
           routine_id: string
+          updated_at?: string
           user_id: string
         }
         Update: {
@@ -371,6 +394,7 @@ export type Database = {
           name?: string
           order_index?: number
           routine_id?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: [

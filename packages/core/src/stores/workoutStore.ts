@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 import type { Workout, WorkoutExercise, Set } from "../types/index.js";
+import { generateUUID } from "../utils/uuid.js";
 
 interface WorkoutState {
   currentDate: string;
@@ -54,10 +55,6 @@ const initialState: WorkoutState = {
   error: null,
 };
 
-function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
 export const useWorkoutStore = create<WorkoutStore>()(
   immer((set) => ({
     ...initialState,
@@ -65,7 +62,7 @@ export const useWorkoutStore = create<WorkoutStore>()(
     startWorkout: (date) =>
       set((state) => {
         state.activeWorkout = {
-          id: generateId(),
+          id: generateUUID(),
           date,
           start_time: new Date().toISOString(),
         };
@@ -97,7 +94,7 @@ export const useWorkoutStore = create<WorkoutStore>()(
       set((state) => {
         if (!state.activeWorkout) return;
         const entry: WorkoutExercise = {
-          id: weId ?? generateId(),
+          id: weId ?? generateUUID(),
           workout_id: state.activeWorkout.id,
           exercise_id: exerciseId,
           order_index: state.exercises.length,
@@ -127,7 +124,7 @@ export const useWorkoutStore = create<WorkoutStore>()(
       set((state) => {
         const existingSets = state.sets[workoutExerciseId] ?? [];
         const newSet: Set = {
-          id: generateId(),
+          id: generateUUID(),
           workout_exercise_id: workoutExerciseId,
           is_complete: false,
           is_warmup: false,
@@ -198,7 +195,7 @@ export const useWorkoutStore = create<WorkoutStore>()(
 
     groupExercises: (weId1, weId2) =>
       set((state) => {
-        const groupId = generateId();
+        const groupId = generateUUID();
         for (const ex of state.exercises) {
           if (ex.id === weId1 || ex.id === weId2) ex.group_id = groupId;
         }
