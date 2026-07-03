@@ -23,6 +23,7 @@ Ver `stores.md` para detalle completo de cada store.
 - `useExerciseStore` — catálogo de ejercicios + categorías
 - `useProgressStore` — personal records + estimated 1RM
 - `useRoutineStore` — rutinas + días + ejercicios por día + predefined sets
+- `usePreferencesStore` — las 16 claves de `UserPreferences` (tema, unidades, toggles, timer, calendario) + `loaded`; ver "Preferencias offline" en `offline-sync.md`
 
 ## Utils
 
@@ -42,9 +43,10 @@ getExerciseFields(type)         // → { showWeight, showReps, showDistance, sho
 generateUUID()                  // crypto.randomUUID() si existe (web nativo / mobile vía expo-crypto polyfill),
                                  // con fallback RFC4122 v4 manual. Usado por workoutStore y todos los repos
                                  // locales de mobile para generar IDs reales antes del insert (offline-first)
+computePersonalRecordUpdate(candidate, currentMaxWeight)  // réplica pura del trigger SQL update_personal_record — ver offline-sync.md
 ```
 
-## Tests (206 total)
+## Tests (219 total)
 
 - `exerciseStore.test.ts` — CRUD ejercicios y categorías
 - `workoutStore.test.ts` — workout lifecycle, sets, agrupaciones
@@ -53,7 +55,9 @@ generateUUID()                  // crypto.randomUUID() si existe (web nativo / m
 - `calculations.test.ts` — calculate1RM, calculatePlates, etc.
 - `dateUtils.test.ts` — formatWorkoutDate, getWeekRange, etc.
 - `schemas.test.ts` — validación Zod
-- `uuid.test.ts` — formato, unicidad, fallback sin `crypto` (añadido con el plan offline)
+- `uuid.test.ts` — formato, unicidad, fallback sin `crypto`
+- `personalRecords.test.ts` — computePersonalRecordUpdate (gate, no filtra is_warmup, reps independientes)
+- `preferencesStore.test.ts` — loadPreferences (merge), setPreference (clave suelta)
 
 ## Nota — `ChartPoint` duplicado
 `progressStore.ts` mantiene su propia interfaz `ChartPoint` (debe coincidir campo a campo con la de `packages/database/src/repositories/progressRepository.ts`: `totalReps`, `totalDistance`, `totalTime`, `maxSpeed`, `bestPace`, `weightByReps`). Al añadir un campo a una, añadirlo también a la otra o falla el type-check.

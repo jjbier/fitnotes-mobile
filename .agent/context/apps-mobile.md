@@ -21,7 +21,7 @@ _Last updated: 2026-07-03_
 ```typescript
 // Pantallas: SIEMPRE useRepositories(), NUNCA instanciar createXxxRepository(supabase) para CRUD
 // ni llamar a getSession() para obtener un userId de escritura.
-const { workoutRepo, exerciseRepo, routineRepo, bodyTrackerRepo, goalsRepo, progressRepo, userId, isGuest } = useRepositories();
+const { workoutRepo, exerciseRepo, routineRepo, bodyTrackerRepo, goalsRepo, progressRepo, preferencesRepo, userId, isGuest } = useRepositories();
 // Excepción: métodos analíticos fuera de alcance offline (getExerciseStats, getExerciseHistory,
 // convertExerciseWeights, getRoutineStats, getChartData, backup/CSV) — ahí sí se instancia un repo remoto aparte ("split-repo"):
 const remoteExerciseRepo = useMemo(() => createExerciseRepository(supabase), []);
@@ -33,11 +33,14 @@ La app arranca siempre en `(tabs)` sin pedir login — `_layout.tsx` ya no tiene
 
 ## Supabase en mobile
 ```typescript
-// Solo para leer/escribir user_metadata (preferencias) o funciones remote-only —
-// para identidad de escritura local usar siempre useRepositories().userId, no getSession().
+// Solo para funciones remote-only (backup/CSV, estadísticas avanzadas) o updateUser
+// en segundo plano al escribir una preferencia con cuenta real.
+// Identidad de escritura: siempre useRepositories().userId, nunca getSession().
 const { data: { session } } = await supabase.auth.getSession();
 ```
-**Nota:** las preferencias en `user_metadata` (ver tabla abajo) no tienen fallback local — en modo invitado, cambiarlas simplemente no persiste (gap conocido, ver `CLAUDE.md`).
+
+## Preferencias (offline, post-Fase 6)
+16 claves (`UserPreferences` en `@fitnotes/core`) resueltas siempre vía `usePreferencesStore` + `preferencesRepo` (tabla local `user_preferences`, fuera de sync) — funcionan en modo invitado. Con cuenta real, cada escritura también actualiza `user_metadata` en segundo plano (sync entre dispositivos); al iniciar sesión, `_layout.tsx` fusiona `user_metadata` sobre el valor local (remoto gana). Detalle completo en `offline-sync.md` § Preferencias offline.
 
 ## workout_exercise ID — regla crítica
 ```typescript
@@ -55,18 +58,7 @@ const theme = useTheme();
 ```
 - Tab bar: `useColorScheme()` directo en `(tabs)/_layout.tsx` (no useTheme — es layout)
 - StatusBar: `<StatusBar style="auto" />` ya configurado en `_layout.tsx`
-- **Selector manual de tema**: `useThemeModeStore.getState().setMode("light"|"dark"|"system")` en Ajustes; `_layout.tsx` inicializa el store desde `user_metadata.theme_preference` en `getSession()` y `onAuthStateChange`
-
-## user_metadata — claves usadas (Supabase Auth)
-```
-weight_unit, default_weight_increment, calendar_week_start, auto_select_next_set,
-track_personal_records, mark_sets_complete, default_rest_seconds,
-estimated_records_rep_limit, display_name, theme_preference,
-rest_timer_sound_enabled, rest_timer_volume (0-100),
-show_set_count_home, hidden_category_ids (string[]),
-calendar_show_day_panel, calendar_show_category_dots
-```
-Todas se leen con `session.user.user_metadata?.clave` y se escriben con `supabase.auth.updateUser({ data: { clave: valor } })`.
+- **Selector manual de tema**: `useThemeModeStore.getState().setMode("light"|"dark"|"system")` en Ajustes; se hidrata desde `usePreferencesStore`/tabla local en `RepositoryContext` (siempre) y desde `user_metadata` en `_layout.tsx` si hay sesión real (remoto gana)
 
 ## Sync offline + cross-device (ver `offline-sync.md` para el motor completo)
 - `SyncContext` → `{ status, pendingCount, lastSyncAt, refetchSignal }`; `status` viene de `SyncEngine.sync()` (`"idle"|"syncing"|"error"`), banner visible en `_layout.tsx` para cualquier estado ≠ idle
@@ -79,7 +71,7 @@ Todas se leen con `session.user.user_metadata?.clave` y se escriben con `supabas
 ## Rest Timer (workout/[exerciseId].tsx)
 - Solo arranque manual — NO se inicia automáticamente al añadir/completar series
 - Fin de tiempo: `Vibration.vibrate([0, 400, 150, 400, 150, 400])` + `Haptics.notificationAsync(Success)` + **sonido opcional** (`expo-av`, `Audio.Sound` precargado en un `useEffect` con `require("../../assets/sounds/timer-end.mp3")`, `setVolumeAsync` + `replayAsync()` si `rest_timer_sound_enabled`)
-- Recuerda última duración usada: `last-timer-duration.json` (expo-file-system), fallback a `user_metadata.default_rest_seconds`
+- Recuerda última duración usada: `last-timer-duration.json` (expo-file-system), fallback a `usePreferencesStore().default_rest_seconds` (funciona en modo invitado)
 - **Sin** push notifications (`expo-notifications` eliminado del flujo del timer)
 
 ## Accessibility

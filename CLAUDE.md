@@ -19,7 +19,7 @@ Detalle en `.agent/context/`: `architecture.md`, `apps-web.md`, `apps-mobile.md`
 - Zustand 5 + Immer (stores en core)
 - Web: Tailwind v4 (requiere `@theme inline` en `globals.css` — ver bug abajo), `lucide-react` para iconos, `ConfirmDialog` propio (no `confirm()` nativo), shadcn/ui NO inicializado
 - Mobile: StyleSheet only (NO NativeWind en componentes), `FileStorage` como auth storage (no AsyncStorage), `expo-sqlite@~15.1.4` (DB local), `expo-crypto@~14.0.2` (polyfill UUID), `@react-native-community/netinfo@11.4.1` (detección de reconexión)
-- Tests: Vitest (core 215 tests, database 82 tests), Playwright (web E2E, 13 specs/66 tests), Detox (mobile E2E, `android.attached`, dispositivo físico)
+- Tests: Vitest (core 219 tests, database 87 tests), Playwright (web E2E, 13 specs/66 tests), Detox (mobile E2E, `android.attached`, dispositivo físico)
 
 ## Decisiones arquitectónicas clave
 - Repository pattern `createXxxRepository(client)` (remoto) espejado 1:1 por `createLocalXxxRepository(db: SqlExecutor)` (local) — mismos nombres de método, mismo shape `{data, error}`. Detalle en `offline-sync.md`
@@ -29,21 +29,21 @@ Detalle en `.agent/context/`: `architecture.md`, `apps-web.md`, `apps-mobile.md`
 - `ExerciseType` cast obligatorio al mapear Supabase → core
 - 1RM Brzycki; PR auto-actualizado vía trigger SQL (remoto) **y** réplica JS en local (`computePersonalRecordUpdate`, Fase 6 offline) — ambos pueden generar filas para el mismo evento tras sync (duplicado aceptado, ver `offline-sync.md`); RLS `auth.uid()=user_id` en todas las tablas
 - Supersets: `group_id`/`group_name` compartidos en `routine_day_exercises` y `workout_exercises`
-- Home Screen Settings (categorías ocultas): client-side (localStorage web / `user_metadata` mobile), sin campo en DB — **no funciona en modo invitado** (ver Bugs conocidos)
+- Home Screen Settings (categorías ocultas): client-side (localStorage web / preferencias mobile), sin campo en DB
+- **Preferencias offline (mobile)**: `UserPreferences` (16 claves: tema, unidades, toggles de entrenamiento, timer, calendario, categorías ocultas) vive en `packages/core` con `usePreferencesStore` (zustand) + `createLocalPreferencesRepository` (tabla `user_preferences`, clave/valor en SQLite, no sincronizable). Siempre resueltas (invitado o cuenta real) — reemplaza el patrón anterior de leer/escribir `user_metadata` directamente en cada pantalla. Con cuenta real, cada escritura también actualiza `user_metadata` en segundo plano (sync entre dispositivos); al iniciar sesión, `_layout.tsx` hidrata la tabla local con el valor remoto (remoto gana). Detalle en `offline-sync.md`
 - Lista completa de decisiones: `.agent/context/architecture.md` y `.agent/context/offline-sync.md`
 
 ## Estado actual — qué funciona
 Web/mobile: Fases 0–5 de paridad con la app de referencia completas, sin gaps funcionales.
 Mobile offline (plan de 7 fases → 6 tras fusionar bootstrap en Fase 5, `.agent/context/offline-sync.md`): **Fases 0–6 completas** — offline 100% funcional salvo backup/CSV/restaurar/eliminar historial/estadísticas avanzadas.
-- `packages/core` ✅ 215 tests Vitest (+9 de `computePersonalRecordUpdate`, réplica del trigger SQL de PRs)
-- `packages/database` ✅ 8 repositorios remotos + 6 repos locales (workout/exercise/routine/body-tracker/goals/progress) + `SyncEngine` v2 (push/pull real, cola durable en SQLite) + `claimGuestIdentity()` — 82 tests Vitest
+- `packages/core` ✅ 219 tests Vitest (+9 de `computePersonalRecordUpdate`, +4 de `usePreferencesStore`)
+- `packages/database` ✅ 8 repositorios remotos + 6 repos locales (workout/exercise/routine/body-tracker/goals/progress) + repo de preferencias (`user_preferences`, no sincronizable) + `SyncEngine` v2 (push/pull real, cola durable en SQLite) + `claimGuestIdentity()` — 87 tests Vitest
 - `apps/web` ✅ todas las rutas, nav de 6 secciones (igual que mobile), `/search` global, dashboard con franja semanal+racha+drag&drop+multi-select+resumen final, accesibilidad WCAG AA, CSP, CI/CD. **Sin cambios offline** (fuera de alcance, solo mobile; web sigue requiriendo cuenta)
-- `apps/mobile` ✅ APK release estable (dispositivo `ZY22G9PDSV`), mismas 6 tabs, Detox funcional. **App 100% funcional sin cuenta desde el arranque** (modo invitado): CRUD de entrenamientos/ejercicios/categorías/rutinas/body tracker/goals offline, PRs generados localmente al completar sets (Fase 6), badge de PR/tab Progreso/goals leyendo de SQLite local. Cuenta pasa a ser opcional — alcanzable desde Configuración ("Crear cuenta"/"Iniciar sesión para sincronizar"), no un gate de arranque. Backup/CSV/recalcular PRs (remoto)/restaurar/eliminar historial/estadísticas avanzadas siguen requiriendo cuenta real (gateadas con aviso "requiere una cuenta")
+- `apps/mobile` ✅ APK release estable (dispositivo `ZY22G9PDSV`), mismas 6 tabs, Detox funcional. **App 100% funcional sin cuenta desde el arranque** (modo invitado): CRUD de entrenamientos/ejercicios/categorías/rutinas/body tracker/goals offline, PRs generados localmente al completar sets (Fase 6), badge de PR/tab Progreso/goals leyendo de SQLite local, preferencias (tema/unidades/toggles/timer/calendario) persistidas localmente y ya no se pierden en modo invitado. Cuenta pasa a ser opcional — alcanzable desde Configuración ("Crear cuenta"/"Iniciar sesión para sincronizar"), no un gate de arranque. Backup/CSV/recalcular PRs (remoto)/restaurar/eliminar historial/estadísticas avanzadas siguen requiriendo cuenta real (gateadas con aviso "requiere una cuenta")
 - Ambos ✅ fechas en español, colores/tema renderizando correctamente en web
 
 ## Bugs conocidos / no repetir
 - **Sesión Supabase no sobrevive a `force-stop` en mobile**: pese a `persistSession: true` + `FileStorage`, tras matar el proceso (`am force-stop`) la sesión no se restaura. Con cuenta opcional (Fase 5) esto ya no bloquea el arranque (la app siempre entra a `(tabs)`), pero el dispositivo queda "atascado" mostrando la cuenta real como activa (`local_identity.is_guest=false`) sin sesión válida — el sync falla en silencio hasta volver a iniciar sesión manualmente desde Configuración. **Importante:** `_layout.tsx` distingue explícitamente un `SIGNED_OUT` real de esta comprobación de sesión fallida (parámetro `isExplicitSignOut` en `handleSessionChange`) — tratar "sin sesión" como sign-out en el arranque en frío borraría datos de una cuenta real sin haber confirmado que el usuario cerró sesión. **Sin fix de fondo todavía** (la sesión sigue sin restaurarse tras force-stop).
-- **Preferencias de usuario (`user_metadata`) no funcionan en modo invitado**: tema, unidad de peso, incremento por defecto, orden de calendario, etc. se guardan vía `supabase.auth.updateUser()` — sin cuenta real, estas llamadas no tienen dónde persistir. Hoy simplemente no se guardan (degradación silenciosa a los valores por defecto), no hay fallback local. Gap conocido, no resuelto en la Fase 5 de cuenta opcional.
 - **`deleteCategory` no limpiaba `category_id` en sus ejercicios** (local): la FK remota es `ON DELETE SET NULL`; el repo local solo tombstonaba la categoría, dejando ejercicios con un `category_id` colgante. Arreglado (ver `offline-sync.md`).
 - **`deleteExercise` no cascadeaba** a `workout_exercises`/`sets`/`routine_day_exercises`/`predefined_sets` (local): la FK remota es `ON DELETE CASCADE`. Arreglado.
 - **Automatización ADB con `input text` y coordenadas**: los taps deben usar las coordenadas REALES del dispositivo (`uiautomator dump`), no las del PNG del screenshot escalado — factor 1.2x en este dispositivo (1080×2400 real vs 900×2000 mostrado). Olvidar el factor es la causa más común de "tap en el elemento equivocado" al testear.
@@ -56,7 +56,6 @@ Mobile offline (plan de 7 fases → 6 tras fusionar bootstrap en Fase 5, `.agent
 
 ## Pendiente inmediato
 - **Duplicado de PRs tras claim+sync**: un PR generado offline (JS) y el mismo PR regenerado por el trigger SQL remoto al pushear el set pueden convivir como dos filas distintas — sin dedup entre ambos mecanismos. Aceptado, no bloquea (ver `offline-sync.md`)
-- **Preferencias en modo invitado**: sin fallback local para `user_metadata` (tema, unidades, toggles) — decidir si vale la pena un store local o se acepta como limitación permanente
 - **Multi-dispositivo en modo invitado**: si el mismo usuario usa invitado en dos dispositivos antes de crear cuenta, ambos claims generan filas duplicadas al vincularse a la misma cuenta (sin deduplicación) — limitación aceptada, documentada en `offline-sync.md`
 - `packages/ui` vacío, sin spec
 - **EAS `projectId`**: placeholder en `app.json`, requiere `eas init` con cuenta Expo real

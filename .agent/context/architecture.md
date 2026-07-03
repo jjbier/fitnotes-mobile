@@ -41,8 +41,8 @@ fitnotes-app/
 | `useRef` para fetch stale en predefined sets | Race condition al cambiar ejercicio rápido en modal |
 | `useTheme()` desde `lib/theme.ts` | Dark mode via useColorScheme — NO hardcodear colores hex |
 | Tab bar usa `useColorScheme()` directo | Layouts no pueden llamar hooks de la misma forma que componentes |
-| `useThemeModeStore` (zustand, fuera de core) en `lib/theme.ts` | Override manual light/dark/system sobre `useColorScheme()`, sincronizado con `user_metadata.theme_preference` |
-| Home Screen Settings sin migración DB | Categorías ocultas = lista de IDs client-side (localStorage web / user_metadata mobile) — evita tocar RLS/schema para un ajuste puramente visual |
+| `useThemeModeStore` (zustand, fuera de core) en `lib/theme.ts` | Override manual light/dark/system sobre `useColorScheme()`; se hidrata desde `usePreferencesStore`/tabla local (o `user_metadata` si hay cuenta) — ver "Preferencias offline" en `offline-sync.md` |
+| Home Screen Settings sin migración DB | Categorías ocultas = lista de IDs client-side (localStorage web / `usePreferencesStore` mobile) — evita tocar RLS/schema para un ajuste puramente visual |
 | Backup/restore mobile sin document-picker nativo | Reutiliza patrón ya usado por import CSV: export vía `Share.share`, restore vía modal de pegado de texto — evita instalar `expo-document-picker` |
 | Rest timer sound vía `expo-av` (no `expo-audio`) | SDK 52: `expo-audio` aún beta/inestable en esa versión; `expo-av` es la opción estable para playback simple |
 | `@theme inline` en `apps/web/app/globals.css` (2026-07-02) | Tailwind v4 no genera utilidades para colores custom (`bg-primary`, etc.) sin registrarlos en `@theme` — bug presente desde el scaffold, pasó desapercibido porque los tests E2E comprueban DOM/roles, no CSS computado |
@@ -56,6 +56,7 @@ fitnotes-app/
 | SIN `PRAGMA foreign_keys` en SQLite local | Las cascadas de la FK remota (`ON DELETE CASCADE`/`SET NULL`) se replican a mano en cada `deleteXxx` del repo local — evita comportamiento sutil dependiente de la conexión SQLite |
 | `RepositoryContext`/`useRepositories()` en vez de `createXxxRepository(supabase)` ad-hoc por pantalla | DI centralizada — todas las pantallas leen/escriben contra los repos locales; los remotos quedan para el `SyncEngine` y analíticas fuera de alcance offline |
 | `computePersonalRecordUpdate()` en `packages/core` (Fase 6 offline) | Réplica pura y testeable del trigger SQL `update_personal_record`, invocada desde `localWorkoutRepository.updateSet` — un workout de invitado genera sus PRs sin depender de sync |
+| `user_preferences` local (clave/valor, fuera de `SYNCABLE_TABLES`) | Preferencias son configuración de dispositivo/cuenta, no datos de fitness — no pasan por el `SyncEngine`; `user_metadata` sigue existiendo como sync entre dispositivos para cuentas reales |
 
 ## Base de datos (Supabase — ref: `fbhjiwtriqrxibqwsyqj`)
 

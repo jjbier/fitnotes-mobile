@@ -44,6 +44,8 @@ createServerClient(cookieStore)    // Server Components / Route Handlers
 
 `localWorkoutRepository`, `localExerciseRepository`, `localRoutineRepository`, `localBodyTrackerRepository`, `localGoalsRepository`, `localProgressRepository` — espejan 1:1 los repos remotos de arriba (mismo nombre de método, mismo shape `{data, error}`), pero leen/escriben SQLite vía la interfaz `SqlExecutor` en vez de Supabase. Plan offline completo (Fases 0–6): personal records se generan localmente en `localWorkoutRepository.updateSet` y se leen desde `localProgressRepository` (Fase 6). Detalle completo (esquema, cascadas FK a replicar a mano, patrón de escritura, DI): **`.agent/context/offline-sync.md`**.
 
+Séptimo repo, sin equivalente remoto: `localPreferencesRepository` (`getAll`, `set`, `setMany`) sobre la tabla `user_preferences` (clave/valor JSON) — fuera de `SYNCABLE_TABLES`, el `SyncEngine` no la toca. Ver "Preferencias offline" en `offline-sync.md`.
+
 ## SyncEngine (`src/sync/syncEngine.ts`) — v2, offline-first
 
 ```ts

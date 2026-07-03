@@ -90,5 +90,18 @@ loadChartData(measurementId, entries)
 addEntry / deleteEntry
 ```
 
+## usePreferencesStore
+
+```ts
+// State
+preferences: UserPreferences   // 16 claves (tema, unidades, toggles, timer, calendario) — ver DEFAULT_PREFERENCES
+loaded: boolean
+
+// Actions
+loadPreferences(partial)   // Object.assign — merge, no reemplaza (hidratación local + remota conviven)
+setPreference(key, value)
+```
+Hidratado desde `preferencesRepo` (mobile, tabla local `user_preferences`) y opcionalmente fusionado con `user_metadata` si hay sesión real — ver "Preferencias offline" en `offline-sync.md`.
+
 ## Fuera de core: useThemeModeStore (mobile)
-`apps/mobile/lib/theme.ts` — store zustand simple (`mode: "light"|"dark"|"system"`) NO en `@fitnotes/core` porque solo aplica a mobile. Ver `apps-mobile.md`.
+`apps/mobile/lib/theme.ts` — store zustand simple (`mode: "light"|"dark"|"system"`) NO en `@fitnotes/core` porque solo aplica a mobile. Se hidrata desde `usePreferencesStore.preferences.theme_preference`, no directamente de `user_metadata`. Ver `apps-mobile.md`.
