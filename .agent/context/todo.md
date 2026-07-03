@@ -1,6 +1,34 @@
 # Trabajo pendiente
 
-_Last updated: 2026-07-02_
+_Last updated: 2026-07-03_
+
+## Completado ✅ 2026-07-03 — plan offline mobile, Fase 5 de 6: cuenta opcional
+
+Rediseño pedido por el usuario a mitad del plan original: la app debía funcionar 100% offline **sin cuenta**, activando la sincronización solo al crear/vincular una cuenta. Sustituye lo que iban a ser las Fases 5 (body tracker/goals) y 7 (bootstrap) del plan original, que se fusionaron en esta única Fase 5 rediseñada — el plan pasó de 7 a 6 fases totales. Detalle completo en `offline-sync.md`.
+
+- `local_identity` (tabla singleton SQLite) resuelve un `userId` siempre presente (invitado o cuenta real) vía `RepositoryContext`/`useRepositories()` — reemplaza el patrón de ~13 pantallas llamando a `getSession()` por su cuenta
+- `_layout.tsx` ya no fuerza login: arranca siempre en `(tabs)`; "Crear cuenta"/"Iniciar sesión para sincronizar" son acciones desde Configuración
+- `claimGuestIdentity()`: al crear/vincular cuenta, reescribe `user_id` (invitado→real) en las 13 tablas locales y en los payloads de `pending_ops` ya encolados, en una transacción — sin necesidad de un módulo de bootstrap aparte (el `sync()` normal ya hace pull completo cuando el watermark está vacío)
+- `wipeAndSetIdentity()`: vacía la DB local en sign-out o cambio directo entre dos cuentas reales, con aviso previo si hay cambios sin sincronizar
+- **Guard de seguridad crítico** encontrado y corregido antes de cerrar la fase: la comprobación de sesión del arranque en frío no debe tratarse como sign-out (habría borrado datos de una cuenta real cada vez que la sesión no sobrevive a un `force-stop`) — `handleSessionChange` ahora distingue `isExplicitSignOut` (solo `true` en el evento `SIGNED_OUT` real)
+- `localBodyTrackerRepository`/`localGoalsRepository` (adelantados desde la antigua Fase 5) + pantallas migradas
+- Backup/CSV/recalcular PRs/restaurar/eliminar historial/estadísticas avanzadas gateados tras `requireAccount()` en Settings
+- Specs Detox (`smoke`, `navigation`, `interactions`, `routines-delete`) actualizados: el login ya no es la pantalla inicial, se llega a él desde Configuración
+- `packages/database`: 69 tests Vitest (+18 desde la Fase 4: local identity, claim, body tracker, goals)
+- Limitaciones aceptadas: preferencias `user_metadata` sin fallback local en modo invitado; duplicados si el mismo usuario usa invitado en dos dispositivos antes de crear cuenta
+
+## Completado ✅ 2026-07-03 — plan offline mobile, Fases 0–4 de 7 (histórico, ver arriba para el rediseño)
+
+Plan completo: `.agent/context/offline-sync.md`. Solo mobile (web no cambia).
+
+- Fase 0: spike `expo-sqlite` de-riskeado (build release + arranque en dispositivo físico + Detox, sin repetir el crash histórico)
+- Fase 1: `generateUUID()` en core + polyfill Hermes (`expo-crypto`), interfaz `SqlExecutor`, schema local (13 tablas), migraciones versionadas, `RepositoryContext`/`useRepositories()`
+- Fase 2: `localWorkoutRepository` — workouts/workout_exercises/sets 100% offline
+- Fase 3: `SyncEngine` v2 — pull real, cola durable, push ordering por FK, conflicto local-gana-si-dirty, trigger por reconexión de red (`netinfo`)
+- Fase 4: `localExerciseRepository` + `localRoutineRepository` — ejercicios/categorías/rutinas 100% offline; migradas todas las pantallas a `useRepositories()` (patrón "split-repo" donde hay analíticas fuera de alcance)
+- Bugs reales encontrados y corregidos durante Fase 4 (device testing, no en tests unitarios): `deleteCategory` no limpiaba `category_id` de sus ejercicios (FK remota `SET NULL`); `deleteExercise` no cascadeaba a workout_exercises/sets/routine_day_exercises/predefined_sets (FK remota `CASCADE`); reorders locales devolvían `{error}` único en vez de array
+- Bug conocido sin fix: sesión Supabase no sobrevive a `force-stop` (pre-existente, no introducido por este trabajo)
+- Pendiente: Fase 5 (body tracker/goals), Fase 6 (PRs offline), Fase 7 (bootstrap inicial)
 
 ## Completado ✅ 2026-07-02 — paridad visual/funcional web↔mobile + bugs reales
 - Web: nav restructurada a 6 secciones (igual que mobile), nueva ruta `/search` (búsqueda global)
@@ -56,7 +84,11 @@ _Last updated: 2026-07-02_
 - **EAS `projectId`**: `app.json` tiene placeholder — `eas init` requiere cuenta Expo del usuario
 - Cuenta de test Supabase compartida y frágil ante fechas relativas — algunos specs de Playwright/Detox pueden fallar por datos, no por código (ver CLAUDE.md)
 
+## Pendiente — plan offline mobile (Fase 6 de 6, ver `offline-sync.md`)
+- Fase 6: réplica en JS del trigger SQL de personal records — más urgente ahora que antes: un workout registrado como invitado no dispara el trigger remoto hasta que hay claim+sync, así que hoy los PRs no se actualizan en absoluto sin cuenta
+- Preferencias vía `user_metadata` (tema, unidades, toggles) sin fallback local en modo invitado — decidir si se resuelve o se acepta como limitación permanente
+- Bug sin fix: sesión Supabase no sobrevive a `force-stop` en mobile — ya no bloquea el arranque (cuenta opcional), pero deja el sync parado en silencio hasta volver a iniciar sesión
+
 ## Descartado
 - `shadcn/ui` — incompatibilidad eslint-config-next + ESLint v9
 - `packages/ui` — sin spec de design tokens
-- Offline-first SQLite — app funciona directamente con Supabase

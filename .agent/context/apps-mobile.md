@@ -1,28 +1,50 @@
 # apps/mobile — Expo SDK 52
 
-_Last updated: 2026-07-02_
+_Last updated: 2026-07-03_
 
 ## Config
-- `app.json` → scheme `fitnotes`, typedRoutes enabled. **expo-sqlite plugin ELIMINADO** (causaba crash). EAS `projectId` es placeholder — requiere `eas init`
+- `app.json` → scheme `fitnotes`, typedRoutes enabled. `expo-sqlite` **reintroducido** (2026-07, plan offline Fase 0) tras el crash histórico — de-riskeado con spike dedicado antes de construir nada encima, ver `offline-sync.md`. EAS `projectId` es placeholder — requiere `eas init`
 - `babel.config.js` → `babel-preset-expo` con `jsxImportSource: "nativewind"` + `reanimated/plugin`. **SIN `nativewind/babel`**
 - `metro.config.js` → `watchFolders: [monorepoRoot]`, `nodeModulesPaths`, `withNativeWind`, **custom resolveRequest .js→.ts**
 - `.npmrc` raíz → `public-hoist-pattern` para Babel — requerido para `assembleRelease`
-- `lib/supabase.ts` → `createClient` con **FileStorage** (expo-file-system) como auth storage — NO AsyncStorage
+- `lib/supabase.ts` → `createClient` con **FileStorage** (expo-file-system) como auth storage — NO AsyncStorage. `persistSession: true`, pero ver bug conocido (sesión no sobrevive a `force-stop`) en `offline-sync.md`/`CLAUDE.md`
 - `lib/theme.ts` → `useTheme()` + `Colors.light` / `Colors.dark` + **`useThemeModeStore`** (zustand: `mode: "light"|"dark"|"system"`) — `useTheme()` resuelve `mode === "system" ? useColorScheme() : mode`
+- `lib/cryptoPolyfill.ts` → instala `globalThis.crypto.randomUUID` en Hermes vía `expo-crypto`; importado al inicio de `app/_layout.tsx` (necesario para `generateUUID()` de core en mobile)
+- `lib/db/client.ts` → `getLocalDb(): Promise<SqlExecutor>`, singleton, abre `expo-sqlite` + corre migraciones + envuelve con `serializeExecutor`
+- `lib/netinfo.ts` → `useNetworkStatus()` sobre `@react-native-community/netinfo`, dispara sync al reconectar
+- `contexts/RepositoryContext.tsx` → `<RepositoryProvider>` + `useRepositories()`, ver "Repos locales / DI" abajo
 - Deps nativas añadidas 2026-07-01 (via `npx expo install`, autolinking sin cambios extra): `expo-av@~15.0.2` (sonido rest timer), `expo-sharing@~13.0.1` + `react-native-view-shot@~4.0.3` (exportar imagen de gráficos)
+- Deps nativas añadidas 2026-07 (plan offline): `expo-sqlite@~15.1.4`, `expo-crypto@~14.0.2`, `@react-native-community/netinfo@11.4.1`
 - `assets/sounds/timer-end.mp3` — sonido del rest timer (generado con ffmpeg, dos beeps ~1.15s)
+
+## Repos locales / DI + identidad (offline, Fases 1–5 — ver `offline-sync.md` para el detalle completo)
+```typescript
+// Pantallas: SIEMPRE useRepositories(), NUNCA instanciar createXxxRepository(supabase) para CRUD
+// ni llamar a getSession() para obtener un userId de escritura.
+const { workoutRepo, exerciseRepo, routineRepo, bodyTrackerRepo, goalsRepo, userId, isGuest } = useRepositories();
+// Excepción: métodos analíticos fuera de alcance offline (getExerciseStats, getExerciseHistory,
+// convertExerciseWeights, getRoutineStats, backup/CSV) — ahí sí se instancia un repo remoto aparte ("split-repo"):
+const remoteExerciseRepo = useMemo(() => createExerciseRepository(supabase), []);
+```
+Estado: workouts/sets (Fase 2), ejercicios/categorías/rutinas (Fase 4), body tracker/goals (Fase 5) — todos migrados a `useRepositories()` en todas las pantallas. `userId` resuelve siempre a un id (invitado o cuenta real, vía `local_identity`); `isGuest` distingue si hay cuenta vinculada. Cuenta ya no es obligatoria — ver "Cuenta opcional" abajo.
+
+## Cuenta opcional (Fase 5 offline)
+La app arranca siempre en `(tabs)` sin pedir login — `_layout.tsx` ya no tiene auth guard. "Crear cuenta"/"Iniciar sesión para sincronizar" son acciones desde Configuración (Perfil), no una pantalla inicial obligatoria. Detalle completo (claim, identidad invitado, wipe en sign-out, guard de seguridad contra el bug de `force-stop`) en `offline-sync.md`. Backup/CSV, recalcular PRs, restaurar y eliminar historial siguen requiriendo cuenta real — `settings.tsx` usa un helper `requireAccount()` que alerta antes de cada acción.
 
 ## Supabase en mobile
 ```typescript
-// SIEMPRE usar getSession() en pantallas (no getUser())
+// Solo para leer/escribir user_metadata (preferencias) o funciones remote-only —
+// para identidad de escritura local usar siempre useRepositories().userId, no getSession().
 const { data: { session } } = await supabase.auth.getSession();
 ```
+**Nota:** las preferencias en `user_metadata` (ver tabla abajo) no tienen fallback local — en modo invitado, cambiarlas simplemente no persiste (gap conocido, ver `CLAUDE.md`).
 
 ## workout_exercise ID — regla crítica
 ```typescript
-addExerciseToWorkout(exerciseId, data.id)  // ← UUID real de DB, no ID local
-// Sin esto: store tiene ID local, DB tiene UUID distinto → delete/update fallan vía RLS
+addExerciseToWorkout(exerciseId, data.id)  // ← UUID real devuelto por el repo (local u online), no ID local
+// Sin esto: store tiene ID distinto al persistido → delete/update fallan (vía RLS en remoto, o simplemente no encuentran la fila en local)
 ```
+Desde el plan offline (Fase 1), `generateUUID()` genera el UUID real en el cliente **antes** del insert (local o remoto) — ya no existe el patrón viejo "ID temporal → reemplazar tras respuesta del servidor", pero la regla de pasar siempre el ID que devuelve el repo al store sigue aplicando igual.
 
 ## Dark mode
 ```typescript
@@ -46,12 +68,13 @@ calendar_show_day_panel, calendar_show_category_dots
 ```
 Todas se leen con `session.user.user_metadata?.clave` y se escriben con `supabase.auth.updateUser({ data: { clave: valor } })`.
 
-## Sync cross-device
-- `SyncContext` → `refetchSignal` counter, incrementado por `_layout.tsx` tras pull
+## Sync offline + cross-device (ver `offline-sync.md` para el motor completo)
+- `SyncContext` → `{ status, pendingCount, lastSyncAt, refetchSignal }`; `status` viene de `SyncEngine.sync()` (`"idle"|"syncing"|"error"`), banner visible en `_layout.tsx` para cualquier estado ≠ idle
+- `refetchSignal` counter, incrementado por `_layout.tsx` tras un pull que afecta a `workouts`/`workout_exercises`/`sets` — las pantallas releen su **repo local** (no red)
 - **Todos los tabs** suscritos: `index.tsx`, `exercises.tsx`, `progress.tsx`, `tools.tsx`, `calendar.tsx`
 - `calendar.tsx` usa `useCallback` para `loadMonth(y, m)` y recarga en `useEffect([refetchSignal])`
-- `_layout.tsx` actualiza ejercicios (`loadExercises`) y rutinas (`loadRoutines`) directamente cuando `changedTables` contiene esas tablas — no requiere refetchSignal para estos stores
-- workout/workout_exercises/sets → `setRefetchSignal(n + 1)`
+- `_layout.tsx` actualiza ejercicios (`loadExercises`) y rutinas (`loadRoutines`) directamente desde los **repos locales** (`createLocalExerciseRepository`/`createLocalRoutineRepository` sobre `getLocalDb()`) cuando `changedTables` contiene esas tablas — ya NO vuelve a pedir a Supabase, `applyRemoteRows` ya dejó los datos en SQLite
+- Triggers de sync: `AppState` foreground (como antes) **+** reconexión de red vía `useNetworkStatus()` (nuevo, Fase 3) — cubre volver de modo avión con la app ya en primer plano
 
 ## Rest Timer (workout/[exerciseId].tsx)
 - Solo arranque manual — NO se inicia automáticamente al añadir/completar series
@@ -66,7 +89,7 @@ Todas se leen con `session.user.user_metadata?.clave` y se escriben con `supabas
 
 ```
 app/
-├── _layout.tsx                  Stack root — auth guard + AppState sync + SyncContext.Provider
+├── _layout.tsx                  Stack root — RepositoryProvider + AppContent (identidad/claim/sync, sin auth guard) + SyncContext.Provider
 ├── (auth)/login.tsx
 ├── (auth)/register.tsx
 ├── (tabs)/

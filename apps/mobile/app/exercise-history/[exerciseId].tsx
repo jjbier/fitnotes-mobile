@@ -10,10 +10,11 @@ import { Ionicons } from "@expo/vector-icons";
 import ViewShot from "react-native-view-shot";
 import * as Sharing from "expo-sharing";
 import { ExerciseType, getExerciseFields, useExerciseStore, calculate1RM, estimateRepMax, todayISO } from "@fitnotes/core";
-import { createExerciseRepository, createProgressRepository, createWorkoutRepository, type ChartPoint } from "@fitnotes/database";
+import { createExerciseRepository, createProgressRepository, type ChartPoint } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import LineChart, { type ChartDataPoint } from "../../components/LineChart";
 import DateInput from "../../components/DateInput";
+import { useRepositories } from "../../contexts/RepositoryContext";
 
 type SetRow = {
   id: string;
@@ -92,8 +93,8 @@ export default function ExerciseHistoryScreen() {
 
   const storeExercise = useExerciseStore((s) => s.exercises.find((e) => e.id === exerciseId));
   const updateExerciseStore = useExerciseStore((s) => s.updateExercise);
-  const exerciseRepo = useMemo(() => createExerciseRepository(supabase), []);
-  const workoutRepo = useMemo(() => createWorkoutRepository(supabase), []);
+  const { exerciseRepo, workoutRepo, userId } = useRepositories();
+  const remoteExerciseRepo = useMemo(() => createExerciseRepository(supabase), []);
   const progressRepo = useMemo(() => createProgressRepository(supabase), []);
 
   const [tab, setTab] = useState<HistoryTab>("history");
@@ -106,7 +107,6 @@ export default function ExerciseHistoryScreen() {
   const [repTarget, setRepTarget] = useState(5);
   const [showTrend, setShowTrend] = useState(false);
   const [estRepLimit, setEstRepLimit] = useState<number | undefined>(undefined);
-  const [userId, setUserId] = useState("");
   const [exportingImage, setExportingImage] = useState(false);
   const chartShotRef = useRef<ViewShot>(null);
 
@@ -158,12 +158,10 @@ export default function ExerciseHistoryScreen() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       const v = session?.user?.user_metadata?.estimated_records_rep_limit as number | undefined;
       setEstRepLimit(v && v > 0 ? v : undefined);
-      if (session?.user?.id) setUserId(session.user.id);
     });
   }, []);
 
   async function handleCopyToToday(set: SetRow) {
-    if (!userId) return;
     setCopyingSetId(set.id);
     try {
       const today = todayISO();
@@ -201,7 +199,7 @@ export default function ExerciseHistoryScreen() {
 
   useEffect(() => {
     async function load() {
-      const { data, error: err } = await exerciseRepo.getExerciseHistory(exerciseId);
+      const { data, error: err } = await remoteExerciseRepo.getExerciseHistory(exerciseId);
       if (err) { setError(err.message); setLoading(false); return; }
       setSessions(data ?? []);
       setLoading(false);

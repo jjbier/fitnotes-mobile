@@ -78,7 +78,6 @@ export default function TrainingScreen() {
 
   useKeepAwake();
 
-  const [userId, setUserId] = useState("");
   const [saving, setSaving] = useState(false);
   const [weightUnit, setWeightUnit] = useState<"kg" | "lb">("kg");
   const [globalWeightIncrement, setGlobalWeightIncrement] = useState<number>(2.5);
@@ -116,7 +115,7 @@ export default function TrainingScreen() {
   const [timerVolume, setTimerVolume] = useState(80);
   const timerSoundRef = useRef<Audio.Sound | null>(null);
 
-  const { workoutRepo: repo } = useRepositories();
+  const { workoutRepo: repo, userId } = useRepositories();
   const progressRepo = useMemo(() => createProgressRepository(supabase), []);
   const exerciseRepo = useMemo(() => createExerciseRepository(supabase), []);
 
@@ -156,7 +155,6 @@ export default function TrainingScreen() {
       FileSystem.readAsStringAsync(timerFile).then((s) => JSON.parse(s) as { seconds: number }).catch(() => null),
     ]).then(([{ data: { session } }, savedTimer]) => {
       if (session?.user) {
-        setUserId(session.user.id);
         setWeightUnit((session.user.user_metadata?.weight_unit as "kg" | "lb" | undefined) ?? "kg");
         setGlobalWeightIncrement((session.user.user_metadata?.default_weight_increment as number | undefined) ?? 2.5);
         setAutoSelectNextSet((session.user.user_metadata?.auto_select_next_set as boolean | undefined) ?? true);

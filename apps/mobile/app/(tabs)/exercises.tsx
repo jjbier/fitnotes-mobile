@@ -15,6 +15,7 @@ import { supabase } from "../../lib/supabase";
 import type { Category, Exercise } from "@fitnotes/core";
 import { useTheme } from "../../lib/theme";
 import { useSyncStatus } from "../../contexts/SyncContext";
+import { useRepositories } from "../../contexts/RepositoryContext";
 
 const TYPE_OPTIONS: { value: ExerciseType; label: string }[] = [
   { value: ExerciseType.WEIGHT_REPS, label: "Peso × Reps" },
@@ -57,7 +58,6 @@ export default function ExercisesScreen() {
 
   const [search, setSearch] = useState("");
   const [showFabMenu, setShowFabMenu] = useState(false);
-  const [userId, setUserId] = useState("");
   const [exerciseStats, setExerciseStats] = useState<Record<string, { workout_count: number; last_used: string | null }>>({});
 
   // Exercise create/edit modal
@@ -93,20 +93,20 @@ export default function ExercisesScreen() {
   const [hiddenCategoryIds, setHiddenCategoryIds] = useState<string[]>([]);
   const [showHiddenCategories, setShowHiddenCategories] = useState(false);
 
-  const repo = useMemo(() => createExerciseRepository(supabase), []);
+  const { exerciseRepo: repo, userId } = useRepositories();
+  const remoteExerciseRepo = useMemo(() => createExerciseRepository(supabase), []);
   const { refetchSignal } = useSyncStatus();
 
   const load = useCallback(async () => {
     setLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
-      setUserId(session.user.id);
       setHiddenCategoryIds((session.user.user_metadata?.hidden_category_ids as string[] | undefined) ?? []);
     }
     const [catRes, exRes, statsRes] = await Promise.all([
       repo.getCategories(),
       repo.getExercises(),
-      repo.getExerciseStats(),
+      remoteExerciseRepo.getExerciseStats(),
     ]);
     if (catRes.data && exRes.data) {
       loadExercises(
@@ -129,7 +129,7 @@ export default function ExercisesScreen() {
     if (statsRes.data) setExerciseStats(statsRes.data);
     setLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repo]);
+  }, [repo, remoteExerciseRepo]);
 
   useEffect(() => {
     load();
@@ -182,7 +182,7 @@ export default function ExercisesScreen() {
     if (!newCatName.trim()) return;
     setCatSaving(true);
     const { data, error } = await repo.createCategory({ name: newCatName.trim(), color: newCatColor }, userId);
-    if (error) { Alert.alert("Error", error.message); setCatSaving(false); return; }
+    if (error || !data) { Alert.alert("Error", error?.message ?? "Ha ocurrido un error"); setCatSaving(false); return; }
     const cat: Category = { id: data.id, name: data.name, color: data.color, order_index: data.order_index };
     addCategory(cat);
     setModalCategories((prev) => [...prev, cat]);
@@ -197,7 +197,7 @@ export default function ExercisesScreen() {
     if (!newCatName.trim()) return;
     setCatSaving(true);
     const { data, error } = await repo.createCategory({ name: newCatName.trim(), color: newCatColor }, userId);
-    if (error) { Alert.alert("Error", error.message); setCatSaving(false); return; }
+    if (error || !data) { Alert.alert("Error", error?.message ?? "Ha ocurrido un error"); setCatSaving(false); return; }
     const cat: Category = { id: data.id, name: data.name, color: data.color, order_index: data.order_index };
     addCategory(cat);
     setNewCatName("");
@@ -227,7 +227,7 @@ export default function ExercisesScreen() {
         default_rest_seconds: defaultRest,
         default_chart: exDefaultChart,
       });
-      if (error) { Alert.alert("Error", error.message); setSaving(false); return; }
+      if (error || !data) { Alert.alert("Error", error?.message ?? "Ha ocurrido un error"); setSaving(false); return; }
       updateExercise(editingExercise.id, {
         name: data.name,
         notes: data.notes ?? undefined,
@@ -239,7 +239,7 @@ export default function ExercisesScreen() {
         default_chart: (data.default_chart ?? "weight") as "weight" | "volume" | "reps",
       });
       if (convertFactor) {
-        await repo.convertExerciseWeights(editingExercise.id, convertFactor);
+        await remoteExerciseRepo.convertExerciseWeights(editingExercise.id, convertFactor);
       }
       setSaving(false);
       setShowModal(false);
@@ -248,7 +248,7 @@ export default function ExercisesScreen() {
         { name: exName.trim(), notes: exNotes.trim() || null, category_id: exCategoryId, type: exType, weight_unit: weightUnit, weight_increment: weightIncrement, default_rest_seconds: defaultRest, default_chart: exDefaultChart },
         userId
       );
-      if (error) { Alert.alert("Error", error.message); setSaving(false); return; }
+      if (error || !data) { Alert.alert("Error", error?.message ?? "Ha ocurrido un error"); setSaving(false); return; }
       addExercise({
         id: data.id,
         name: data.name,

@@ -1,8 +1,8 @@
 # Stores — @fitnotes/core
 
-_Last updated: 2026-07-01_
+_Last updated: 2026-07-03_
 
-Zustand 5 + Immer. Importados via `@fitnotes/core`. Estado en memoria — Supabase es la fuente de verdad.
+Zustand 5 + Immer. Importados via `@fitnotes/core`. Estado en memoria — **web**: Supabase es la fuente de verdad. **Mobile**: SQLite local es la fuente de verdad (los stores reflejan lo que hay en local, no Supabase directamente); Supabase solo se alcanza vía el `SyncEngine` en background. Ver `offline-sync.md`.
 
 ## useWorkoutStore
 

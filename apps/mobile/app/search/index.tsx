@@ -6,9 +6,8 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useExerciseStore, ExerciseType } from "@fitnotes/core";
-import { createWorkoutRepository } from "@fitnotes/database";
-import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../lib/theme";
+import { useRepositories } from "../../contexts/RepositoryContext";
 
 type LastWorkout = { date: string; maxWeight: number; maxReps: number; setCount: number };
 
@@ -46,7 +45,7 @@ export default function SearchScreen() {
   const router = useRouter();
   const exercises = useExerciseStore((s) => s.exercises);
   const categories = useExerciseStore((s) => s.categories);
-  const repo = useMemo(() => createWorkoutRepository(supabase), []);
+  const { workoutRepo: repo } = useRepositories();
 
   const [query, setQuery] = useState("");
   const [lastWorkouts, setLastWorkouts] = useState<Record<string, LastWorkout>>({});

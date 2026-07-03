@@ -2,6 +2,7 @@ import type { SqlExecutor } from "./sqlExecutor.js";
 import { LOCAL_SCHEMA_STATEMENTS } from "./schema.js";
 import { PENDING_OPS_SCHEMA_STATEMENTS } from "./pendingOpsSchema.js";
 import { WATERMARKS_SCHEMA_STATEMENTS } from "./watermarksSchema.js";
+import { LOCAL_IDENTITY_SCHEMA_STATEMENTS } from "./localIdentitySchema.js";
 
 interface LocalMigration {
   version: number;
@@ -22,6 +23,10 @@ const MIGRATIONS: LocalMigration[] = [
       ...PENDING_OPS_SCHEMA_STATEMENTS,
       ...WATERMARKS_SCHEMA_STATEMENTS,
     ],
+  },
+  {
+    version: 2,
+    statements: [...LOCAL_IDENTITY_SCHEMA_STATEMENTS],
   },
 ];
 

@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useProgressStore, useExerciseStore, calculate1RM, ExerciseType, getWeekRange, todayISO } from "@fitnotes/core";
-import { createProgressRepository, createExerciseRepository } from "@fitnotes/database";
+import { createProgressRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../lib/theme";
 import { useSyncStatus } from "../../contexts/SyncContext";
+import { useRepositories } from "../../contexts/RepositoryContext";
 
 export default function ProgressScreen() {
   const theme = useTheme();
@@ -24,7 +25,7 @@ export default function ProgressScreen() {
   const [weeklyByCategory, setWeeklyByCategory] = useState<{ catId: string; name: string; color: string; sets: number; volume: number }[]>([]);
 
   const progressRepo = useMemo(() => createProgressRepository(supabase), []);
-  const exRepo = useMemo(() => createExerciseRepository(supabase), []);
+  const { exerciseRepo: exRepo } = useRepositories();
   const { refetchSignal } = useSyncStatus();
 
   const load = useCallback(async (forceReload = false) => {

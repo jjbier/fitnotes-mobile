@@ -1,8 +1,8 @@
 # Repositories — @fitnotes/database
 
-_Last updated: 2026-07-01_
+_Last updated: 2026-07-03_
 
-Todos exportados desde `packages/database/src/index.ts`. Todos usan `SupabaseClient<Database>`.
+Todos exportados desde `packages/database/src/index.ts`. Todos usan `SupabaseClient<Database>` (repos **remotos**, esta página). Mobile los usa solo para el `SyncEngine` y para los métodos analíticos fuera de alcance offline — el CRUD de pantallas usa los **repos locales** (`createLocalWorkoutRepository`, `createLocalExerciseRepository`, `createLocalRoutineRepository`, vía `useRepositories()`), que espejan el mismo nombre de método sobre SQLite. Ver `.agent/context/offline-sync.md` para el detalle de los locales y qué métodos de cada tabla de abajo siguen siendo remote-only (`getExerciseStats`, `getExerciseHistory`, `convertExerciseWeights`, `getRoutineStats`, CSV/backup).
 
 ## workoutRepository
 

@@ -5,7 +5,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useWorkoutStore, useExerciseStore, formatWorkoutDate, todayISO, ExerciseType } from "@fitnotes/core";
 import type { WorkoutExercise } from "@fitnotes/core";
-import { createWorkoutRepository, createExerciseRepository, createRoutineRepository } from "@fitnotes/database";
+import { createWorkoutRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import { useSyncStatus } from "../../contexts/SyncContext";
 import { useRepositories } from "../../contexts/RepositoryContext";
@@ -38,7 +38,6 @@ export default function HomeScreen() {
   const exercises = useExerciseStore((s) => s.exercises);
   const loadExercises = useExerciseStore((s) => s.loadExercises);
 
-  const [userId, setUserId] = useState("");
   const [showSetCountHome, setShowSetCountHome] = useState(true);
   const [currentDate, setCurrentDate] = useState(params.date || today);
   const [workoutComment, setWorkoutCommentLocal] = useState("");
@@ -62,11 +61,9 @@ export default function HomeScreen() {
   const [selectedWEIds, setSelectedWEIds] = useState<Set<string>>(new Set());
   const { status: syncStatus, pendingCount, refetchSignal } = useSyncStatus();
 
-  const { workoutRepo: repo } = useRepositories();
+  const { workoutRepo: repo, exerciseRepo: exRepo, routineRepo, userId } = useRepositories();
   // shareWorkout sigue requiriendo red (fuera de alcance offline) — usa el repo remoto directamente.
   const remoteWorkoutRepo = useMemo(() => createWorkoutRepository(supabase), []);
-  const exRepo = useMemo(() => createExerciseRepository(supabase), []);
-  const routineRepo = useMemo(() => createRoutineRepository(supabase), []);
 
   const loadWorkoutForDate = useCallback(async (date: string) => {
     const { data: workout } = await repo.getWorkoutByDate(date);
@@ -98,7 +95,6 @@ export default function HomeScreen() {
       setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        setUserId(session.user.id);
         setShowSetCountHome((session.user.user_metadata?.show_set_count_home as boolean | undefined) ?? true);
       }
 

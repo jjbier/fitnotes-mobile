@@ -7,6 +7,7 @@ import { createRoutineRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../lib/theme";
 import { useSyncStatus } from "../../contexts/SyncContext";
+import { useRepositories } from "../../contexts/RepositoryContext";
 
 export default function RoutinesScreen() {
   const theme = useTheme();
@@ -23,7 +24,6 @@ export default function RoutinesScreen() {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newNotes, setNewNotes] = useState("");
-  const [userId, setUserId] = useState("");
 
   const [editSource, setEditSource] = useState<{ id: string; name: string; notes: string } | null>(null);
   const [editName, setEditName] = useState("");
@@ -38,25 +38,24 @@ export default function RoutinesScreen() {
 
   const [routineStats, setRoutineStats] = useState<Record<string, { lastUsed: string | null; sessionCount: number }>>({});
 
-  const repo = useMemo(() => createRoutineRepository(supabase), []);
+  const { routineRepo: repo, userId } = useRepositories();
+  const remoteRoutineRepo = useMemo(() => createRoutineRepository(supabase), []);
   const { refetchSignal } = useSyncStatus();
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) setUserId(session.user.id);
     const { data } = await repo.getRoutines();
     if (data) {
       loadRoutines(data.map((r) => ({ id: r.id, name: r.name, notes: r.notes ?? undefined })));
       const ids = data.map((r) => r.id);
-      const { data: stats } = await repo.getRoutineStats(ids);
+      const { data: stats } = await remoteRoutineRepo.getRoutineStats(ids);
       const statsMap: Record<string, { lastUsed: string | null; sessionCount: number }> = {};
       for (const s of stats) statsMap[s.routineId] = { lastUsed: s.lastUsed, sessionCount: s.sessionCount };
       setRoutineStats(statsMap);
     }
     setLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repo]);
+  }, [repo, remoteRoutineRepo]);
 
   useEffect(() => {
     load().then(() => {

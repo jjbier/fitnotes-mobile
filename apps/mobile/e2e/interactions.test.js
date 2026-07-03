@@ -1,7 +1,9 @@
 async function login() {
   await device.launchApp({ newInstance: true });
-  await waitFor(element(by.text("Iniciar sesión"))).toBeVisible().withTimeout(20000);
-  await element(by.text("Iniciar sesión")).tap();
+  await waitFor(element(by.text("Hoy")).atIndex(0)).toBeVisible().withTimeout(20000);
+  await element(by.text("Configuración")).atIndex(0).tap();
+  await waitFor(element(by.text("Iniciar sesión para sincronizar"))).toBeVisible().withTimeout(10000);
+  await element(by.text("Iniciar sesión para sincronizar")).tap();
   await waitFor(element(by.id("login-email-input"))).toBeVisible().withTimeout(10000);
   await element(by.id("login-email-input")).typeText("e2e-tests@fitnotes.local");
   await element(by.id("login-password-input")).typeText("E2ETestPass!2026");

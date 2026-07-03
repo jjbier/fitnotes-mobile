@@ -7,11 +7,10 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { NestableScrollContainer, NestableDraggableFlatList, ScaleDecorator, type RenderItemParams } from "react-native-draggable-flatlist";
-import { createBodyTrackerRepository } from "@fitnotes/database";
-import { supabase } from "../../lib/supabase";
 import LineChart, { type ChartDataPoint } from "../../components/LineChart";
 import DateInput from "../../components/DateInput";
 import { useTheme } from "../../lib/theme";
+import { useRepositories } from "../../contexts/RepositoryContext";
 
 interface Measurement {
   id: string;
@@ -44,7 +43,7 @@ export default function BodyTrackerScreen() {
   const [historyEntries, setHistoryEntries] = useState<Entry[]>([]);
   const [historyFilterId, setHistoryFilterId] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [userId, setUserId] = useState("");
+  const { bodyTrackerRepo: repo, userId } = useRepositories();
 
   const [logModal, setLogModal] = useState(false);
   const [logMeasurementId, setLogMeasurementId] = useState("");
@@ -67,16 +66,9 @@ export default function BodyTrackerScreen() {
   const [measureGoalValue, setMeasureGoalValue] = useState("");
   const [measureSaving, setMeasureSaving] = useState(false);
 
-  const repo = useMemo(() => createBodyTrackerRepository(supabase), []);
-
   const loadData = useCallback(async () => {
     setIsLoading(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    const uid = session?.user?.id ?? "";
-    if (uid) {
-      setUserId(uid);
-      await repo.seedDefaultMeasurementsIfNeeded(uid);
-    }
+    await repo.seedDefaultMeasurementsIfNeeded(userId);
 
     const { data: mData } = await repo.getMeasurements();
     if (mData) {
@@ -94,8 +86,7 @@ export default function BodyTrackerScreen() {
       setPreviousEntries(prevMap);
     }
     setIsLoading(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [repo, userId]);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadData(); }, [loadData]);

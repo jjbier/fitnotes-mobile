@@ -1,16 +1,16 @@
-describe("Smoke — login y navegación básica", () => {
+describe("Smoke — modo invitado y login opcional", () => {
   beforeAll(async () => {
     await device.launchApp({ newInstance: true });
   });
 
-  it("muestra la pantalla de bienvenida al arrancar sin sesión", async () => {
-    await waitFor(element(by.text("FitNotes App"))).toBeVisible().withTimeout(20000);
-    await expect(element(by.text("Iniciar sesión"))).toBeVisible();
+  it("arranca directamente en la tab Hoy, sin pedir cuenta", async () => {
+    await waitFor(element(by.text("Hoy")).atIndex(0)).toBeVisible().withTimeout(20000);
   });
 
-  it("inicia sesión con el usuario de test y llega a la tab Hoy", async () => {
-    await waitFor(element(by.text("Iniciar sesión"))).toBeVisible().withTimeout(20000);
-    await element(by.text("Iniciar sesión")).tap();
+  it("inicia sesión desde Configuración con el usuario de test y sincroniza", async () => {
+    await element(by.text("Configuración")).atIndex(0).tap();
+    await waitFor(element(by.text("Iniciar sesión para sincronizar"))).toBeVisible().withTimeout(10000);
+    await element(by.text("Iniciar sesión para sincronizar")).tap();
     await waitFor(element(by.id("login-email-input"))).toBeVisible().withTimeout(10000);
     await element(by.id("login-email-input")).typeText("e2e-tests@fitnotes.local");
     await element(by.id("login-password-input")).typeText("E2ETestPass!2026");

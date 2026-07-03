@@ -1,6 +1,8 @@
 # packages/database — @fitnotes/database
 
-_Last updated: 2026-07-01_
+_Last updated: 2026-07-03_
+
+**Nota:** este paquete ahora tiene dos mitades. `src/repositories/` + `src/supabase/` (cliente/tipos/migraciones remotas, usado por web y por el `SyncEngine`) y `src/local/` + `src/sync/` (repos SQLite locales + motor de sync, usado SOLO por mobile). Detalle completo de la mitad offline en `.agent/context/offline-sync.md` — este archivo se centra en la mitad remota/histórica.
 
 ## Cliente Supabase (`src/supabase/client.ts`)
 
@@ -34,29 +36,31 @@ createServerClient(cookieStore)    // Server Components / Route Handlers
 - `004_default_chart.sql` — `exercises.default_chart TEXT` ("weight"|"volume"|"reps")
 - `005_routine_day_exercise_group_name.sql` — `routine_day_exercises.group_name TEXT`
 - `006_body_measurement_order.sql` — `body_measurements.order_index INTEGER` (reorden drag&drop)
+- `007_offline_sync_prep.sql` — documenta drift real del schema (`is_warmup` en sets, `exercise_goals`) que ya existía en `types.ts` pero no en ninguna migración committeada; necesario antes de escribir el schema SQLite local contra el esquema real
 
 **Tabla `exercise_goals`** existe en DB (goals por ejercicio) — presente en `types.ts`, gestionada por `goalsRepository`.
 
-## SyncEngine (`src/sync/syncEngine.ts`)
+## Repos locales SQLite (`src/local/repositories/`) — solo mobile
+
+`localWorkoutRepository`, `localExerciseRepository`, `localRoutineRepository` — espejan 1:1 los repos remotos de arriba (mismo nombre de método, mismo shape `{data, error}`), pero leen/escriben SQLite vía la interfaz `SqlExecutor` en vez de Supabase. Body tracker y goals (Fase 5) y personal records offline (Fase 6) siguen pendientes. Detalle completo (esquema, cascadas FK a replicar a mano, patrón de escritura, DI): **`.agent/context/offline-sync.md`**.
+
+## SyncEngine (`src/sync/syncEngine.ts`) — v2, offline-first
 
 ```ts
-interface SyncResult {
-  pushed: number;
-  pulled: number;
-  conflicts: ConflictRecord[];
-  changedTables: Set<string>;  // tablas con cambios remotos — usado en _layout.tsx
+class SyncEngine {
+  constructor(client: SupabaseClient<Database>, db: SqlExecutor)
+  async sync(userId): Promise<{ pushed, pullFailed, pushFailed, changedTables: Set<string> }>
+  async getPendingCount(): Promise<number>
 }
-
-sync(lastSyncAt?): Promise<SyncResult>
-pushLocalChanges(): Promise<SyncResult>
-pullRemoteChanges(since?): Promise<SyncResult>
 ```
+Reescrito en la Fase 3 del plan offline — el motor viejo (`pullRemoteChanges` solo contaba filas, `queueOperation()` nunca se llamaba) fue reemplazado por pull real (`pullChanges.ts`, paginado por `updated_at`), cola durable en SQLite (`pendingOpsQueue.ts`, reemplaza el JSON en memoria de antes) y orden de push que respeta FKs (`pushOrdering.ts`). Conflicto: local gana si `_dirty`, si no gana `updated_at` más reciente (`applyRemoteRows.ts`).
 
-- Mobile singleton: `lib/sync.ts` → `export const syncEngine = new SyncEngine(supabase)`
-- `_layout.tsx` usa `changedTables` para actualizaciones selectivas:
-  - `exercises` o `categories` → `loadExercises(...)` directo en store
-  - `routines` / `routine_days` / `routine_day_exercises` → `loadRoutines(...)` directo en store
-  - `workouts` / `workout_exercises` / `sets` → `setRefetchSignal(n + 1)`
+- Mobile singleton: `apps/mobile/lib/sync.ts` → `getSyncEngine()`
+- Triggers: `AppState` foreground **y** reconexión de red (`netinfo.ts`) en `_layout.tsx`
+- `_layout.tsx` usa `changedTables` para releer desde **local** (ya no vuelve a pedir a Supabase):
+  - `exercises` o `categories` → lee `createLocalExerciseRepository(db).getCategories()/getExercises()` → `loadExercises(...)` en store
+  - `routines`/`routine_days`/`routine_day_exercises` → `createLocalRoutineRepository(db).getRoutines()` → `loadRoutines(...)` en store
+  - `workouts`/`workout_exercises`/`sets` → `setRefetchSignal(n + 1)` (las pantallas releen su propio repo local)
 
 ## exercise_type enum en DB
 Valores UPPERCASE: `WEIGHT_REPS`, `REPS_ONLY`, `DISTANCE_TIME`, `WEIGHT_ONLY`, `TIME_ONLY`

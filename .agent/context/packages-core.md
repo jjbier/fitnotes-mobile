@@ -1,6 +1,6 @@
 # packages/core — @fitnotes/core
 
-_Last updated: 2026-07-02_
+_Last updated: 2026-07-03_
 
 **Regla absoluta:** cero imports de `react`, `next`, `expo`, `react-native`. Solo TypeScript puro + zustand + zod + immer.
 
@@ -39,9 +39,12 @@ todayISO()                      // "YYYY-MM-DD"
 getWeekRange(dateStr)           // { start, end } lun→dom
 groupWorkoutsByMonth(workouts)  // Record<"Month YYYY", Workout[]>
 getExerciseFields(type)         // → { showWeight, showReps, showDistance, showTime }
+generateUUID()                  // crypto.randomUUID() si existe (web nativo / mobile vía expo-crypto polyfill),
+                                 // con fallback RFC4122 v4 manual. Usado por workoutStore y todos los repos
+                                 // locales de mobile para generar IDs reales antes del insert (offline-first)
 ```
 
-## Tests (203 total)
+## Tests (206 total)
 
 - `exerciseStore.test.ts` — CRUD ejercicios y categorías
 - `workoutStore.test.ts` — workout lifecycle, sets, agrupaciones
@@ -50,6 +53,7 @@ getExerciseFields(type)         // → { showWeight, showReps, showDistance, sho
 - `calculations.test.ts` — calculate1RM, calculatePlates, etc.
 - `dateUtils.test.ts` — formatWorkoutDate, getWeekRange, etc.
 - `schemas.test.ts` — validación Zod
+- `uuid.test.ts` — formato, unicidad, fallback sin `crypto` (añadido con el plan offline)
 
 ## Nota — `ChartPoint` duplicado
 `progressStore.ts` mantiene su propia interfaz `ChartPoint` (debe coincidir campo a campo con la de `packages/database/src/repositories/progressRepository.ts`: `totalReps`, `totalDistance`, `totalTime`, `maxSpeed`, `bestPace`, `weightByReps`). Al añadir un campo a una, añadirlo también a la otra o falla el type-check.

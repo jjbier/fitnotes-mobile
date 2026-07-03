@@ -6,11 +6,12 @@ import {
 import { useNavigation, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useExerciseStore, useProgressStore, calculate1RM, ExerciseType } from "@fitnotes/core";
-import { createGoalsRepository, createExerciseRepository, createProgressRepository, type ExerciseGoalRow } from "@fitnotes/database";
+import { createProgressRepository, type ExerciseGoalRow } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import type { Exercise } from "@fitnotes/core";
 import DateInput from "../../components/DateInput";
 import { useTheme } from "../../lib/theme";
+import { useRepositories } from "../../contexts/RepositoryContext";
 
 export default function GoalsScreen() {
   const colors = useTheme();
@@ -25,7 +26,6 @@ export default function GoalsScreen() {
 
   const [goals, setGoals] = useState<ExerciseGoalRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState("");
   const [bestSets, setBestSets] = useState<Record<string, { maxReps: number; maxDistance: number; maxTime: number }>>({});
 
   // Modal state
@@ -39,8 +39,7 @@ export default function GoalsScreen() {
   const [saving, setSaving] = useState(false);
   const [exSearch, setExSearch] = useState("");
 
-  const goalsRepo = useMemo(() => createGoalsRepository(supabase), []);
-  const exRepo = useMemo(() => createExerciseRepository(supabase), []);
+  const { exerciseRepo: exRepo, goalsRepo, userId } = useRepositories();
   const progressRepo = useMemo(() => createProgressRepository(supabase), []);
 
   useEffect(() => {
@@ -50,9 +49,6 @@ export default function GoalsScreen() {
   useEffect(() => {
     async function load() {
       setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) setUserId(session.user.id);
-
       const hasCache = exercises.length > 0 && categories.length > 0;
       const [prRes, goalsData, catRes, exRes] = await Promise.all([
         progressRepo.getAllPersonalRecords(),

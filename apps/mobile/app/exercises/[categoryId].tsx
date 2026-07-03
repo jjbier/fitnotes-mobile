@@ -10,6 +10,7 @@ import { createExerciseRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import type { Exercise } from "@fitnotes/core";
 import { useTheme } from "../../lib/theme";
+import { useRepositories } from "../../contexts/RepositoryContext";
 
 const TYPE_OPTIONS: { value: ExerciseType; label: string }[] = [
   { value: ExerciseType.WEIGHT_REPS, label: "Peso × Reps" },
@@ -60,7 +61,6 @@ export default function ExerciseCategoryScreen() {
   const activeWorkoutId = useWorkoutStore((s) => s.activeWorkout?.id);
 
   const [search, setSearch] = useState("");
-  const [userId, setUserId] = useState("");
   const [exerciseStats, setExerciseStats] = useState<Record<string, { workout_count: number; last_used: string | null }>>({});
 
   // Create modal
@@ -79,7 +79,8 @@ export default function ExerciseCategoryScreen() {
   const [exWeightUnit, setExWeightUnit] = useState<"kg" | "lb">("kg");
   const [editSaving, setEditSaving] = useState(false);
 
-  const repo = useMemo(() => createExerciseRepository(supabase), []);
+  const { exerciseRepo: repo, userId } = useRepositories();
+  const remoteExerciseRepo = useMemo(() => createExerciseRepository(supabase), []);
   const isFavorites = categoryId === "favorites";
   const category = categories.find((c) => c.id === categoryId);
 
@@ -92,17 +93,15 @@ export default function ExerciseCategoryScreen() {
     async function load() {
       // If store already has data, just load stats
       if (exercises.length > 0) {
-        const statsRes = await repo.getExerciseStats();
+        const statsRes = await remoteExerciseRepo.getExerciseStats();
         if (statsRes.data) setExerciseStats(statsRes.data);
         return;
       }
       setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) setUserId(session.user.id);
       const [catRes, exRes, statsRes] = await Promise.all([
         repo.getCategories(),
         repo.getExercises(),
-        repo.getExerciseStats(),
+        remoteExerciseRepo.getExerciseStats(),
       ]);
       if (catRes.data && exRes.data) {
         loadExercises(
@@ -125,13 +124,6 @@ export default function ExerciseCategoryScreen() {
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoryId]);
-
-  // Also get userId if not set
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) setUserId(session.user.id);
-    });
-  }, []);
 
   const categoryExercises = isFavorites
     ? exercises.filter((e) => e.is_favorite)
@@ -161,7 +153,7 @@ export default function ExerciseCategoryScreen() {
       { name: newName.trim(), notes: newNotes.trim() || null, category_id: targetCategoryId, type: newType, weight_unit: weightUnit },
       userId
     );
-    if (error) { Alert.alert("Error", error.message); setAddSaving(false); return; }
+    if (error || !data) { Alert.alert("Error", error?.message ?? "Ha ocurrido un error"); setAddSaving(false); return; }
     addExercise({
       id: data.id,
       name: data.name,
@@ -199,7 +191,7 @@ export default function ExerciseCategoryScreen() {
       type: exType,
       weight_unit: weightUnit,
     });
-    if (error) { Alert.alert("Error", error.message); setEditSaving(false); return; }
+    if (error || !data) { Alert.alert("Error", error?.message ?? "Ha ocurrido un error"); setEditSaving(false); return; }
     updateExercise(editingExercise.id, {
       name: data.name,
       notes: data.notes ?? undefined,
@@ -208,7 +200,7 @@ export default function ExerciseCategoryScreen() {
       weight_unit: data.weight_unit as "kg" | "lb",
     });
     if (convertFactor) {
-      await repo.convertExerciseWeights(editingExercise.id, convertFactor);
+      await remoteExerciseRepo.convertExerciseWeights(editingExercise.id, convertFactor);
     }
     setEditSaving(false);
     setEditingExercise(null);

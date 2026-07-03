@@ -21,31 +21,36 @@ import {
 } from "@fitnotes/core";
 import { useTheme } from "../lib/theme";
 import { supabase } from "../lib/supabase";
-import { createExerciseRepository, createProgressRepository, createWorkoutRepository } from "@fitnotes/database";
+import { createProgressRepository } from "@fitnotes/database";
+import type { LocalWorkoutRepository } from "@fitnotes/database";
+import { useRepositories } from "../contexts/RepositoryContext";
 
 function useExerciseOptions() {
+  const { exerciseRepo } = useRepositories();
   const [exercises, setExercises] = useState<{ id: string; name: string }[]>([]);
   const [loaded, setLoaded] = useState(false);
   function ensureLoaded() {
     if (loaded) return;
     setLoaded(true);
-    const repo = createExerciseRepository(supabase);
-    repo.getExercises().then(({ data }) => {
+    exerciseRepo.getExercises().then(({ data }) => {
       if (data) setExercises(data.map((e) => ({ id: e.id, name: e.name })).sort((a, b) => a.name.localeCompare(b.name)));
     });
   }
   return { exercises, ensureLoaded };
 }
 
-async function addSetToTodayWorkout(exerciseId: string, weight: number, reps: number | undefined): Promise<boolean> {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user) return false;
-  const workoutRepo = createWorkoutRepository(supabase);
+async function addSetToTodayWorkout(
+  workoutRepo: LocalWorkoutRepository,
+  userId: string,
+  exerciseId: string,
+  weight: number,
+  reps: number | undefined
+): Promise<boolean> {
   const today = new Date().toISOString().split("T")[0]!;
 
   let workout = (await workoutRepo.getWorkoutByDate(today)).data;
   if (!workout) {
-    const { data } = await workoutRepo.createWorkout({ date: today }, session.user.id);
+    const { data } = await workoutRepo.createWorkout({ date: today }, userId);
     workout = data ?? null;
   }
   if (!workout) return false;
@@ -55,7 +60,7 @@ async function addSetToTodayWorkout(exerciseId: string, weight: number, reps: nu
   if (!we) {
     const { data } = await workoutRepo.addExercise(
       { workout_id: workout.id, exercise_id: exerciseId, order_index: wes?.length ?? 0 },
-      session.user.id
+      userId
     );
     we = data ?? undefined;
   }
@@ -64,7 +69,7 @@ async function addSetToTodayWorkout(exerciseId: string, weight: number, reps: nu
   const { data: existingSets } = await workoutRepo.getSets(we.id);
   const { error } = await workoutRepo.createSet(
     { workout_exercise_id: we.id, weight, reps, order_index: existingSets?.length ?? 0 },
-    session.user.id
+    userId
   );
   return !error;
 }
@@ -174,6 +179,7 @@ const PERCENTAGES = [50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
 const INCREMENTS = [0.5, 1, 1.25, 2.5, 5];
 
 function SetCalculator() {
+  const { workoutRepo, userId } = useRepositories();
   const [baseWeight, setBaseWeight] = useState("");
   const [incrementIdx, setIncrementIdx] = useState(3); // 2.5
   const [showMaxPicker, setShowMaxPicker] = useState(false);
@@ -203,7 +209,7 @@ function SetCalculator() {
   async function handleAdd(pct: number, weight: number) {
     if (!addExerciseId) return;
     const reps = parseInt(addReps, 10) || undefined;
-    const ok = await addSetToTodayWorkout(addExerciseId, weight, reps);
+    const ok = await addSetToTodayWorkout(workoutRepo, userId, addExerciseId, weight, reps);
     if (ok) {
       setAddedPct(pct);
       setTimeout(() => setAddedPct((p) => (p === pct ? null : p)), 1500);

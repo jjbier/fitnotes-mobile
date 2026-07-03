@@ -2,31 +2,11 @@ import { generateUUID } from "@fitnotes/core";
 import type { SqlExecutor } from "../sqlExecutor.js";
 import { enqueuePendingOp } from "../pendingOps.js";
 import type { Database } from "../../supabase/types.js";
+import { nowIso, toBool, fromBool, type RawRow, type RepoError } from "./shared.js";
 
 type WorkoutRow = Database["public"]["Tables"]["workouts"]["Row"];
 type WorkoutExerciseRow = Database["public"]["Tables"]["workout_exercises"]["Row"];
 type SetRow = Database["public"]["Tables"]["sets"]["Row"];
-
-interface RepoError {
-  message: string;
-}
-
-function nowIso(): string {
-  return new Date().toISOString();
-}
-
-function toBool(v: unknown): boolean {
-  return v === 1 || v === true;
-}
-
-function fromBool(v: boolean | undefined): number {
-  return v ? 1 : 0;
-}
-
-// Fila SQLite cruda (booleans como 0/1, más columnas de control _dirty/_deleted)
-interface RawRow {
-  [key: string]: unknown;
-}
 
 function mapWorkoutRow(row: RawRow): WorkoutRow {
   return {

@@ -1,6 +1,6 @@
 # Architecture — FitNotes App
 
-_Last updated: 2026-07-02_
+_Last updated: 2026-07-03_
 
 ## Monorepo layout
 
@@ -49,12 +49,18 @@ fitnotes-app/
 | `formatWorkoutDate` con arrays hardcodeados (no `Intl.DateTimeFormat`) | Hermes (RN/mobile) puede tener soporte ICU incompleto — arrays evitan depender de `Intl` en un util compartido con mobile |
 | `ConfirmDialog` (React) en vez de `window.confirm()` en web | Paridad visual con mobile (Alert.alert estilizado); rompe cualquier test E2E que use `page.once("dialog", ...)` — hay que clicar el botón del `alertdialog` |
 | `Modal` propio en vez de `Alert.alert` para menús >3 opciones (mobile) | Android limita `Alert.alert` a 3 botones nativos; un 4º se descarta en silencio sin error |
+| Mobile offline-first: repos locales SQLite espejan 1:1 los repos remotos | UI agnóstica de backend; escritura instantánea sin red — ver `offline-sync.md` |
+| `SqlExecutor` como interfaz inyectada (no `expo-sqlite` directo en los repos) | Permite testear con Vitest + `better-sqlite3` sin dispositivo/emulador |
+| UUIDs reales (`generateUUID()`) en vez de IDs temporales | Un insert offline ya tiene su ID definitivo — elimina el patrón "crear con ID temporal → reemplazar tras respuesta del servidor" |
+| Tombstones (`_deleted=1`) en vez de borrado físico local | Un pull concurrente no puede "resucitar" una fila que el usuario borró offline antes de que el delete se pushee |
+| SIN `PRAGMA foreign_keys` en SQLite local | Las cascadas de la FK remota (`ON DELETE CASCADE`/`SET NULL`) se replican a mano en cada `deleteXxx` del repo local — evita comportamiento sutil dependiente de la conexión SQLite |
+| `RepositoryContext`/`useRepositories()` en vez de `createXxxRepository(supabase)` ad-hoc por pantalla | DI centralizada — todas las pantallas leen/escriben contra los repos locales; los remotos quedan para el `SyncEngine` y analíticas fuera de alcance offline |
 
 ## Base de datos (Supabase — ref: `fbhjiwtriqrxibqwsyqj`)
 
 Tablas: `categories`, `exercises`, `workouts`, `workout_exercises`, `sets`,
 `personal_records`, `routines`, `routine_days`, `routine_day_exercises`,
-`predefined_sets`, `body_measurements`, `body_measurement_entries`
+`predefined_sets`, `body_measurements`, `body_measurement_entries`, `exercise_goals`
 
 - Todas: `user_id uuid references auth.users` + RLS `auth.uid() = user_id` (FOR ALL)
 - Todas: `updated_at` mantenido por trigger
@@ -68,7 +74,7 @@ Tablas: `categories`, `exercises`, `workouts`, `workout_exercises`, `sets`,
 - `exercise_goals`: tabla de objetivos por ejercicio, gestionada por `goalsRepository`
 - Función RPC: `delete_user()` — SECURITY DEFINER
 
-## Migraciones aplicadas (001–006)
+## Migraciones aplicadas (001–007)
 
 1. Schema inicial + RLS + triggers
 2. Función delete_user RPC
@@ -76,3 +82,8 @@ Tablas: `categories`, `exercises`, `workouts`, `workout_exercises`, `sets`,
 4. default_chart en exercises
 5. group_name en routine_day_exercises
 6. order_index en body_measurements (backfill vía ROW_NUMBER)
+7. Documenta el drift real del schema (`is_warmup` en sets, tabla `exercise_goals`) que existía en `types.ts` pero no en ninguna migración committeada — necesario para escribir el schema SQLite local contra el esquema real
+
+## Mobile: base de datos local (SQLite, offline)
+
+Espejo de 13 tablas remotas (las 9 de siempre + `personal_records`, `body_measurements`, `body_measurement_entries`, `exercise_goals`, antes excluidas del sync). Detalle completo, incluida la tabla de cascadas FK que hay que replicar a mano por tabla: **ver `.agent/context/offline-sync.md`**.

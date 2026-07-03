@@ -3,10 +3,11 @@ import { Animated, Dimensions, PanResponder, SafeAreaView, ScrollView, Text, Vie
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { formatWorkoutDate, useExerciseStore, ExerciseType } from "@fitnotes/core";
-import { createCalendarRepository, createExerciseRepository } from "@fitnotes/database";
+import { createCalendarRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../lib/theme";
 import { useSyncStatus } from "../../contexts/SyncContext";
+import { useRepositories } from "../../contexts/RepositoryContext";
 
 function pad(n: number): string { return String(n).padStart(2, "0"); }
 
@@ -90,7 +91,7 @@ export default function CalendarScreen() {
   const { refetchSignal } = useSyncStatus();
 
   const repo = useMemo(() => createCalendarRepository(supabase), []);
-  const exRepo = useMemo(() => createExerciseRepository(supabase), []);
+  const { exerciseRepo: exRepo } = useRepositories();
   const today = now.toISOString().split("T")[0]!;
 
   const loadMonth = useCallback(async (y: number, m: number) => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SafeAreaView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -6,9 +6,8 @@ import { NestableScrollContainer, NestableDraggableFlatList, ScaleDecorator } fr
 import type { RenderItemParams } from "react-native-draggable-flatlist";
 import { useRoutineStore, useExerciseStore, useWorkoutStore, ExerciseType, todayISO, getExerciseFields } from "@fitnotes/core";
 import type { PredefinedSet, RoutineDay, RoutineDayExercise } from "@fitnotes/core";
-import { createRoutineRepository, createExerciseRepository, createWorkoutRepository } from "@fitnotes/database";
-import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../lib/theme";
+import { useRepositories } from "../../contexts/RepositoryContext";
 
 type LocalPS = { localId: string; weight: string; reps: string; distance: string; time_seconds: string };
 
@@ -44,7 +43,6 @@ export default function RoutineDetailScreen() {
   const loadWorkouts = useWorkoutStore((s) => s.loadWorkouts);
 
   const [editMode, setEditMode] = useState(false);
-  const [userId, setUserId] = useState("");
   const [newDayName, setNewDayName] = useState("");
   const [showDayInput, setShowDayInput] = useState(false);
   const [addingExToDay, setAddingExToDay] = useState<string | null>(null);
@@ -67,9 +65,7 @@ export default function RoutineDetailScreen() {
   const [renameGroupText, setRenameGroupText] = useState("");
   const [renamingGroup, setRenamingGroup] = useState<{ dayId: string; groupId: string } | null>(null);
 
-  const routineRepo = useMemo(() => createRoutineRepository(supabase), []);
-  const exRepo = useMemo(() => createExerciseRepository(supabase), []);
-  const workoutRepo = useMemo(() => createWorkoutRepository(supabase), []);
+  const { routineRepo, exerciseRepo: exRepo, workoutRepo, userId } = useRepositories();
 
   const routine = routines.find((r) => r.id === routineId);
   const days = (routineDays[routineId ?? ""] ?? []).slice().sort((a, b) => a.order_index - b.order_index);
@@ -81,9 +77,6 @@ export default function RoutineDetailScreen() {
   useEffect(() => {
     async function load() {
       setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) setUserId(session.user.id);
-
       const hasCache = exercises.length > 0;
       const [rRes, catRes, exRes] = await Promise.all([
         routineRepo.getRoutines(),

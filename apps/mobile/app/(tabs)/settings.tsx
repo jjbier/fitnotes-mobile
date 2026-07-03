@@ -18,7 +18,9 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 import { useTheme, useThemeModeStore, type ThemeMode } from "../../lib/theme";
-import { createWorkoutRepository, createBackupRepository, createBodyTrackerRepository, createExerciseRepository, isBackupData, type BackupData } from "@fitnotes/database";
+import { createWorkoutRepository, createBackupRepository, createBodyTrackerRepository, isBackupData, type BackupData } from "@fitnotes/database";
+import { useRepositories } from "../../contexts/RepositoryContext";
+import { useSyncStatus } from "../../contexts/SyncContext";
 
 function parseCSVRows(csv: string) {
   const lines = csv.trim().split(/\r?\n/);
@@ -51,6 +53,17 @@ function parseCSVRows(csv: string) {
 export default function SettingsScreen() {
   const colors = useTheme();
   const router = useRouter();
+  const { exerciseRepo, isGuest } = useRepositories();
+  const { pendingCount } = useSyncStatus();
+
+  /** Backup/CSV/recalcular PRs/restaurar/eliminar historial siguen siendo remote-only (fuera de alcance offline) — requieren cuenta real. */
+  function requireAccount(): boolean {
+    if (isGuest) {
+      Alert.alert("Esta función requiere una cuenta", "Crea una cuenta o inicia sesión para usar backup, restauración o recalcular récords.");
+      return false;
+    }
+    return true;
+  }
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -109,7 +122,7 @@ export default function SettingsScreen() {
     supabase.from("exercises").select("id, name").order("name").then(({ data }) => {
       setExerciseOptions(data ?? []);
     });
-    createExerciseRepository(supabase).getCategories().then(({ data }) => {
+    exerciseRepo.getCategories().then(({ data }) => {
       setCategoryOptions(data ?? []);
     });
   }, []);
@@ -193,6 +206,7 @@ export default function SettingsScreen() {
   }
 
   async function handleExportCSV() {
+    if (!requireAccount()) return;
     setExportLoading(true);
     const repo = createWorkoutRepository(supabase);
     const csv = await repo.exportAllCSV();
@@ -202,6 +216,7 @@ export default function SettingsScreen() {
   }
 
   async function handleImportCSV() {
+    if (!requireAccount()) return;
     const rows = parseCSVRows(importCSV);
     if (rows.length === 0) { Alert.alert("Error", "No se encontraron filas válidas. Asegúrate de pegar un CSV con el formato correcto."); return; }
     const { data: { session } } = await supabase.auth.getSession();
@@ -219,6 +234,7 @@ export default function SettingsScreen() {
   }
 
   async function handleRecalcPRs() {
+    if (!requireAccount()) return;
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return;
     setRecalcStatus("running");
@@ -234,6 +250,7 @@ export default function SettingsScreen() {
   }
 
   async function handleFullBackup() {
+    if (!requireAccount()) return;
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return;
     setFullBackupLoading(true);
@@ -262,6 +279,7 @@ export default function SettingsScreen() {
 
   async function handleExecuteRestore() {
     if (!restoreParsed) return;
+    if (!requireAccount()) return;
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return;
     setRestoreLoading(true);
@@ -280,6 +298,7 @@ export default function SettingsScreen() {
   }
 
   async function handleExportBodyTrackerCSV() {
+    if (!requireAccount()) return;
     setBodyExportLoading(true);
     try {
       const repo = createBodyTrackerRepository(supabase);
@@ -292,6 +311,7 @@ export default function SettingsScreen() {
   }
 
   async function handleDeleteHistory() {
+    if (!requireAccount()) return;
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return;
     setDeleteHistoryLoading(true);
@@ -322,15 +342,22 @@ export default function SettingsScreen() {
   }
 
   async function handleSignOut() {
-    Alert.alert("Cerrar sesión", "¿Estás seguro de que quieres cerrar sesión?", [
+    const message =
+      pendingCount > 0
+        ? `Tienes ${pendingCount} cambio(s) sin sincronizar. Se perderán al cerrar sesión — ¿seguro que quieres continuar?`
+        : "¿Estás seguro de que quieres cerrar sesión?";
+    Alert.alert("Cerrar sesión", message, [
       { text: "Cancelar", style: "cancel" },
       {
         text: "Cerrar sesión",
         style: "destructive",
         onPress: async () => {
           setSignOutLoading(true);
+          // La DB local se vacía centralmente en _layout.tsx al reaccionar al
+          // evento SIGNED_OUT, que también navega de vuelta a (tabs) como
+          // nuevo invitado — aquí solo hace falta disparar el sign-out.
           await supabase.auth.signOut();
-          router.replace("/(auth)/login");
+          setSignOutLoading(false);
         },
       },
     ]);
@@ -344,24 +371,46 @@ export default function SettingsScreen() {
         {/* Profile */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Perfil</Text>
-          {email ? <Text style={styles.emailText}>{email}</Text> : null}
-          <Text style={styles.label}>Nombre visible</Text>
-          <TextInput
-            value={displayName}
-            onChangeText={setDisplayName}
-            placeholder="Tu nombre"
-            placeholderTextColor="#94a3b8"
-            style={styles.input}
-          />
-          <TouchableOpacity
-            onPress={handleSave}
-            disabled={saveStatus === "saving"}
-            style={[styles.btn, styles.btnPrimary]}
-          >
-            <Text style={styles.btnPrimaryText}>
-              {saveStatus === "saving" ? "Guardando…" : saveStatus === "saved" ? "¡Guardado!" : saveStatus === "error" ? "Error — intentar de nuevo" : "Guardar cambios"}
-            </Text>
-          </TouchableOpacity>
+          {isGuest ? (
+            <>
+              <Text style={styles.emailText}>Sin cuenta — tus datos están solo en este dispositivo.</Text>
+              <TouchableOpacity
+                onPress={() => router.push("/(auth)/register")}
+                style={[styles.btn, styles.btnOutline]}
+              >
+                <Ionicons name="person-add-outline" size={16} color={colors.textSecondary} />
+                <Text style={styles.btnOutlineText}>Crear cuenta</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => router.push("/(auth)/login")}
+                style={[styles.btn, styles.btnOutline]}
+              >
+                <Ionicons name="log-in-outline" size={16} color={colors.textSecondary} />
+                <Text style={styles.btnOutlineText}>Iniciar sesión para sincronizar</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              {email ? <Text style={styles.emailText}>{email}</Text> : null}
+              <Text style={styles.label}>Nombre visible</Text>
+              <TextInput
+                value={displayName}
+                onChangeText={setDisplayName}
+                placeholder="Tu nombre"
+                placeholderTextColor="#94a3b8"
+                style={styles.input}
+              />
+              <TouchableOpacity
+                onPress={handleSave}
+                disabled={saveStatus === "saving"}
+                style={[styles.btn, styles.btnPrimary]}
+              >
+                <Text style={styles.btnPrimaryText}>
+                  {saveStatus === "saving" ? "Guardando…" : saveStatus === "saved" ? "¡Guardado!" : saveStatus === "error" ? "Error — intentar de nuevo" : "Guardar cambios"}
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         {/* Preferences */}
@@ -630,7 +679,7 @@ export default function SettingsScreen() {
               </>
             )}
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => { setRestorePaste(""); setRestoreParsed(null); setShowRestoreModal(true); }} style={[styles.btn, styles.btnOutline]}>
+          <TouchableOpacity onPress={() => { if (!requireAccount()) return; setRestorePaste(""); setRestoreParsed(null); setShowRestoreModal(true); }} style={[styles.btn, styles.btnOutline]}>
             <Ionicons name="cloud-upload-outline" size={16} color={colors.textSecondary} />
             <Text style={styles.btnOutlineText}>Restaurar copia de seguridad</Text>
           </TouchableOpacity>
@@ -692,61 +741,66 @@ export default function SettingsScreen() {
             )}
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => { setImportCSV(""); setShowImportModal(true); }}
+            onPress={() => { if (!requireAccount()) return; setImportCSV(""); setShowImportModal(true); }}
             style={[styles.btn, styles.btnOutline]}
           >
             <Ionicons name="cloud-upload-outline" size={16} color={colors.textSecondary} />
             <Text style={styles.btnOutlineText}>Importar datos (CSV)</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={handleSignOut}
-            disabled={signOutLoading}
-            style={[styles.btn, styles.btnOutline]}
-          >
-            {signOutLoading ? (
-              <ActivityIndicator size="small" color={colors.primary} />
-            ) : (
-              <>
-                <Ionicons name="log-out-outline" size={16} color={colors.textSecondary} />
-                <Text style={styles.btnOutlineText}>Cerrar sesión</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          {!isGuest && (
+            <TouchableOpacity
+              onPress={handleSignOut}
+              disabled={signOutLoading}
+              style={[styles.btn, styles.btnOutline]}
+            >
+              {signOutLoading ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <>
+                  <Ionicons name="log-out-outline" size={16} color={colors.textSecondary} />
+                  <Text style={styles.btnOutlineText}>Cerrar sesión</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Danger Zone */}
         <View style={[styles.section, styles.dangerSection]}>
           <Text style={[styles.sectionTitle, { color: "#ef4444" }]}>Zona de peligro</Text>
           <TouchableOpacity
-            onPress={() => { setDeleteHistoryFrom(""); setDeleteHistoryTo(""); setDeleteHistoryExerciseId(null); setShowDeleteHistoryModal(true); }}
+            onPress={() => { if (!requireAccount()) return; setDeleteHistoryFrom(""); setDeleteHistoryTo(""); setDeleteHistoryExerciseId(null); setShowDeleteHistoryModal(true); }}
             style={[styles.btn, styles.btnDanger]}
           >
             <Text style={styles.btnDangerText}>Eliminar historial de entrenamientos</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() =>
-              Alert.alert(
-                "Eliminar cuenta",
-                "Esto eliminará permanentemente todos tus datos. Esta acción no se puede deshacer.",
-                [
-                  { text: "Cancelar", style: "cancel" },
-                  {
-                    text: "Eliminar",
-                    style: "destructive",
-                    onPress: async () => {
-                      const { error } = await supabase.rpc("delete_user");
-                      if (error) { Alert.alert("Error", error.message); return; }
-                      await supabase.auth.signOut();
-                      router.replace("/(auth)/login");
+          {!isGuest && (
+            <TouchableOpacity
+              onPress={() =>
+                Alert.alert(
+                  "Eliminar cuenta",
+                  "Esto eliminará permanentemente todos tus datos. Esta acción no se puede deshacer.",
+                  [
+                    { text: "Cancelar", style: "cancel" },
+                    {
+                      text: "Eliminar",
+                      style: "destructive",
+                      onPress: async () => {
+                        const { error } = await supabase.rpc("delete_user");
+                        if (error) { Alert.alert("Error", error.message); return; }
+                        // Igual que en handleSignOut, _layout.tsx vacía la DB
+                        // local y navega de vuelta a (tabs) como nuevo invitado.
+                        await supabase.auth.signOut();
+                      },
                     },
-                  },
-                ]
-              )
-            }
-            style={[styles.btn, styles.btnDanger]}
-          >
-            <Text style={styles.btnDangerText}>Eliminar cuenta</Text>
-          </TouchableOpacity>
+                  ]
+                )
+              }
+              style={[styles.btn, styles.btnDanger]}
+            >
+              <Text style={styles.btnDangerText}>Eliminar cuenta</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
       {/* Import CSV modal */}
