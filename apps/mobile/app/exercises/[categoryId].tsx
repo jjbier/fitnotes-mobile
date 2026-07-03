@@ -143,7 +143,7 @@ export default function ExerciseCategoryScreen() {
     setShowAddModal(true);
   }
 
-  async function handleAdd(andNew = false) {
+  async function handleAdd() {
     if (!newName.trim()) { Alert.alert("Error", "El nombre es obligatorio"); return; }
     const targetCategoryId = isFavorites ? (categories[0]?.id ?? "") : categoryId;
     if (!targetCategoryId) { Alert.alert("Error", "Crea una categoría antes de añadir ejercicios"); return; }
@@ -165,12 +165,7 @@ export default function ExerciseCategoryScreen() {
       created_at: data.created_at,
     });
     setAddSaving(false);
-    if (andNew) {
-      setNewName("");
-      setNewNotes("");
-    } else {
-      setShowAddModal(false);
-    }
+    setShowAddModal(false);
   }
 
   function openEditModal(ex: Exercise) {
@@ -426,21 +421,12 @@ export default function ExerciseCategoryScreen() {
               )}
               <View style={{ gap: 8 }}>
                 <TouchableOpacity
-                  onPress={() => handleAdd(false)}
+                  onPress={() => handleAdd()}
                   disabled={addSaving || !newName.trim()}
                   style={{ backgroundColor: theme.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: addSaving || !newName.trim() ? 0.6 : 1 }}
                 >
                   <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>
                     {addSaving ? "Creando…" : "Crear ejercicio"}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => handleAdd(true)}
-                  disabled={addSaving || !newName.trim()}
-                  style={{ borderRadius: 12, borderWidth: 1.5, borderColor: theme.primary, paddingVertical: 14, alignItems: "center", opacity: addSaving || !newName.trim() ? 0.6 : 1 }}
-                >
-                  <Text style={{ color: theme.primary, fontSize: 16, fontWeight: "700" }}>
-                    Guardar y nuevo
                   </Text>
                 </TouchableOpacity>
               </View>

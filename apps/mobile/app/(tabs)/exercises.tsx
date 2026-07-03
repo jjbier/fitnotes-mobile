@@ -206,7 +206,7 @@ export default function ExercisesScreen() {
     setShowCategoryOnlyModal(false);
   }
 
-  async function doSave(andNew: boolean, convertFactor?: number) {
+  async function doSave(convertFactor?: number) {
     if (!exName.trim()) { Alert.alert("Error", "El nombre es obligatorio"); return; }
     if (!exCategoryId) { Alert.alert("Error", "Selecciona o crea una categoría"); return; }
 
@@ -263,21 +263,11 @@ export default function ExercisesScreen() {
         default_chart: (data.default_chart ?? "weight") as "weight" | "volume" | "reps",
       });
       setSaving(false);
-
-      if (andNew) {
-        const cats = useExerciseStore.getState().categories;
-        setModalCategories(cats);
-        setExName("");
-        setExNotes("");
-        setExType(ExerciseType.WEIGHT_REPS);
-        setExWeightUnit("kg");
-      } else {
-        setShowModal(false);
-      }
+      setShowModal(false);
     }
   }
 
-  function handleSave(andNew: boolean) {
+  function handleSave() {
     const typeChanged = editingExercise && exType !== editingExercise.type;
     const isWeightType = WEIGHT_TYPES.includes(exType);
     const unitChanged = editingExercise && isWeightType && exWeightUnit !== (editingExercise.weight_unit ?? "kg");
@@ -306,9 +296,9 @@ export default function ExercisesScreen() {
           {
             text: "Cambiar", style: "destructive", onPress: () => {
               if (unitChanged) {
-                showUnitAlert(() => doSave(andNew), () => doSave(andNew, convFactor));
+                showUnitAlert(() => doSave(), () => doSave(convFactor));
               } else {
-                doSave(andNew);
+                doSave();
               }
             },
           },
@@ -318,11 +308,11 @@ export default function ExercisesScreen() {
     }
 
     if (unitChanged) {
-      showUnitAlert(() => doSave(andNew), () => doSave(andNew, convFactor));
+      showUnitAlert(() => doSave(), () => doSave(convFactor));
       return;
     }
 
-    doSave(andNew);
+    doSave();
   }
 
   async function handleToggleFavorite(id: string, current: boolean) {
@@ -776,7 +766,7 @@ export default function ExercisesScreen() {
               {/* Actions */}
               <View style={{ marginTop: 4, gap: 8 }}>
                 <TouchableOpacity
-                  onPress={() => handleSave(false)}
+                  onPress={() => handleSave()}
                   disabled={saving}
                   style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: saving ? 0.6 : 1 }}
                 >
@@ -786,17 +776,6 @@ export default function ExercisesScreen() {
                       : (editingExercise ? "Guardar cambios" : "Crear ejercicio")}
                   </Text>
                 </TouchableOpacity>
-                {!editingExercise && (
-                  <TouchableOpacity
-                    onPress={() => handleSave(true)}
-                    disabled={saving}
-                    style={{ borderRadius: 12, borderWidth: 1.5, borderColor: "#6366f1", paddingVertical: 14, alignItems: "center", opacity: saving ? 0.6 : 1 }}
-                  >
-                    <Text style={{ color: "#6366f1", fontSize: 16, fontWeight: "700" }}>
-                      Guardar y nuevo
-                    </Text>
-                  </TouchableOpacity>
-                )}
               </View>
             </ScrollView>
           </SafeAreaView>
