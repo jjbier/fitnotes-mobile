@@ -40,7 +40,7 @@ export default function LoginScreen() {
               style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 12, backgroundColor: theme.inputBg, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, color: theme.text }}
               value={email}
               onChangeText={setEmail}
-              placeholder="you@example.com"
+              placeholder="tu@email.com"
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"

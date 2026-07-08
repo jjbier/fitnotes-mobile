@@ -22,6 +22,20 @@ export const NO_EXERCISE_FIELDS: ExerciseFields = { weight: false, reps: false, 
 /** Fallback fields for when every field should be shown regardless of exercise type. */
 export const ALL_EXERCISE_FIELDS: ExerciseFields = { weight: true, reps: true, distance: true, time: true };
 
+/** Spanish display label for each exercise type, e.g. for badges/pickers. */
+export const EXERCISE_TYPE_LABELS: Record<ExerciseType, string> = {
+  [ExerciseType.WEIGHT_REPS]: "Peso × Reps",
+  [ExerciseType.DISTANCE_TIME]: "Dist / Tiempo",
+  [ExerciseType.REPS_ONLY]: "Reps",
+  [ExerciseType.WEIGHT_ONLY]: "Peso",
+  [ExerciseType.TIME_ONLY]: "Tiempo",
+  [ExerciseType.WEIGHT_DISTANCE]: "Peso + Dist",
+  [ExerciseType.WEIGHT_TIME]: "Peso + Tiempo",
+  [ExerciseType.REPS_DISTANCE]: "Reps + Dist",
+  [ExerciseType.REPS_TIME]: "Reps + Tiempo",
+  [ExerciseType.DISTANCE_ONLY]: "Distancia",
+};
+
 /** Formats a set's duration in seconds as "Xs", "Xmin" or "M:SS". */
 export function formatSetTime(secs: number): string {
   const m = Math.floor(secs / 60);

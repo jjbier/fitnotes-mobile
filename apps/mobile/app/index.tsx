@@ -17,7 +17,7 @@ export default function LandingScreen() {
         {/* Title */}
         <Text style={styles.title}>FitNotes App</Text>
         <Text style={styles.subtitle}>
-          Track your workouts, PRs and progress — all in one place.
+          Registra tus entrenamientos, récords y progreso — todo en un solo lugar.
         </Text>
 
         {/* CTA buttons */}
@@ -40,9 +40,9 @@ export default function LandingScreen() {
         {/* Feature bullets */}
         <View style={styles.features}>
           {[
-            "Workout logging with sets, reps and weight",
-            "Personal records tracked automatically",
-            "Progress charts and body tracker",
+            "Registro de entrenamientos con series, repeticiones y peso",
+            "Récords personales calculados automáticamente",
+            "Gráficas de progreso y seguimiento corporal",
           ].map((feature) => (
             <Text key={feature} style={styles.featureItem}>
               • {feature}
