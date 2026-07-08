@@ -9,7 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import DraggableFlatList, { ScaleDecorator } from "react-native-draggable-flatlist";
 import type { RenderItemParams } from "react-native-draggable-flatlist";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { useExerciseStore, useWorkoutStore, usePreferencesStore, filterExercises, ExerciseType } from "@fitnotes/core";
+import { useExerciseStore, useWorkoutStore, usePreferencesStore, filterExercises, ExerciseType, formatLastUsedLabel } from "@fitnotes/core";
 import { createExerciseRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import type { Category, Exercise } from "@fitnotes/core";
@@ -885,17 +885,6 @@ const CategoryCard = memo(function CategoryCard({ name, color, count, onPress }:
   );
 });
 
-function formatLastUsed(dateStr: string): string {
-  const date = new Date(dateStr + "T00:00:00");
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const diffDays = Math.round((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return "Hoy";
-  if (diffDays === 1) return "Ayer";
-  if (diffDays < 7) return `Hace ${diffDays} días`;
-  return date.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
-
 const ExerciseRow = memo(function ExerciseRow({
   ex,
   categories,
@@ -915,7 +904,7 @@ const ExerciseRow = memo(function ExerciseRow({
 }) {
   const category = categories.find((c) => c.id === ex.category_id);
   const statsLine = stats
-    ? `${stats.workout_count} ${stats.workout_count === 1 ? "sesión" : "sesiones"}${stats.last_used ? ` · ${formatLastUsed(stats.last_used)}` : ""}`
+    ? `${stats.workout_count} ${stats.workout_count === 1 ? "sesión" : "sesiones"}${stats.last_used ? ` · ${formatLastUsedLabel(stats.last_used)}` : ""}`
     : null;
 
   return (

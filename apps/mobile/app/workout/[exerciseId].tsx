@@ -8,7 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
 import DraggableFlatList, { ScaleDecorator, NestableScrollContainer, NestableDraggableFlatList, type RenderItemParams } from "react-native-draggable-flatlist";
-import { useWorkoutStore, useExerciseStore, usePreferencesStore, ExerciseType, calculate1RM } from "@fitnotes/core";
+import { useWorkoutStore, useExerciseStore, usePreferencesStore, ExerciseType, calculate1RM, formatMinutesSeconds } from "@fitnotes/core";
 import { createProgressRepository, createExerciseRepository } from "@fitnotes/database";
 import type { WorkoutExercise } from "@fitnotes/core";
 import { supabase } from "../../lib/supabase";
@@ -36,12 +36,6 @@ type HistorySession = {
     order_index: number;
   }[];
 };
-
-function formatTime(seconds: number) {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
 
 function formatLastSet(s: LastSet): string {
   const parts: string[] = [];
@@ -584,7 +578,7 @@ export default function TrainingScreen() {
           <Ionicons name="remove-circle-outline" size={20} color="#64748b" />
         </TouchableOpacity>
         <Text style={{ fontSize: 18, fontWeight: "700", color: timerActive ? "#6366f1" : timerFinished ? "#22c55e" : "#0f172a", minWidth: 52, textAlign: "center" }}>
-          {formatTime(timerRemaining)}
+          {formatMinutesSeconds(timerRemaining)}
         </Text>
         <TouchableOpacity onPress={() => handleChangeDuration(15)} disabled={timerRunning} style={{ padding: 4, opacity: timerRunning ? 0.4 : 1 }} accessibilityLabel="Añadir 15 segundos">
           <Ionicons name="add-circle-outline" size={20} color="#64748b" />

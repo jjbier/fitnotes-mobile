@@ -4,7 +4,7 @@ import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { NestableScrollContainer, NestableDraggableFlatList, ScaleDecorator } from "react-native-draggable-flatlist";
 import type { RenderItemParams } from "react-native-draggable-flatlist";
-import { useRoutineStore, useExerciseStore, useWorkoutStore, ExerciseType, todayISO, getExerciseFields } from "@fitnotes/core";
+import { useRoutineStore, useExerciseStore, useWorkoutStore, ExerciseType, todayISO, getExerciseFields, NO_EXERCISE_FIELDS } from "@fitnotes/core";
 import type { PredefinedSet, RoutineDay, RoutineDayExercise } from "@fitnotes/core";
 import { useTheme } from "../../lib/theme";
 import { useRepositories } from "../../contexts/RepositoryContext";
@@ -451,7 +451,7 @@ export default function RoutineDetailScreen() {
             {psCount > 0 && (
               <View style={{ marginLeft: rde.group_id ? 11 : 0, marginTop: 3, gap: 2 }}>
                 {(predefinedSets[rde.id] ?? []).map((ps, pi) => {
-                  const fields = ex ? getExerciseFields(ex.type) : { weight: false, reps: false, distance: false, time: false };
+                  const fields = ex ? getExerciseFields(ex.type) : NO_EXERCISE_FIELDS;
                   const parts: string[] = [];
                   if (fields.weight && ps.weight != null) parts.push(`${ps.weight} kg`);
                   else if (fields.weight) parts.push("— kg");
@@ -658,7 +658,7 @@ export default function RoutineDetailScreen() {
                 <>
                   {psLocalSets.length > 0 && (() => {
                     const ex = exerciseMap[psExerciseId];
-                    const fields = ex ? getExerciseFields(ex.type) : { weight: false, reps: false, distance: false, time: false };
+                    const fields = ex ? getExerciseFields(ex.type) : NO_EXERCISE_FIELDS;
                     return (
                       <View style={{ flexDirection: "row", gap: 6, paddingHorizontal: 4 }}>
                         <Text style={{ width: 24, fontSize: 11, color: theme.textMuted }}>#</Text>
@@ -673,7 +673,7 @@ export default function RoutineDetailScreen() {
 
                   {psLocalSets.map((row, idx) => {
                     const ex = exerciseMap[psExerciseId];
-                    const fields = ex ? getExerciseFields(ex.type) : { weight: false, reps: false, distance: false, time: false };
+                    const fields = ex ? getExerciseFields(ex.type) : NO_EXERCISE_FIELDS;
                     return (
                       <View key={row.localId} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                         <Text style={{ width: 24, fontSize: 13, color: theme.textMuted, textAlign: "center" }}>{idx + 1}</Text>

@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useExerciseStore, ExerciseType } from "@fitnotes/core";
+import { useExerciseStore, ExerciseType, formatShortDate, formatDaysAgo } from "@fitnotes/core";
 import { useTheme } from "../../lib/theme";
 import { useRepositories } from "../../contexts/RepositoryContext";
 
@@ -23,22 +23,6 @@ const TYPE_LABELS: Partial<Record<ExerciseType, string>> = {
   [ExerciseType.REPS_TIME]: "Reps+Tiempo",
   [ExerciseType.DISTANCE_ONLY]: "Distancia",
 };
-
-function formatDate(iso: string) {
-  return new Date(iso + "T12:00:00").toLocaleDateString("es-ES", {
-    day: "numeric", month: "short", year: "numeric",
-  });
-}
-
-function daysAgo(iso: string) {
-  const diff = Math.floor((Date.now() - new Date(iso + "T12:00:00").getTime()) / 86400000);
-  if (diff === 0) return "hoy";
-  if (diff === 1) return "ayer";
-  if (diff < 7) return `hace ${diff} días`;
-  if (diff < 30) return `hace ${Math.floor(diff / 7)} sem`;
-  if (diff < 365) return `hace ${Math.floor(diff / 30)} mes`;
-  return `hace ${Math.floor(diff / 365)} año`;
-}
 
 export default function SearchScreen() {
   const colors = useTheme();
@@ -158,7 +142,7 @@ export default function SearchScreen() {
                   {lw ? (
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
                       <Ionicons name="time-outline" size={11} color={colors.primary} />
-                      <Text style={{ fontSize: 11, color: colors.primary }}>{daysAgo(lw.date)} · {formatDate(lw.date)}</Text>
+                      <Text style={{ fontSize: 11, color: colors.primary }}>{formatDaysAgo(lw.date)} · {formatShortDate(lw.date)}</Text>
                       {lw.setCount > 0 && (
                         <>
                           <Text style={{ fontSize: 11, color: colors.border }}>·</Text>

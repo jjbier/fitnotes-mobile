@@ -16,6 +16,64 @@ export function getExerciseFields(type: ExerciseType): ExerciseFields {
   return { weight: w, reps: r, distance: d, time: t };
 }
 
+/** Fallback fields for when the exercise type isn't known yet (e.g. still loading). */
+export const NO_EXERCISE_FIELDS: ExerciseFields = { weight: false, reps: false, distance: false, time: false };
+
+/** Fallback fields for when every field should be shown regardless of exercise type. */
+export const ALL_EXERCISE_FIELDS: ExerciseFields = { weight: true, reps: true, distance: true, time: true };
+
+/** Formats a set's duration in seconds as "Xs", "Xmin" or "M:SS". */
+export function formatSetTime(secs: number): string {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  if (m === 0) return `${s}s`;
+  return s === 0 ? `${m}min` : `${m}:${String(s).padStart(2, "0")}`;
+}
+
+export interface SetFieldsInput {
+  weight?: number;
+  reps?: number;
+  distance?: number;
+  time_seconds?: number;
+}
+
+/** Formats a set's fields (weight/reps/distance/time) for display, e.g. "80 kg × 8 reps". */
+export function formatSetDisplay(set: SetFieldsInput, type: ExerciseType, unit: string): string {
+  const f = getExerciseFields(type);
+  const parts: string[] = [];
+  if (f.weight && set.weight != null) parts.push(`${set.weight} ${unit}`);
+  if (f.reps && set.reps != null) parts.push(`${set.reps} reps`);
+  if (f.distance && set.distance != null) parts.push(`${set.distance} km`);
+  if (f.time && set.time_seconds != null) parts.push(formatSetTime(set.time_seconds));
+  return parts.join(" × ") || "—";
+}
+
+/** Formats a duration in seconds as a clock: "MM:SS", or "H:MM:SS" once it reaches an hour. */
+export function formatClockDuration(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+/** Formats a duration in seconds as "MM:SS" (no hours rollover). */
+export function formatMinutesSeconds(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+/** Formats a duration in seconds as "M:SS", minutes not zero-padded (used in progress charts). */
+export function formatChartDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+/** Default barbell plate denominations (kg) for the plate calculator. */
+export const DEFAULT_PLATES = [25, 20, 15, 10, 5, 2.5, 1.25];
+
 /**
  * Brzycki one-rep max formula.
  * Accurate for reps 1–10; breaks down above 10 (denominator goes negative at reps>=37).

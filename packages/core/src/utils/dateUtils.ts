@@ -66,3 +66,41 @@ export function daysBetween(a: string, b: string): number {
     (new Date(b).getTime() - new Date(a).getTime()) / msPerDay
   );
 }
+
+/** Formats a date string (YYYY-MM-DD) as "lunes, 7 de julio de 2026". */
+export function formatFullDate(dateStr: string): string {
+  const date = new Date(dateStr + "T00:00:00");
+  return date.toLocaleDateString("es-ES", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
+}
+
+/** Formats a date string as "Hoy" / "Ayer" / "Hace N días" / "dd/mm/yyyy". */
+export function formatLastUsedLabel(dateStr: string): string {
+  const date = new Date(dateStr + "T00:00:00");
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return "Hoy";
+  if (diffDays === 1) return "Ayer";
+  if (diffDays < 7) return `Hace ${diffDays} días`;
+  return date.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+/** Formats an ISO date string as a short date, e.g. "7 jul 2026". */
+export function formatShortDate(iso: string): string {
+  return new Date(iso + "T12:00:00").toLocaleDateString("es-ES", {
+    day: "numeric", month: "short", year: "numeric",
+  });
+}
+
+/** Formats an ISO date string as a relative label: "hoy" / "ayer" / "hace N días" / "hace N sem" / "hace N mes" / "hace N año". */
+export function formatDaysAgo(iso: string): string {
+  const diff = Math.floor((Date.now() - new Date(iso + "T12:00:00").getTime()) / 86400000);
+  if (diff === 0) return "hoy";
+  if (diff === 1) return "ayer";
+  if (diff < 7) return `hace ${diff} días`;
+  if (diff < 30) return `hace ${Math.floor(diff / 7)} sem`;
+  if (diff < 365) return `hace ${Math.floor(diff / 30)} mes`;
+  return `hace ${Math.floor(diff / 365)} año`;
+}

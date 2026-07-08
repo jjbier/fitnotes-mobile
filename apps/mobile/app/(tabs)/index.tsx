@@ -3,7 +3,7 @@ import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicat
 import { NestableScrollContainer, NestableDraggableFlatList, ScaleDecorator, type RenderItemParams } from "react-native-draggable-flatlist";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useWorkoutStore, useExerciseStore, usePreferencesStore, formatWorkoutDate, todayISO, ExerciseType } from "@fitnotes/core";
+import { useWorkoutStore, useExerciseStore, usePreferencesStore, formatWorkoutDate, todayISO, ExerciseType, formatClockDuration } from "@fitnotes/core";
 import type { WorkoutExercise } from "@fitnotes/core";
 import { createWorkoutRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
@@ -370,14 +370,6 @@ export default function HomeScreen() {
     if (text) await Share.share({ message: text });
   }
 
-  function formatDuration(secs: number) {
-    const h = Math.floor(secs / 3600);
-    const m = Math.floor((secs % 3600) / 60);
-    const s = secs % 60;
-    if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  }
-
   async function handleCopyWorkout(sourceWorkoutId: string) {
     setCopyLoading(true);
     setShowCopyModal(false);
@@ -547,7 +539,7 @@ export default function HomeScreen() {
                     </TouchableOpacity>
                   )}
                   {activeWorkout.end_time && <Ionicons name="time-outline" size={14} color="#6366f1" />}
-                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#6366f1" }}>{formatDuration(timerDisplay)}</Text>
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#6366f1" }}>{formatClockDuration(timerDisplay)}</Text>
                   {timerState === "paused" && timerDisplay > 0 && (
                     <Text style={{ fontSize: 11, color: "#94a3b8" }}>pausado</Text>
                   )}
@@ -877,7 +869,7 @@ export default function HomeScreen() {
             {summaryStats && (
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "center", width: "100%" }}>
                 {[
-                  { icon: "time-outline" as const, label: "Duración", value: formatDuration(summaryStats.duration) },
+                  { icon: "time-outline" as const, label: "Duración", value: formatClockDuration(summaryStats.duration) },
                   { icon: "barbell-outline" as const, label: "Ejercicios", value: String(summaryStats.exercises) },
                   { icon: "list-outline" as const, label: "Series", value: String(summaryStats.sets) },
                   { icon: "flame-outline" as const, label: "Volumen", value: summaryStats.volume > 0 ? `${(summaryStats.volume / 1000).toFixed(1)}k kg` : "—" },

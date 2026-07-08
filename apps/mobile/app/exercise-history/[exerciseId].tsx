@@ -9,7 +9,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import ViewShot from "react-native-view-shot";
 import * as Sharing from "expo-sharing";
-import { ExerciseType, getExerciseFields, useExerciseStore, usePreferencesStore, calculate1RM, estimateRepMax, todayISO } from "@fitnotes/core";
+import { ExerciseType, useExerciseStore, usePreferencesStore, calculate1RM, estimateRepMax, todayISO, formatFullDate, formatSetDisplay } from "@fitnotes/core";
 import { createExerciseRepository, createProgressRepository, type ChartPoint } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import LineChart, { type ChartDataPoint } from "../../components/LineChart";
@@ -38,33 +38,9 @@ type Session = {
 type Metric = "weight" | "volume" | "reps" | "totalReps" | "est1rm" | "distance" | "totalDistance" | "time" | "totalTime" | "speed" | "pace" | "weightByReps" | "repMaxProgression";
 type HistoryTab = "history" | "chart" | "stats";
 
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr + "T00:00:00");
-  return date.toLocaleDateString("es-ES", {
-    weekday: "long", day: "numeric", month: "long", year: "numeric",
-  });
-}
-
 function formatDateShort(dateStr: string): string {
   const date = new Date(dateStr + "T00:00:00");
   return date.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
-}
-
-function formatDuration(secs: number): string {
-  const m = Math.floor(secs / 60);
-  const s = secs % 60;
-  if (m === 0) return `${s}s`;
-  return s === 0 ? `${m}min` : `${m}:${String(s).padStart(2, "0")}`;
-}
-
-function formatSet(set: SetRow, type: ExerciseType, unit: string): string {
-  const f = getExerciseFields(type);
-  const parts: string[] = [];
-  if (f.weight && set.weight != null) parts.push(`${set.weight} ${unit}`);
-  if (f.reps && set.reps != null) parts.push(`${set.reps} reps`);
-  if (f.distance && set.distance != null) parts.push(`${set.distance} km`);
-  if (f.time && set.time_seconds != null) parts.push(formatDuration(set.time_seconds));
-  return parts.join(" × ") || "—";
 }
 
 const ALL_METRICS: { key: Metric; label: string; types: ExerciseType[] | "all" }[] = [
@@ -449,7 +425,7 @@ export default function ExerciseHistoryScreen() {
                 <View style={{ backgroundColor: "#f8fafc", paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
                   <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                     <Text style={{ fontSize: 13, fontWeight: "600", color: "#0f172a", textTransform: "capitalize", flex: 1 }}>
-                      {formatDate(session.date)}
+                      {formatFullDate(session.date)}
                     </Text>
                     {(() => {
                       const vol = visibleSets.filter((s) => s.is_complete && !s.is_warmup).reduce((acc, s) => acc + (s.weight && s.reps ? s.weight * s.reps : 0), 0);
@@ -490,7 +466,7 @@ export default function ExerciseHistoryScreen() {
                             <Text style={{ fontSize: 11, fontWeight: "600", color: set.is_warmup ? "#d97706" : set.is_complete ? "#6366f1" : "#94a3b8" }}>{set.is_warmup ? "W" : idx + 1}</Text>
                           </View>
                         )}
-                        <Text style={{ fontSize: 14, color: "#0f172a", flex: 1 }}>{formatSet(set, exerciseType, unit)}</Text>
+                        <Text style={{ fontSize: 14, color: "#0f172a", flex: 1 }}>{formatSetDisplay(set, exerciseType, unit)}</Text>
                         {!selectMode && set.comment ? (
                           <Text style={{ fontSize: 11, color: "#94a3b8", maxWidth: 100 }} numberOfLines={1}>{set.comment}</Text>
                         ) : null}

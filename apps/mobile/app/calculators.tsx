@@ -18,6 +18,7 @@ import {
   estimateRepMax,
   calculateSetWeight,
   calculatePlates,
+  DEFAULT_PLATES,
 } from "@fitnotes/core";
 import { useTheme } from "../lib/theme";
 import type { LocalWorkoutRepository } from "@fitnotes/database";
@@ -339,8 +340,6 @@ function SetCalculator() {
     </View>
   );
 }
-
-const DEFAULT_PLATES = [25, 20, 15, 10, 5, 2.5, 1.25];
 
 function PlateCalculatorPanel() {
   const [targetWeight, setTargetWeight] = useState("");
