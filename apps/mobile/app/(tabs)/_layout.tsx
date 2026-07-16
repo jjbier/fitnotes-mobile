@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
 
+/** Definición de las 6 tabs de la app (nombre de ruta, título en español e iconos activo/inactivo). */
 const TABS: {
   name: string;
   title: string;
@@ -18,6 +19,13 @@ const TABS: {
   { name: "settings", title: "Configuración", icon: "settings-outline", iconActive: "settings" },
 ];
 
+/**
+ * Layout raíz del grupo `(tabs)`: declara el navegador de 6 tabs (Hoy,
+ * Calendario, Ejercicios, Progreso, Rutinas, Configuración) con iconos
+ * Ionicons (outline/filled según foco) y colores adaptados a modo claro/oscuro
+ * vía `useColorScheme`. No contiene lógica de datos ni de identidad — esa vive
+ * en el `_layout.tsx` raíz que envuelve a este grupo.
+ */
 export default function TabLayout() {
   const scheme = useColorScheme();
   const isDark = scheme === "dark";

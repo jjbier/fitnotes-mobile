@@ -9,8 +9,17 @@ import type { PredefinedSet, RoutineDay, RoutineDayExercise } from "@fitnotes/co
 import { useTheme } from "../../lib/theme";
 import { useRepositories } from "../../contexts/RepositoryContext";
 
+/** Representación de un `PredefinedSet` en el formulario del modal: valores como texto editable y un id local estable para las filas. */
 type LocalPS = { localId: string; weight: string; reps: string; distance: string; time_seconds: string };
 
+/**
+ * Pantalla de detalle de una rutina: gestión de sus días y, dentro de cada día, de sus
+ * ejercicios (añadir/quitar, reordenar por drag&drop, agrupar en supersets con nombre
+ * propio, y definir series predefinidas por ejercicio). El modo edición (`editMode`)
+ * alterna entre gestión estructural y el uso normal de "Registrar" un día, que crea un
+ * entrenamiento nuevo con todos los ejercicios del día y sus series predefinidas ya
+ * cargadas (y actualiza las series predefinidas con los valores realmente aplicados).
+ */
 export default function RoutineDetailScreen() {
   const theme = useTheme();
   const { id: routineId } = useLocalSearchParams<{ id: string }>();
@@ -161,6 +170,12 @@ export default function RoutineDetailScreen() {
     ));
   }
 
+  /**
+   * Alterna la pertenencia de un ejercicio a un superset dentro del día. Si ya está en
+   * un grupo, ofrece renombrarlo o sacarlo del grupo (desasignando `group_id` a todos
+   * sus miembros); si no está agrupado, lo une al ejercicio siguiente en el orden del
+   * día — uniéndose a su grupo si ya existe, o creando uno nuevo con id aleatorio.
+   */
   async function handleToggleSuperset(dayId: string, rde: RoutineDayExercise) {
     const dayExs = (routineDayExercises[dayId] ?? []).slice().sort((a, b) => a.order_index - b.order_index);
 
@@ -208,6 +223,7 @@ export default function RoutineDetailScreen() {
     }
   }
 
+  /** Reordena los días tras un drag&drop de forma optimista, revirtiendo al orden anterior si el repo falla al persistirlo. */
   async function handleDayDragEnd({ data }: { data: RoutineDay[] }) {
     if (!routineId) return;
     const prevOrder = days.map((d) => ({ id: d.id, order_index: d.order_index }));
@@ -220,6 +236,7 @@ export default function RoutineDetailScreen() {
     }
   }
 
+  /** Reordena los ejercicios de un día tras un drag&drop de forma optimista, revirtiendo al orden anterior si el repo falla al persistirlo. */
   async function handleExDragEnd(dayId: string, data: RoutineDayExercise[]) {
     const prevOrder = (routineDayExercises[dayId] ?? []).map((e) => ({ id: e.id, order_index: e.order_index }));
     const updates = data.map((e, i) => ({ id: e.id, order_index: i }));
@@ -233,6 +250,7 @@ export default function RoutineDetailScreen() {
 
   // ─── Predefined sets ────────────────────────────────────────────────────────
 
+  /** Convierte `PredefinedSet[]` (valores numéricos u `undefined`) al formato de fila editable del formulario (strings, `""` para vacío). */
   function psToLocal(sets: PredefinedSet[]): LocalPS[] {
     return sets.map((s, i) => ({
       localId: `${i}-${s.order_index}`,
@@ -243,6 +261,16 @@ export default function RoutineDetailScreen() {
     }));
   }
 
+  /**
+   * Abre el modal de series predefinidas para un ejercicio del día. Si ya hay datos en
+   * caché (`predefinedSets` del store) los usa directamente; si no, los carga del repo.
+   *
+   * Fix de condición de carrera: `psLoadingForRef` guarda qué `rdeId` disparó la carga
+   * en curso. Si el usuario cierra el modal o abre el de otro ejercicio antes de que
+   * la petición async resuelva, la ref ya no coincide con `rdeId` al volver del await
+   * y la función corta en seco — evita que una respuesta tardía de un ejercicio anterior
+   * sobrescriba el estado del modal que el usuario tiene abierto ahora.
+   */
   async function openPsModal(rdeId: string, exerciseId: string) {
     setPsRdeId(rdeId);
     setPsExerciseId(exerciseId);
@@ -278,6 +306,7 @@ export default function RoutineDetailScreen() {
     setPsLocalSets((prev) => prev.filter((r) => r.localId !== localId));
   }
 
+  /** Persiste las filas del formulario como series predefinidas del ejercicio (reemplaza el set completo) y actualiza el store local. */
   async function handleSavePredefinedSets() {
     if (!psRdeId) return;
     setPsSaving(true);
@@ -306,6 +335,14 @@ export default function RoutineDetailScreen() {
     setSelectLogDayId(dayId);
   }
 
+  /**
+   * Registra un día de la rutina como un entrenamiento nuevo: crea el workout de hoy,
+   * añade cada ejercicio seleccionado del día (con su grupo de superset si lo tiene) y,
+   * por cada uno, crea sus series predefinidas ya con los valores guardados. Tras crear
+   * las series, reescribe las series predefinidas del ejercicio con los valores
+   * realmente aplicados (para que la próxima vez arranquen desde ahí). Al terminar,
+   * hidrata `useWorkoutStore` con el entrenamiento recién creado para que quede activo.
+   */
   async function handleLogDay(dayId: string, selectedIds: string[]) {
     const allDayExs = (routineDayExercises[dayId] ?? []).slice().sort((a, b) => a.order_index - b.order_index);
     const dayExs = allDayExs.filter((rde) => selectedIds.includes(rde.exercise_id));

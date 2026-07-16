@@ -1,7 +1,14 @@
+/**
+ * Lectura/escritura de la identidad local singleton (`local_identity`) — quién
+ * es el usuario activo en este dispositivo (invitado o cuenta real) y si el
+ * SyncEngine debe intentar sincronizar. No hace cascadas ni encola pending_ops:
+ * es metadato de dispositivo, no una tabla sincronizable.
+ */
 import { generateUUID } from "@fitnotes/core";
 import type { SqlExecutor } from "./sqlExecutor.js";
 import { nowIso, type RawRow } from "./repositories/shared.js";
 
+/** Identidad activa resuelta: `user_id` de escritura y si es invitado o cuenta real vinculada. */
 export interface LocalIdentity {
   activeUserId: string;
   isGuest: boolean;

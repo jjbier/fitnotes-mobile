@@ -1,8 +1,15 @@
+/**
+ * Repositorio remoto de progreso: PRs, punto de datos agregado por fecha para
+ * gráficas (`ChartPoint`) y resumen de entrenamiento semanal. Toda la
+ * agregación se hace en memoria en JS a partir de filas crudas de Supabase
+ * (sin SQL agregado), por eso mueve volúmenes de filas completos.
+ */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../supabase/types.js";
 
 type Client = SupabaseClient<Database>;
 
+/** Agregado de una fecha de entrenamiento para un ejercicio: máximos y totales de peso/reps/distancia/tiempo, 1RM estimado y mejor peso por número de reps. */
 export interface ChartPoint {
   date: string;
   maxWeight: number;
@@ -21,6 +28,7 @@ export interface ChartPoint {
 
 export function createProgressRepository(client: Client) {
   return {
+    /** PRs de un ejercicio, ordenados por reps ascendente y luego peso descendente. */
     getPersonalRecords(exerciseId: string) {
       return client
         .from("personal_records")
@@ -30,6 +38,7 @@ export function createProgressRepository(client: Client) {
         .order("weight", { ascending: false });
     },
 
+    /** Todos los PRs del usuario, agrupables por ejercicio (mismo orden que {@link getPersonalRecords} pero sin filtrar). */
     getAllPersonalRecords() {
       return client
         .from("personal_records")
@@ -39,7 +48,7 @@ export function createProgressRepository(client: Client) {
         .order("weight", { ascending: false });
     },
 
-    // Returns best completed set stats per exercise for exercises that lack PRs (e.g. reps-only)
+    /** Mejores reps/distancia/tiempo de sets completos (no warmup) por ejercicio — para ejercicios sin PR de peso (p.ej. solo-reps o cardio). */
     async getBestSetsByExercise(exerciseIds: string[]): Promise<Record<string, { maxReps: number; maxDistance: number; maxTime: number }>> {
       if (exerciseIds.length === 0) return {};
       const { data } = await client
@@ -62,6 +71,13 @@ export function createProgressRepository(client: Client) {
       return result;
     },
 
+    /**
+     * Serie temporal de {@link ChartPoint} para un ejercicio: une sets completos
+     * (no warmup) por fecha de entrenamiento, calculando en el mismo bucle el 1RM
+     * estimado (fórmula Epley-like `w * 36/(37-r)`, solo válida para r<37),
+     * velocidad/ritmo (para ejercicios de cardio con distancia+tiempo) y el mejor
+     * peso por número de reps (`weightByReps`). Ordenado por fecha ascendente.
+     */
     async getChartData(exerciseId: string): Promise<ChartPoint[]> {
       // Fetch workout_exercises for this exercise, with their parent workout dates
       const { data: weRows, error } = await client
@@ -134,6 +150,7 @@ export function createProgressRepository(client: Client) {
         .sort((a, b) => a.date.localeCompare(b.date));
     },
 
+    /** Sets completados y volumen (peso × reps) por ejercicio, para todos los entrenamientos desde `weekStart` en adelante — usado en el resumen semanal del dashboard. */
     async getWeeklyTraining(weekStart: string): Promise<{ exerciseId: string; setCount: number; volume: number }[]> {
       const { data: workouts } = await client
         .from("workouts")

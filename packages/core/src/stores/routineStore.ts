@@ -1,11 +1,22 @@
+/**
+ * Store Zustand de rutinas: rutinas → días → ejercicios de cada día → sets
+ * predefinidos de cada ejercicio, cada nivel indexado por el id de su padre.
+ * No llama a Supabase directamente: cuando el usuario quiere "loguear" un
+ * día de rutina como entrenamiento, expone la intención vía
+ * `pendingRoutineLog`/`logRoutineWorkout` para que la capa de UI (que sí
+ * tiene acceso al repositorio) la resuelva.
+ */
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 import type { Routine, RoutineDay, RoutineDayExercise, PredefinedSet } from "../types/index.js";
 
 interface RoutineState {
   routines: Routine[];
+  /** Días de cada rutina, indexados por `routine_id`. */
   routineDays: Record<string, RoutineDay[]>;
+  /** Ejercicios de cada día, indexados por `routine_day_id`. */
   routineDayExercises: Record<string, RoutineDayExercise[]>;
+  /** Sets predefinidos de cada ejercicio de rutina, indexados por el id del `RoutineDayExercise`. */
   predefinedSets: Record<string, PredefinedSet[]>;
   activeRoutineId: string | null;
   /** Set by logRoutineWorkout — the UI layer observes this and handles Supabase calls. */
@@ -15,22 +26,38 @@ interface RoutineState {
 }
 
 interface RoutineActions {
+  /** Reemplaza la lista completa de rutinas. */
   loadRoutines: (routines: Routine[]) => void;
+  /** Carga los días de una rutina y garantiza una entrada (posiblemente vacía) en `routineDayExercises` para cada día. */
   loadRoutineDays: (routineId: string, days: RoutineDay[]) => void;
+  /** Reemplaza los ejercicios cacheados de un día de rutina. */
   loadRoutineDayExercises: (dayId: string, exercises: RoutineDayExercise[]) => void;
+  /** Reemplaza los sets predefinidos cacheados de un ejercicio de rutina. */
   loadPredefinedSets: (rdExerciseId: string, sets: PredefinedSet[]) => void;
+  /** Añade una rutina nueva y le inicializa una lista vacía de días. */
   createRoutine: (routine: Routine) => void;
+  /** Mergea un patch parcial sobre la rutina con ese id. */
   updateRoutine: (id: string, patch: Partial<Routine>) => void;
+  /** Elimina la rutina y, en cascada dentro del store, sus días, ejercicios de día y sets predefinidos asociados; limpia `activeRoutineId` si apuntaba a ella. */
   deleteRoutine: (id: string) => void;
+  /** Duplica `original` bajo `newId` con el nombre prefijado "Copy of ..." y una lista de días vacía (no copia los días). */
   copyRoutine: (original: Routine, newId: string) => void;
   setActiveRoutine: (id: string | null) => void;
+  /** Añade un día a `routineDays[day.routine_id]` (crea la lista si no existía) y le inicializa una lista vacía de ejercicios. */
   addRoutineDay: (day: RoutineDay) => void;
+  /** Mergea un patch parcial sobre el día con ese id, buscándolo en todas las rutinas cacheadas. */
   updateRoutineDay: (id: string, patch: Partial<RoutineDay>) => void;
+  /** Elimina el día y, en cascada dentro del store, los sets predefinidos de sus ejercicios. */
   deleteRoutineDay: (routineId: string, dayId: string) => void;
+  /** Reescribe `order_index` de los días indicados y reordena la lista según el nuevo índice. */
   reorderDays: (routineId: string, updates: { id: string; order_index: number }[]) => void;
+  /** Añade un ejercicio al día correspondiente (crea la lista si no existía). */
   addExerciseToDay: (exercise: RoutineDayExercise) => void;
+  /** Quita el ejercicio del día y borra sus sets predefinidos cacheados. */
   removeExerciseFromDay: (dayId: string, rdExerciseId: string) => void;
+  /** Reescribe `order_index` de los ejercicios indicados y reordena la lista según el nuevo índice. */
   reorderExercisesInDay: (dayId: string, updates: { id: string; order_index: number }[]) => void;
+  /** Reemplaza los sets predefinidos de un ejercicio de rutina (misma acción que `loadPredefinedSets`, usada tras editar en vez de cargar). */
   savePredefinedSets: (rdExerciseId: string, sets: PredefinedSet[]) => void;
   setLoading: (v: boolean) => void;
   setError: (v: string | null) => void;
@@ -50,6 +77,7 @@ interface RoutineActions {
 
 type RoutineStore = RoutineState & RoutineActions;
 
+/** Store combinado (estado + acciones) de rutinas, con Immer para mutaciones ergonómicas. */
 export const useRoutineStore = create<RoutineStore>()(
   immer((set, get) => ({
     routines: [],

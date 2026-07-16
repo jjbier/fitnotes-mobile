@@ -9,6 +9,17 @@ import { useTheme } from "../../lib/theme";
 import { useSyncStatus } from "../../contexts/SyncContext";
 import { useRepositories } from "../../contexts/RepositoryContext";
 
+/**
+ * Tab "Rutinas" (nombre de archivo `tools.tsx` por herencia histórica, pero
+ * la pantalla es el listado de rutinas): crear, editar, copiar y eliminar
+ * rutinas de entrenamiento, con estadísticas de uso (última vez usada, nº de
+ * sesiones) resueltas contra el repo remoto. Las acciones de edición/copia/
+ * borrado se presentan en un menú modal propio en vez de `Alert.alert`,
+ * porque Android descarta en silencio un 4º botón nativo (Cancelar/Editar/
+ * Copiar/Eliminar no caben en el límite de 3). Soporta apertura directa del
+ * modal de creación vía el parámetro de navegación `create=1`. Recarga al
+ * recibir `refetchSignal` tras un sync.
+ */
 export default function RoutinesScreen() {
   const theme = useTheme();
   const router = useRouter();
@@ -42,6 +53,7 @@ export default function RoutinesScreen() {
   const remoteRoutineRepo = useMemo(() => createRoutineRepository(supabase), []);
   const { refetchSignal } = useSyncStatus();
 
+  /** Carga las rutinas (repo local) y sus estadísticas de uso (repo remoto) y las vuelca al store. */
   const load = useCallback(async () => {
     setLoading(true);
     const { data } = await repo.getRoutines();
@@ -73,10 +85,12 @@ export default function RoutinesScreen() {
   // Nota: Alert.alert en Android solo soporta 3 botones (positive/negative/
   // neutral) — con 4 botones (Cancelar/Editar/Copiar/Eliminar) el 4º se
   // descartaba en silencio y "Eliminar" nunca aparecía. Usamos un Modal propio.
+  /** Abre el menú de acciones (Editar/Copiar/Eliminar) para la rutina dada. */
   function openMenu(id: string, name: string, notes: string) {
     setMenuTarget({ id, name, notes });
   }
 
+  /** Pide confirmación y elimina la rutina junto con todos sus días. */
   function confirmDelete(id: string, name: string) {
     Alert.alert("Eliminar rutina", `¿Eliminar "${name}" y todos sus días?`, [
       { text: "Cancelar", style: "cancel" },
@@ -87,6 +101,7 @@ export default function RoutinesScreen() {
     ]);
   }
 
+  /** Valida y crea una rutina nueva vacía (sin días/ejercicios), cerrando el modal de creación. */
   async function handleCreate() {
     if (!newName.trim()) { Alert.alert("Error", "El nombre es obligatorio"); return; }
     const { data, error } = await repo.createRoutine({ name: newName.trim(), notes: newNotes.trim() }, userId);
@@ -97,6 +112,7 @@ export default function RoutinesScreen() {
     setShowCreate(false);
   }
 
+  /** Guarda el nombre/notas editados de la rutina en `editSource`. */
   async function handleEdit() {
     if (!editSource || !editName.trim()) return;
     setEditSaving(true);
@@ -107,6 +123,7 @@ export default function RoutinesScreen() {
     setEditSource(null);
   }
 
+  /** Duplica `copySource` (días, ejercicios y series predefinidas incluidos) bajo el nuevo nombre `copyName`. */
   async function handleCopy() {
     if (!copySource || !copyName.trim()) return;
     setCopying(true);

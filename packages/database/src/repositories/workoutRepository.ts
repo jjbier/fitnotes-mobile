@@ -1,3 +1,10 @@
+/**
+ * Repositorio remoto del núcleo de entrenamiento: workouts → workout_exercises
+ * → sets, más utilidades de copiado, compartir como texto, import/export CSV
+ * y borrado masivo de historial. Es el repositorio con más superficie —
+ * usado por web para todo el CRUD de entrenamiento y por mobile solo para
+ * las operaciones analíticas/CSV fuera de alcance offline.
+ */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../supabase/types.js";
 
@@ -12,6 +19,7 @@ export function createWorkoutRepository(client: Client) {
   return {
     // ─── Workouts ──────────────────────────────────────────────────────────────
 
+    /** Entrenamiento de una fecha exacta; si hay duplicados (sin constraint UNIQUE, ver comentario abajo) devuelve el más antiguo por `created_at`. */
     async getWorkoutByDate(date: string) {
       // No hay constraint UNIQUE(user_id, date) en DB — .maybeSingle() lanzaría error
       // si alguna vez hay más de una fila para la fecha (p.ej. doble clic en "Iniciar
@@ -25,6 +33,7 @@ export function createWorkoutRepository(client: Client) {
       return { data: data?.[0] ?? null, error };
     },
 
+    /** Últimos `limit` entrenamientos, más recientes primero. */
     async getWorkouts(limit = 30) {
       return client
         .from("workouts")
@@ -33,6 +42,7 @@ export function createWorkoutRepository(client: Client) {
         .limit(limit);
     },
 
+    /** Últimos `limit` entrenamientos con número de ejercicios y volumen total (peso × reps de sets completos, no warmup) calculado en memoria. */
     async getWorkoutsWithSummary(limit = 10): Promise<{
       data: { id: string; date: string; exerciseCount: number; volume: number }[];
     }> {
@@ -81,6 +91,7 @@ export function createWorkoutRepository(client: Client) {
       };
     },
 
+    /** Crea un entrenamiento (sin constraint UNIQUE por fecha — ver {@link getWorkoutByDate}). */
     async createWorkout(
       data: { date: string; start_time?: string; comment?: string },
       userId: string
@@ -89,6 +100,7 @@ export function createWorkoutRepository(client: Client) {
       return client.from("workouts").insert(insert).select().single();
     },
 
+    /** Actualiza fecha/horas/duración/comentario de un entrenamiento. */
     async updateWorkout(
       id: string,
       data: { date?: string; start_time?: string; end_time?: string; duration_minutes?: number; comment?: string }
@@ -97,12 +109,14 @@ export function createWorkoutRepository(client: Client) {
       return client.from("workouts").update(update).eq("id", id).select().single();
     },
 
+    /** Borra un entrenamiento (cascada limpia sus workout_exercises/sets). */
     async deleteWorkout(id: string) {
       return client.from("workouts").delete().eq("id", id);
     },
 
     // ─── Workout Exercises ─────────────────────────────────────────────────────
 
+    /** Ejercicios de un entrenamiento, en orden. */
     async getWorkoutExercises(workoutId: string) {
       return client
         .from("workout_exercises")
@@ -111,6 +125,7 @@ export function createWorkoutRepository(client: Client) {
         .order("order_index", { ascending: true });
     },
 
+    /** Añade un ejercicio a un entrenamiento; `group_id`/`group_name` opcionales lo agrupan como superset. */
     async addExercise(
       data: {
         workout_id: string;
@@ -125,14 +140,17 @@ export function createWorkoutRepository(client: Client) {
       return client.from("workout_exercises").insert(insert).select().single();
     },
 
+    /** Quita un ejercicio de un entrenamiento (cascada limpia sus sets). */
     async removeExercise(id: string) {
       return client.from("workout_exercises").delete().eq("id", id);
     },
 
+    /** Cambia el grupo/superset de un ejercicio de entrenamiento. */
     async updateWorkoutExercise(id: string, patch: { group_id?: string | null; group_name?: string | null }) {
       return client.from("workout_exercises").update(patch).eq("id", id);
     },
 
+    /** Renombra un grupo/superset entero por `group_id`; nombre vacío lo limpia a `null`. */
     async updateGroupName(groupId: string, name: string) {
       return client
         .from("workout_exercises")
@@ -140,6 +158,7 @@ export function createWorkoutRepository(client: Client) {
         .eq("group_id", groupId);
     },
 
+    /** Reordena los ejercicios de un entrenamiento (una UPDATE por fila, en paralelo). */
     async reorderExercises(updates: { id: string; order_index: number }[]) {
       return Promise.all(
         updates.map(({ id, order_index }) =>
@@ -148,6 +167,12 @@ export function createWorkoutRepository(client: Client) {
       );
     },
 
+    /**
+     * Copia los ejercicios (y sus sets, marcados como no completados) de un
+     * entrenamiento origen a uno destino, insertando secuencialmente a partir
+     * de `startOrderIndex` y omitiendo ejercicios ya presentes en destino
+     * (`existingExerciseIds`) para no duplicar.
+     */
     async copyWorkout(
       sourceWorkoutId: string,
       targetWorkoutId: string,
@@ -208,6 +233,7 @@ export function createWorkoutRepository(client: Client) {
       }
     },
 
+    /** Reprograma un entrenamiento a otra fecha. */
     async moveWorkout(workoutId: string, targetDate: string) {
       return client
         .from("workouts")
@@ -219,6 +245,7 @@ export function createWorkoutRepository(client: Client) {
 
     // ─── Sets ──────────────────────────────────────────────────────────────────
 
+    /** Sets de un ejercicio de entrenamiento, en orden. */
     async getSets(workoutExerciseId: string) {
       return client
         .from("sets")
@@ -227,6 +254,7 @@ export function createWorkoutRepository(client: Client) {
         .order("order_index", { ascending: true });
     },
 
+    /** Crea un set (por defecto no completado — ver {@link updateSet} para marcarlo). */
     async createSet(
       data: {
         workout_exercise_id: string;
@@ -242,6 +270,7 @@ export function createWorkoutRepository(client: Client) {
       return client.from("sets").insert(insert).select().single();
     },
 
+    /** Actualiza un set; marcarlo `is_complete=true` remoto dispara el trigger SQL que actualiza `personal_records` (ver CLAUDE.md). */
     async updateSet(
       id: string,
       data: {
@@ -258,10 +287,12 @@ export function createWorkoutRepository(client: Client) {
       return client.from("sets").update(update).eq("id", id).select().single();
     },
 
+    /** Borra un set. */
     async deleteSet(id: string) {
       return client.from("sets").delete().eq("id", id);
     },
 
+    /** Reordena los sets de un ejercicio de entrenamiento (una UPDATE por fila, en paralelo). */
     async reorderSets(updates: { id: string; order_index: number }[]) {
       return Promise.all(
         updates.map(({ id, order_index }) =>
@@ -272,6 +303,7 @@ export function createWorkoutRepository(client: Client) {
 
     // ─── Share ─────────────────────────────────────────────────────────────────
 
+    /** Formatea un entrenamiento completo (fecha, ejercicios, sets) como texto plano legible, para compartir fuera de la app. */
     async shareWorkout(workoutId: string): Promise<string> {
       const [workoutRes, exercisesRes] = await Promise.all([
         client.from("workouts").select("*").eq("id", workoutId).single(),
@@ -325,6 +357,7 @@ export function createWorkoutRepository(client: Client) {
       return lines.join("\n");
     },
 
+    /** Sets de la última vez (distinta del entrenamiento actual) que se hizo un ejercicio — usado para prellenar/sugerir valores al añadirlo de nuevo. */
     async getLastSessionSets(exerciseId: string, currentWorkoutId: string) {
       const { data: wes } = await client
         .from("workout_exercises")
@@ -356,7 +389,7 @@ export function createWorkoutRepository(client: Client) {
       return sets ?? [];
     },
 
-    // Returns most recent workout date + best set stats per exercise (for global search)
+    /** Para cada ejercicio dado: fecha del entrenamiento más reciente en que aparece, y peso/reps máximos y nº de sets completados (no warmup) de esa sesión. Usado por la búsqueda global. */
     async getLastWorkoutByExercises(exerciseIds: string[]): Promise<Record<string, { date: string; maxWeight: number; maxReps: number; setCount: number }>> {
       if (exerciseIds.length === 0) return {};
       const { data } = await client
@@ -381,6 +414,14 @@ export function createWorkoutRepository(client: Client) {
       return result;
     },
 
+    /**
+     * Importa entrenamientos desde filas de CSV ya parseadas: agrupa por fecha y,
+     * dentro de cada fecha, por nombre de ejercicio (preservando el orden de
+     * aparición); crea ejercicios nuevos sobre la marcha si el nombre no existe
+     * (case-insensitive) por defecto como `WEIGHT_REPS`/kg. Si ya existe un
+     * entrenamiento en una fecha del CSV, esa fecha entera se omite (`skipped`)
+     * para no duplicar — no hace merge parcial.
+     */
     async importFromCSV(
       rows: Array<{
         date: string;
@@ -487,6 +528,7 @@ export function createWorkoutRepository(client: Client) {
       return { imported, skipped, newExercises };
     },
 
+    /** Exporta TODO el historial de entrenamientos del usuario a CSV (`Date,Exercise,Weight,Reps,Distance,Time,Comment,Completed,Warmup`), una fila por set (o una fila vacía de sets si el ejercicio no tiene ninguno). Comas en comentarios se sustituyen por `;` para no romper el CSV. */
     async exportAllCSV(): Promise<string> {
       const { data: workoutsData } = await client
         .from("workouts")
@@ -547,6 +589,15 @@ export function createWorkoutRepository(client: Client) {
       return rows.join("\n");
     },
 
+    /**
+     * Borra historial de entrenamiento con filtros combinables de rango de fecha
+     * y/o ejercicio concreto. Sin `exerciseId`: borra los entrenamientos enteros
+     * del rango. Con `exerciseId`: borra solo ese `workout_exercises` (y sus sets
+     * en cascada) dentro del rango, y además elimina los entrenamientos que
+     * quedan sin ningún ejercicio tras la operación.
+     * @returns número de entrenamientos borrados (sin `exerciseId`) o de filas
+     * de `workout_exercises` borradas (con `exerciseId`).
+     */
     async deleteWorkoutHistory(
       userId: string,
       opts: { dateFrom?: string; dateTo?: string; exerciseId?: string }

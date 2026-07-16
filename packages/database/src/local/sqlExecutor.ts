@@ -5,6 +5,7 @@
  * Local repositories depend on this interface, not on expo-sqlite directly,
  * so Vitest can substitute a Node driver (see local/testing/nodeSqlExecutor.ts).
  */
+/** Resultado de un `runAsync` — filas afectadas y, si aplica, el rowid autogenerado del INSERT. */
 export interface SqlRunResult {
   changes: number;
   lastInsertRowId?: number;

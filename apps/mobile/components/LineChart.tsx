@@ -1,12 +1,29 @@
+/**
+ * Gráfica de línea en SVG (`react-native-svg`) para series temporales
+ * (progreso de peso corporal, historial de un ejercicio, etc.), con relleno
+ * en degradado, línea de tendencia opcional, línea de objetivo opcional y
+ * soporte de tap sobre un punto para ver su valor exacto.
+ */
 import { useState } from "react";
 import { View } from "react-native";
 import { Svg, Path, Circle, Text as SvgText, Line, Rect, Defs, LinearGradient, Stop } from "react-native-svg";
 
+/** Un punto de la serie: etiqueta de eje X (ya formateada) y valor numérico de eje Y. */
 export interface ChartDataPoint {
   label: string;
   value: number;
 }
 
+/**
+ * Props de `LineChart`.
+ * - `data`: serie completa; internamente solo se dibujan los últimos 20 puntos (`data.slice(-20)`).
+ * - `width`/`height`: dimensiones en px del `Svg` (height por defecto 180).
+ * - `color`: color de la línea/área/degradado principal.
+ * - `mini`: modo miniatura (sparkline) — sin ejes, etiquetas, tooltip ni puntos tocables, con padding mínimo.
+ * - `goalValue`: si se indica (y no es `mini`), dibuja una línea discontinua de objetivo.
+ * - `trendData`: serie paralela opcional (misma longitud que `data`) dibujada como línea de tendencia discontinua naranja.
+ * - `onPointPress`: se invoca al tocar un punto con el índice dentro del array `data` original (no del recorte de 20).
+ */
 interface LineChartProps {
   data: ChartDataPoint[];
   width: number;
@@ -23,12 +40,14 @@ const PAD_BOTTOM = 28;
 const PAD_LEFT = 42;
 const PAD_RIGHT = 12;
 
+/** Redondea `v` hacia arriba al siguiente "número bonito" de su orden de magnitud, para el máximo del eje Y (p.ej. 47 → 50, 145 → 200). */
 function niceMax(v: number): number {
   if (v === 0) return 10;
   const magnitude = Math.pow(10, Math.floor(Math.log10(v)));
   return Math.ceil(v / magnitude) * magnitude;
 }
 
+/** Redondea `v` hacia abajo a un "número bonito" para el mínimo del eje Y, acotado por el rango respecto a `max` (evita mínimos negativos o pegados al valor real). */
 function niceMin(v: number, max: number): number {
   const range = max - v;
   if (range === 0 || v === 0) return 0;
@@ -36,6 +55,22 @@ function niceMin(v: number, max: number): number {
   return Math.floor(v / magnitude) * magnitude;
 }
 
+/**
+ * Renderiza la gráfica. Calcula el rango del eje Y (`niceMin`/`niceMax`) a
+ * partir de los valores visibles (incluyendo objetivo y tendencia si los
+ * hay), construye los `Path` de línea/área/tendencia con coordenadas
+ * absolutas de SVG, y superpone rectángulos invisibles por punto para
+ * capturar el tap.
+ *
+ * Cálculo del punto tocado: cada punto visible ocupa un "segmento" horizontal
+ * de ancho `chartW / (points.length - 1)` centrado en `xPos(i)` (mitad hacia
+ * cada punto vecino), así que tocar en cualquier parte de ese ancho —no solo
+ * exactamente sobre el círculo— selecciona el punto `i` más cercano. El
+ * índice que reciben `setSelectedIdx` y `onPointPress` se traduce de vuelta
+ * al array `data` original con `data.length - points.length + i`, ya que
+ * `points` es el recorte `data.slice(-20)` y ambos índices solo coinciden
+ * cuando la serie completa tiene 20 elementos o menos.
+ */
 export default function LineChart({ data, width, height = 180, color = "#6366f1", mini = false, goalValue, trendData, onPointPress }: LineChartProps) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 

@@ -1,3 +1,10 @@
+/**
+ * Decorador de `SqlExecutor` que serializa llamadas concurrentes — necesario
+ * porque SQLite (vía expo-sqlite) no soporta transacciones solapadas; sin
+ * esto, escrituras disparadas en ráfaga desde la UI (p. ej. cada pulsación)
+ * pueden perderse en silencio. Ver comentario de `serializeExecutor` abajo
+ * para el detalle del mecanismo de cola.
+ */
 import type { SqlExecutor } from "./sqlExecutor.js";
 
 /**

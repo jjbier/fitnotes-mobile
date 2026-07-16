@@ -1,14 +1,26 @@
+/**
+ * Store Zustand de la pantalla de Progreso: PRs cacheados por ejercicio,
+ * objetivos (goals) del usuario y los puntos agregados por día que
+ * alimentan los gráficos de progreso.
+ */
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 import { calculate1RM } from "../utils/calculations.js";
 import type { PersonalRecord } from "../types/index.js";
 
+/** Objetivo de peso/reps que el usuario se ha fijado para un ejercicio. */
 interface Goal {
   exerciseId: string;
   targetWeight: number;
   targetReps: number;
 }
 
+/**
+ * Punto agregado de un día concreto en el gráfico de progreso de un
+ * ejercicio: máximos y totales de cada métrica (peso, reps, distancia,
+ * tiempo), el 1RM estimado (Brzycki) de ese día y `weightByReps`, el mejor
+ * peso levantado para cada número de repeticiones ese día.
+ */
 export interface ChartPoint {
   date: string;
   maxWeight: number;
@@ -26,25 +38,34 @@ export interface ChartPoint {
 }
 
 interface ProgressState {
+  /** PRs cacheados, indexados por `exercise_id`. */
   personalRecords: Record<string, PersonalRecord[]>;
   goals: Goal[];
+  /** Puntos de gráfico cacheados, indexados por `exercise_id`. */
   chartData: Record<string, ChartPoint[]>;
   isLoading: boolean;
   error: string | null;
 }
 
 interface ProgressActions {
+  /** Reemplaza el índice completo de PRs, reagrupando la lista dada por `exercise_id`. */
   loadPersonalRecords: (records: PersonalRecord[]) => void;
+  /** Añade un PR a la lista del ejercicio correspondiente (no reemplaza ni deduplica). */
   addPersonalRecord: (record: PersonalRecord) => void;
+  /** Devuelve el mayor 1RM estimado (fórmula de Brzycki) entre los PRs cacheados del ejercicio; `null` si no hay ninguno. */
   calculateEstimated1RM: (exerciseId: string) => number | null;
+  /** Crea o reemplaza (por `exerciseId`) el objetivo del ejercicio. */
   setGoal: (goal: Goal) => void;
   removeGoal: (exerciseId: string) => void;
+  /** Reemplaza los puntos de gráfico cacheados de un ejercicio. */
   loadChartData: (exerciseId: string, data: ChartPoint[]) => void;
   setLoading: (v: boolean) => void;
   setError: (v: string | null) => void;
 }
 
 type ProgressStore = ProgressState & ProgressActions;
+
+/** Store combinado (estado + acciones) de progreso, con Immer para mutaciones ergonómicas. */
 
 export const useProgressStore = create<ProgressStore>()(
   immer((set, get) => ({

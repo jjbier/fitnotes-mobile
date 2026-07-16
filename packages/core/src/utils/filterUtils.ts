@@ -1,3 +1,4 @@
+/** Utilidades de filtrado de listas de ejercicios (búsqueda por nombre). */
 import type { Exercise } from "../types/index.js";
 
 /**

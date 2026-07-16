@@ -43,6 +43,7 @@ function mapEntryRow(row: RawRow): EntryRow {
  */
 export function createLocalBodyTrackerRepository(db: SqlExecutor) {
   return {
+    /** Lee `body_measurements` vivas (activadas primero, luego por orden manual). Solo lectura. */
     async getMeasurements(): Promise<{ data: MeasurementRow[]; error: RepoError | null }> {
       const rows = await db.getAllAsync<RawRow>(
         `SELECT * FROM body_measurements WHERE _deleted = 0 ORDER BY is_enabled DESC, order_index ASC`
@@ -50,6 +51,7 @@ export function createLocalBodyTrackerRepository(db: SqlExecutor) {
       return { data: rows.map(mapMeasurementRow), error: null };
     },
 
+    /** Actualiza `order_index` de varias medidas en `body_measurements`, una `pending_op` de update por fila, todo en una transacción. */
     async reorderMeasurements(
       updates: { id: string; order_index: number }[]
     ): Promise<{ error: RepoError | null }[]> {
@@ -66,6 +68,7 @@ export function createLocalBodyTrackerRepository(db: SqlExecutor) {
       return updates.map(() => ({ error: null }));
     },
 
+    /** Inserta una nueva medida en `body_measurements` con UUID generado en cliente y encola el insert. */
     async createMeasurement(
       data: {
         name: string;
@@ -108,6 +111,7 @@ export function createLocalBodyTrackerRepository(db: SqlExecutor) {
       return { data: row, error: null };
     },
 
+    /** Actualiza campos parciales de una medida en `body_measurements` (UPDATE dinámico por claves presentes) y encola el update. */
     async updateMeasurement(
       id: string,
       data: { name?: string; unit?: string; is_enabled?: boolean; goal_type?: string; goal_value?: number | null }
@@ -129,6 +133,12 @@ export function createLocalBodyTrackerRepository(db: SqlExecutor) {
       return { data: row ? mapMeasurementRow(row) : null, error: null };
     },
 
+    /**
+     * Tombstonea una medida en `body_measurements` y, a mano, todas sus
+     * `body_measurement_entries` vivas — espeja el `ON DELETE CASCADE`
+     * remoto (aquí SQLite corre sin `PRAGMA foreign_keys`). Un `pending_op`
+     * de delete por cada entrada más el de la propia medida.
+     */
     async deleteMeasurement(id: string): Promise<{ error: RepoError | null }> {
       await db.withTransactionAsync(async () => {
         const ts = nowIso();
@@ -148,6 +158,7 @@ export function createLocalBodyTrackerRepository(db: SqlExecutor) {
       return { error: null };
     },
 
+    /** Lee las últimas `limit` entradas vivas de una medida, más recientes primero. Solo lectura. */
     async getEntries(measurementId: string, limit = 50): Promise<{ data: EntryRow[]; error: RepoError | null }> {
       const rows = await db.getAllAsync<RawRow>(
         `SELECT * FROM body_measurement_entries WHERE _deleted = 0 AND measurement_id = ? ORDER BY recorded_at DESC LIMIT ?`,
@@ -156,6 +167,7 @@ export function createLocalBodyTrackerRepository(db: SqlExecutor) {
       return { data: rows.map(mapEntryRow), error: null };
     },
 
+    /** Lee todas las entradas vivas del usuario, sin filtrar por medida (usado para CSV/analíticas de conjunto). Solo lectura. */
     async getAllEntries(userId: string): Promise<{ data: EntryRow[]; error: RepoError | null }> {
       const rows = await db.getAllAsync<RawRow>(
         `SELECT * FROM body_measurement_entries WHERE _deleted = 0 AND user_id = ? ORDER BY recorded_at DESC`,
@@ -164,6 +176,7 @@ export function createLocalBodyTrackerRepository(db: SqlExecutor) {
       return { data: rows.map(mapEntryRow), error: null };
     },
 
+    /** Inserta un nuevo registro en `body_measurement_entries` con UUID de cliente y encola el insert. */
     async addEntry(
       data: { measurement_id: string; value: number; comment?: string; recorded_at?: string },
       userId: string
@@ -191,6 +204,7 @@ export function createLocalBodyTrackerRepository(db: SqlExecutor) {
       return { data: row, error: null };
     },
 
+    /** Tombstonea una única entrada de `body_measurement_entries` y encola el delete. */
     async deleteEntry(id: string): Promise<{ error: RepoError | null }> {
       await db.withTransactionAsync(async () => {
         const ts = nowIso();
@@ -200,6 +214,7 @@ export function createLocalBodyTrackerRepository(db: SqlExecutor) {
       return { error: null };
     },
 
+    /** Tombstonea todas las entradas vivas de una medida sin borrar la medida en sí — "vaciar histórico" manteniendo la configuración. Un `pending_op` de delete por entrada. */
     async resetMeasurement(measurementId: string): Promise<{ error: RepoError | null }> {
       await db.withTransactionAsync(async () => {
         const ts = nowIso();
@@ -216,6 +231,11 @@ export function createLocalBodyTrackerRepository(db: SqlExecutor) {
       return { error: null };
     },
 
+    /**
+     * Inserta las medidas por defecto (peso corporal, grasa corporal) si el
+     * usuario aún no tiene ninguna en `body_measurements` — bootstrap de un
+     * invitado/cuenta nueva sin depender de un pull remoto.
+     */
     async seedDefaultMeasurementsIfNeeded(userId: string): Promise<{ seeded: boolean }> {
       const existing = await db.getFirstAsync<{ count: number }>(
         `SELECT COUNT(*) as count FROM body_measurements WHERE _deleted = 0 AND user_id = ?`,
@@ -261,4 +281,5 @@ export function createLocalBodyTrackerRepository(db: SqlExecutor) {
   };
 }
 
+/** Tipo del repositorio devuelto por {@link createLocalBodyTrackerRepository}. */
 export type LocalBodyTrackerRepository = ReturnType<typeof createLocalBodyTrackerRepository>;

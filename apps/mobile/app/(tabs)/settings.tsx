@@ -23,6 +23,7 @@ import { createWorkoutRepository, createBackupRepository, createBodyTrackerRepos
 import { useRepositories } from "../../contexts/RepositoryContext";
 import { useSyncStatus } from "../../contexts/SyncContext";
 
+/** Parsea el texto pegado de un CSV exportado previamente (formato `Date,Exercise,Weight,Reps,...,Completed,Warmup`) en filas tipadas, descartando líneas inválidas. */
 function parseCSVRows(csv: string) {
   const lines = csv.trim().split(/\r?\n/);
   if (lines.length < 2) return [];
@@ -51,6 +52,19 @@ function parseCSVRows(csv: string) {
   return rows;
 }
 
+/**
+ * Tab Configuración: perfil (nombre visible o CTAs de "Crear cuenta"/"Iniciar
+ * sesión" en modo invitado), preferencias (unidad de peso, incremento global,
+ * inicio de semana, toggles de entrenamiento y rest timer, límite de reps
+ * para récords estimados), apariencia (tema claro/oscuro/sistema),
+ * categorías visibles en Inicio, accesos a calculadoras y a medidas
+ * corporales, exportación/importación CSV, copia de seguridad completa
+ * (.fitnotes) y restauración, recalcular PRs, eliminar historial/cuenta, y
+ * cerrar sesión. Todas las preferencias se leen/escriben siempre desde la
+ * tabla local (invitado o cuenta real) vía `usePreferencesStore` +
+ * `preferencesRepo`; con cuenta real también se replican en `user_metadata`
+ * en segundo plano para sincronizar entre dispositivos.
+ */
 export default function SettingsScreen() {
   const colors = useTheme();
   const router = useRouter();
@@ -83,6 +97,12 @@ export default function SettingsScreen() {
     hidden_category_ids: hiddenCategoryIds,
   } = preferences;
 
+  /**
+   * Patrón central de escritura de una preferencia: actualiza el store en
+   * memoria, persiste en la tabla local (`user_preferences`) y, si hay cuenta
+   * real (no invitado), replica el cambio en `user_metadata` de Supabase en
+   * segundo plano (sync entre dispositivos, sin esperar la respuesta).
+   */
   async function persistPreference<K extends keyof UserPreferences>(key: K, value: UserPreferences[K]) {
     setPreferenceInStore(key, value);
     await preferencesRepo.set(key, value);
@@ -144,6 +164,8 @@ export default function SettingsScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preferencesLoaded]);
 
+  // Handlers de preferencias individuales — todos delegan en `persistPreference`
+  // tras validar/parsear el valor cuando viene de un TextInput.
   async function handleShowSetCountHome(val: boolean) {
     await persistPreference("show_set_count_home", val);
   }
@@ -214,6 +236,7 @@ export default function SettingsScreen() {
     await persistPreference("estimated_records_rep_limit", !isNaN(parsed) && parsed > 0 ? parsed : null);
   }
 
+  /** Exporta todo el historial de entrenamientos a CSV (repo remoto, requiere cuenta) y abre el share sheet nativo. */
   async function handleExportCSV() {
     if (!requireAccount()) return;
     setExportLoading(true);
@@ -224,6 +247,7 @@ export default function SettingsScreen() {
     await Share.share({ message: csv, title: "FitNotes Export" });
   }
 
+  /** Parsea el CSV pegado e importa las filas válidas al historial remoto, omitiendo fechas que ya tengan entrenamiento y creando ejercicios nuevos si hace falta. */
   async function handleImportCSV() {
     if (!requireAccount()) return;
     const rows = parseCSVRows(importCSV);
@@ -242,6 +266,7 @@ export default function SettingsScreen() {
     );
   }
 
+  /** Recalcula todos los récords personales desde cero en el backend (repo remoto, requiere cuenta), mostrando el estado del proceso durante 3s. */
   async function handleRecalcPRs() {
     if (!requireAccount()) return;
     const { data: { session } } = await supabase.auth.getSession();
@@ -258,6 +283,7 @@ export default function SettingsScreen() {
     }
   }
 
+  /** Genera una copia de seguridad completa (JSON `.fitnotes`) desde el backend y la comparte vía el share sheet nativo. */
   async function handleFullBackup() {
     if (!requireAccount()) return;
     const { data: { session } } = await supabase.auth.getSession();
@@ -275,6 +301,7 @@ export default function SettingsScreen() {
     }
   }
 
+  /** Parsea el texto pegado como JSON y valida que tenga forma de `BackupData` (`isBackupData`); si no es válido, deja `restoreParsed` en `null`. */
   function handleRestorePasteChange(text: string) {
     setRestorePaste(text);
     if (!text.trim()) { setRestoreParsed(null); return; }
@@ -286,6 +313,7 @@ export default function SettingsScreen() {
     }
   }
 
+  /** Ejecuta la restauración de la copia de seguridad parseada, reemplazando todos los datos remotos del usuario. */
   async function handleExecuteRestore() {
     if (!restoreParsed) return;
     if (!requireAccount()) return;
@@ -306,6 +334,7 @@ export default function SettingsScreen() {
     }
   }
 
+  /** Exporta las medidas corporales a CSV (repo remoto, requiere cuenta) y abre el share sheet nativo. */
   async function handleExportBodyTrackerCSV() {
     if (!requireAccount()) return;
     setBodyExportLoading(true);
@@ -319,6 +348,7 @@ export default function SettingsScreen() {
     }
   }
 
+  /** Elimina el historial de entrenamientos remoto según los filtros de fecha/ejercicio indicados (vacíos = elimina todo). */
   async function handleDeleteHistory() {
     if (!requireAccount()) return;
     const { data: { session } } = await supabase.auth.getSession();
@@ -341,6 +371,7 @@ export default function SettingsScreen() {
     }
   }
 
+  /** Guarda el nombre visible (`display_name`) del perfil, mostrando brevemente el estado "¡Guardado!". */
   async function handleSave() {
     setSaveStatus("saving");
     await persistPreference("display_name", displayName);
@@ -348,6 +379,12 @@ export default function SettingsScreen() {
     setTimeout(() => setSaveStatus("idle"), 2000);
   }
 
+  /**
+   * Pide confirmación (avisando de cambios sin sincronizar si `pendingCount`
+   * > 0) y dispara `supabase.auth.signOut()`. El vaciado de la DB local y la
+   * navegación de vuelta a `(tabs)` como nuevo invitado los hace `_layout.tsx`
+   * raíz al reaccionar al evento `SIGNED_OUT` — esta función solo inicia el proceso.
+   */
   async function handleSignOut() {
     const message =
       pendingCount > 0

@@ -1,3 +1,11 @@
+/**
+ * Store Zustand del entrenamiento activo y del historial de entrenamientos.
+ * `sets` está indexado por `workout_exercise_id` (no por `exercise_id`) para
+ * soportar el mismo ejercicio repetido varias veces en un entrenamiento
+ * (cada aparición es un `WorkoutExercise` distinto). Los ids nuevos se
+ * generan aquí mismo con `generateUUID()` — nunca ids temporales — para que
+ * un registro creado offline conserve el mismo id tras sincronizar.
+ */
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 import type { Workout, WorkoutExercise, Set } from "../types/index.js";
@@ -7,6 +15,7 @@ interface WorkoutState {
   currentDate: string;
   activeWorkout: Workout | null;
   exercises: WorkoutExercise[];
+  /** Sets de cada ejercicio del entrenamiento activo, indexados por `workout_exercise_id`. */
   sets: Record<string, Set[]>;
   activeExerciseId: string | null;
   workouts: Workout[];
@@ -15,27 +24,49 @@ interface WorkoutState {
 }
 
 interface WorkoutActions {
+  /** Crea un `activeWorkout` nuevo (con id y `start_time` generados aquí) para `date` y resetea ejercicios/sets. */
   startWorkout: (date: string) => void;
+  /** Reemplaza `activeWorkout`/`exercises`/`sets` con un entrenamiento ya existente (p. ej. al abrir uno del historial). */
   loadWorkout: (workout: Workout, exercises: WorkoutExercise[], sets: Record<string, Set[]>) => void;
   loadWorkouts: (workouts: Workout[]) => void;
+  /** Añade un entrenamiento al principio del historial si no existe ya uno con el mismo id (evita duplicados). */
   addWorkoutToHistory: (workout: Workout) => void;
+  /**
+   * Añade un ejercicio al entrenamiento activo (no-op si no hay uno activo).
+   * Si `weId` no se indica, genera un id nuevo; inicializa su lista de sets
+   * vacía y lo marca como `activeExerciseId`.
+   */
   addExerciseToWorkout: (exerciseId: string, weId?: string) => void;
+  /** Quita el ejercicio del entrenamiento activo y borra sus sets cacheados. */
   removeExerciseFromWorkout: (workoutExerciseId: string) => void;
+  /** Quita el entrenamiento del historial; si era el `activeWorkout`, también lo limpia (junto con `exercises`/`sets`). */
   removeWorkoutFromHistory: (workoutId: string) => void;
+  /** Crea un set nuevo para el ejercicio (id generado, incompleto, no warmup, al final de la lista) mezclando los valores de `partial` encima de esos defaults. */
   createSet: (workoutExerciseId: string, partial?: Partial<Set>) => void;
+  /** Mergea un patch parcial sobre el set indicado. */
   updateSet: (workoutExerciseId: string, setId: string, patch: Partial<Set>) => void;
   deleteSet: (workoutExerciseId: string, setId: string) => void;
   markSetComplete: (workoutExerciseId: string, setId: string, complete: boolean) => void;
+  /** Reescribe `order_index` de los ejercicios del entrenamiento activo según el orden de `orderedIds`. */
   reorderExercises: (orderedIds: string[]) => void;
   setActiveExercise: (exerciseId: string | null) => void;
+  /** Actualiza el comentario del `activeWorkout` (no-op si no hay uno activo). */
   setWorkoutComment: (comment: string) => void;
+  /** Reescribe `order_index` de los sets de un ejercicio según el orden de `orderedIds`. */
   reorderSets: (weId: string, orderedIds: string[]) => void;
+  /** Agrupa dos ejercicios del entrenamiento activo como superset, asignándoles un `group_id` nuevo compartido. */
   groupExercises: (weId1: string, weId2: string) => void;
+  /** Quita el `group_id` del ejercicio (lo saca de su superset). */
   ungroupExercise: (weId: string) => void;
+  /** Asigna directamente el `group_id` de un ejercicio (usar para añadir/mover un ejercicio a un grupo ya existente). */
   updateWorkoutExerciseGroup: (weId: string, groupId: string | undefined) => void;
+  /** Renombra el grupo (superset) con ese `group_id` en todos los ejercicios que lo comparten; un nombre vacío limpia `group_name`. */
   renameGroup: (groupId: string, name: string) => void;
+  /** Fija `start_time` del `activeWorkout` solo si aún no tenía uno (no sobrescribe un inicio ya registrado). */
   setWorkoutStartTime: (startTime: string) => void;
+  /** Marca `end_time` como ahora y calcula `duration_minutes` a partir de `start_time` (redondeado a minutos enteros); no-op si no hay entrenamiento activo. */
   finishWorkout: () => void;
+  /** Restaura el store completo a `initialState` (entrenamiento activo, historial y sets incluidos). */
   resetWorkout: () => void;
   setCurrentDate: (date: string) => void;
   setLoading: (v: boolean) => void;
@@ -55,6 +86,7 @@ const initialState: WorkoutState = {
   error: null,
 };
 
+/** Store combinado (estado + acciones) del entrenamiento, con Immer para mutaciones ergonómicas. */
 export const useWorkoutStore = create<WorkoutStore>()(
   immer((set) => ({
     ...initialState,

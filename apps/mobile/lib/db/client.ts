@@ -1,7 +1,17 @@
+/**
+ * Cliente singleton de la base de datos SQLite local del dispositivo.
+ *
+ * Abre `fitnotes.db` con `expo-sqlite`, aplica las migraciones locales
+ * pendientes y expone un único `SqlExecutor` compartido (vía
+ * `serializeExecutor`, de `@fitnotes/database`) que serializa el acceso
+ * concurrente. Toda la UI y los repos locales pasan por `getLocalDb()`; nunca
+ * abren `expo-sqlite` directamente.
+ */
 import * as SQLite from "expo-sqlite";
 import type { SqlExecutor, SqlRunResult } from "@fitnotes/database";
 import { runLocalMigrations, serializeExecutor } from "@fitnotes/database";
 
+/** Adapta la API nativa de `expo-sqlite` (`SQLite.SQLiteDatabase`) a la interfaz `SqlExecutor` que consume `@fitnotes/database`. */
 function wrapDatabase(db: SQLite.SQLiteDatabase): SqlExecutor {
   return {
     execAsync: (sql) => db.execAsync(sql),

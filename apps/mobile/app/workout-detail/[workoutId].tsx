@@ -23,6 +23,7 @@ interface DetailExercise {
   sets: DetailSet[];
 }
 
+/** Formatea una serie de solo lectura como texto compacto según qué campos tenga (peso×reps, reps, distancia+tiempo, etc.). */
 function formatSet(s: DetailSet): string {
   if (s.weight != null && s.reps != null) return `${s.weight} kg × ${s.reps}`;
   if (s.reps != null) return `${s.reps} reps`;
@@ -32,6 +33,14 @@ function formatSet(s: DetailSet): string {
   return "—";
 }
 
+/**
+ * Vista de solo lectura de un entrenamiento por su `workoutId` (arbitrario, no
+ * necesariamente el activo ni el de hoy): usada como destino al navegar desde el
+ * historial de un ejercicio ("ver entrenamiento completo") para consultar todas las
+ * series de todos los ejercicios de esa sesión. Sin edición ni CRUD — solo lectura vía
+ * `createCalendarRepository(supabase)` (repo remoto ad-hoc, fuera del patrón local de
+ * `useRepositories()` porque esta consulta no forma parte del flujo offline habitual).
+ */
 export default function WorkoutDetailScreen() {
   const colors = useTheme();
   const router = useRouter();

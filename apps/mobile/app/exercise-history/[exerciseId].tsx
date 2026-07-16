@@ -38,6 +38,7 @@ type Session = {
 type Metric = "weight" | "volume" | "reps" | "totalReps" | "est1rm" | "distance" | "totalDistance" | "time" | "totalTime" | "speed" | "pace" | "weightByReps" | "repMaxProgression";
 type HistoryTab = "history" | "chart" | "stats";
 
+/** Formatea una fecha ISO como "día mes" corto en español (ej. "3 jul"), usado en las etiquetas del eje del gráfico. */
 function formatDateShort(dateStr: string): string {
   const date = new Date(dateStr + "T00:00:00");
   return date.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
@@ -59,6 +60,18 @@ const ALL_METRICS: { key: Metric; label: string; types: ExerciseType[] | "all" }
   { key: "repMaxProgression", label: "Progresión rep max", types: [ExerciseType.WEIGHT_REPS] },
 ];
 
+/**
+ * Pantalla de historial de un ejercicio: tres pestañas — Historial (sesiones pasadas
+ * con sus series, edición inline, selección múltiple para editar/eliminar en lote,
+ * y "copiar a hoy"), Gráfico (progresión de la métrica elegida —peso, volumen, 1RM
+ * estimado, reps, distancia, tiempo, velocidad, ritmo, o series especiales como
+ * "peso por reps objetivo"— con línea de tendencia opcional y exportación a imagen
+ * vía `react-native-view-shot`) y Estadísticas (resumen agregado por periodo).
+ * Usa el patrón split-repo: `useRepositories()` (local, para leer/mutar series del
+ * historial) junto a repos remotos creados ad-hoc (`createExerciseRepository`,
+ * `createProgressRepository` sobre `supabase`) para operaciones de solo-lectura pesadas
+ * (historial completo, datos del gráfico) que quedan fuera del alcance offline.
+ */
 export default function ExerciseHistoryScreen() {
   const colors = useTheme();
   const router = useRouter();
@@ -87,6 +100,7 @@ export default function ExerciseHistoryScreen() {
   const [exportingImage, setExportingImage] = useState(false);
   const chartShotRef = useRef<ViewShot>(null);
 
+  /** Captura el `ViewShot` que envuelve el gráfico como PNG y lo comparte con el share sheet nativo, si está disponible. */
   async function handleExportImage() {
     if (!chartShotRef.current?.capture) return;
     setExportingImage(true);
@@ -131,6 +145,11 @@ export default function ExerciseHistoryScreen() {
   const exerciseType = (type ?? ExerciseType.WEIGHT_REPS) as ExerciseType;
   const unit = weightUnit ?? "kg";
 
+  /**
+   * Copia una serie del historial al entrenamiento de hoy: reutiliza (o crea) el
+   * workout y el `workout_exercise` de hoy para este ejercicio, y crea una serie nueva
+   * con los mismos valores (peso/reps/distancia/tiempo) al final de la lista.
+   */
   async function handleCopyToToday(set: SetRow) {
     setCopyingSetId(set.id);
     try {
@@ -276,6 +295,7 @@ export default function ExerciseHistoryScreen() {
     ]);
   }
 
+  /** Aplica peso y/o reps (los campos vacíos no se tocan) a todas las series seleccionadas en modo multi-select. */
   async function handleBulkEdit() {
     if (!bulkWeight && !bulkReps) return;
     setBulkSaving(true);
@@ -303,6 +323,7 @@ export default function ExerciseHistoryScreen() {
     m.types === "all" || m.types.includes(exerciseType)
   );
 
+  /** Extrae del punto de datos del gráfico (`ChartPoint`) el valor numérico correspondiente a la métrica seleccionada. */
   function metricValue(p: typeof chartPoints[number]): number {
     if (metric === "weight") return p.maxWeight;
     if (metric === "volume") return p.totalVolume;
@@ -320,6 +341,12 @@ export default function ExerciseHistoryScreen() {
 
   const isSpecialMetric = metric === "weightByReps" || metric === "repMaxProgression";
 
+  /**
+   * Para las métricas especiales ("peso por reps objetivo" y "progresión de rep max")
+   * se deriva un valor por sesión a partir del 1RM estimado y el número de reps objetivo
+   * (`repTarget`), descartando sesiones sin dato; para el resto de métricas se usa
+   * directamente `metricValue`.
+   */
   const rawChartData: ChartDataPoint[] = isSpecialMetric
     ? chartPoints
         .map((p) => ({
@@ -331,6 +358,7 @@ export default function ExerciseHistoryScreen() {
         .filter((p): p is ChartDataPoint => p.value != null && p.value > 0)
     : chartPoints.map((p) => ({ label: formatDateShort(p.date), value: metricValue(p) }));
 
+  /** Calcula la recta de tendencia (regresión lineal por mínimos cuadrados) sobre los valores del gráfico, si "Tendencia" está activada. */
   const trendValues = showTrend && rawChartData.length >= 2
     ? (() => {
         const values = rawChartData.map((p) => p.value);

@@ -1,6 +1,20 @@
+/**
+ * Contexto de inyección de dependencias para toda la capa offline de mobile.
+ *
+ * Provee, a través de `useRepositories()`, la DB SQLite local ya migrada, los
+ * 7 repositorios locales (workout/exercise/routine/body-tracker/goals/
+ * progress/preferences) construidos sobre esa misma conexión, y la identidad
+ * activa del dispositivo (invitado o cuenta real vinculada). La UI de mobile
+ * SOLO debe hablar con estos repos locales — los repos remotos quedan
+ * reservados al `SyncEngine` y a analíticas fuera de alcance offline (ver
+ * `.agent/context/offline-sync.md`). También resuelve el arranque hidratando
+ * `usePreferencesStore`/`useThemeModeStore` desde la tabla local, y expone las
+ * operaciones de identidad (`refreshIdentity`, `wipeAndSetIdentity`) que usan
+ * las pantallas de cuenta para reaccionar a login/logout/claim.
+ */
 import { createContext, useCallback, useContext, useEffect, useState, useMemo, type ReactNode } from "react";
 import { View, ActivityIndicator, Text, StyleSheet } from "react-native";
-import { usePreferencesStore } from "@fitnotes/core";
+import { usePreferencesStore, useWorkoutStore, useExerciseStore, useRoutineStore } from "@fitnotes/core";
 import { useThemeModeStore } from "../lib/theme";
 import type {
   SqlExecutor,
@@ -67,6 +81,19 @@ const styles = StyleSheet.create({
   },
 });
 
+/**
+ * Provider raíz de la capa offline: abre/espera la DB SQLite local
+ * (`getLocalDb()`) y, una vez lista, delega en `RepositoryProviderReady` para
+ * construir los repos y resolver la identidad. Muestra un spinner mientras la
+ * DB no está lista y un mensaje de error si `getLocalDb()` falla (p.ej. disco
+ * lleno o migración corrupta) — un fallo aquí bloquea toda la app, ya que
+ * ninguna pantalla puede leer/escribir sin `db`.
+ *
+ * También es dueño de `wipeAndSetIdentity` (en vez de vivir en
+ * `RepositoryProviderReady`) porque necesita `setDb`: tras vaciar la DB el
+ * executor es una instancia nueva y hay que propagarla para que los repos y
+ * la identidad memoizados más abajo se reconstruyan contra ella.
+ */
 export function RepositoryProvider({ children }: { children: ReactNode }) {
   const [db, setDb] = useState<SqlExecutor | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +114,13 @@ export function RepositoryProvider({ children }: { children: ReactNode }) {
       await setActiveIdentity(fresh, { activeUserId: identity.userId, isGuest: identity.isGuest });
     }
     setDb(fresh);
+    // Las pantallas ya montadas (p.ej. la tab "Hoy") solo recargan sus datos
+    // en el mount inicial — sin esto, tras un wipe seguirían mostrando el
+    // historial de workouts/ejercicios/rutinas de la identidad anterior hasta
+    // el próximo reinicio de la app.
+    useWorkoutStore.getState().resetWorkout();
+    useExerciseStore.getState().loadExercises([], []);
+    useRoutineStore.getState().loadRoutines([]);
   }, []);
 
   if (error) {
@@ -112,6 +146,20 @@ export function RepositoryProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Construye los 7 repos locales (memoizados por `db`, así que solo se
+ * recrean tras un wipe) y resuelve/hidrata la identidad activa vía
+ * `getOrCreateLocalIdentity` (crea un invitado en el primer arranque si no
+ * existe ninguna fila en `local_identity`). Mientras la identidad no está
+ * resuelta muestra un spinner, para no dejar pasar a pantallas que asuman
+ * `userId` disponible.
+ *
+ * También hidrata `usePreferencesStore`/`useThemeModeStore` desde
+ * `preferencesRepo.getAll()` en un efecto separado (dependiente de `db`, para
+ * volver a correr tras un wipe) — si hay sesión de cuenta real activa,
+ * `_layout.tsx` sobrescribe esto después con `user_metadata` remoto (el
+ * remoto gana, para reflejar cambios hechos desde otro dispositivo).
+ */
 function RepositoryProviderReady({
   db,
   wipeAndSetIdentity,
@@ -184,6 +232,14 @@ function RepositoryProviderReady({
   );
 }
 
+/**
+ * Hook de acceso al contexto de repos/identidad — punto de entrada único que
+ * usan las pantallas para leer/escribir datos locales (`workoutRepo`,
+ * `exerciseRepo`, `routineRepo`, `bodyTrackerRepo`, `goalsRepo`,
+ * `progressRepo`, `preferencesRepo`), conocer la identidad activa
+ * (`userId`, `isGuest`) y reaccionar a cambios de cuenta (`refreshIdentity`,
+ * `wipeAndSetIdentity`). Lanza si se llama fuera de un `RepositoryProvider`.
+ */
 export function useRepositories(): RepositoryContextValue {
   const ctx = useContext(RepositoryContext);
   if (!ctx) throw new Error("useRepositories() debe usarse dentro de <RepositoryProvider>");

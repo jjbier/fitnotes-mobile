@@ -1,9 +1,15 @@
+/**
+ * Repositorio de backup/restauración completa (remoto, solo Supabase) y
+ * recálculo de PRs a partir del historial en servidor. Usado por web y por
+ * las pantallas de mobile que requieren cuenta real (fuera de alcance offline).
+ */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../supabase/types.js";
 
 type Client = SupabaseClient<Database>;
 type BackupEntry = Record<string, unknown>;
 
+/** Volcado completo de los datos de un usuario, en el formato exportado/importado por el backup JSON. */
 export interface BackupData {
   version: number;
   exported_at: string;
@@ -22,6 +28,7 @@ export interface BackupData {
   exercise_goals: BackupEntry[];
 }
 
+/** Type guard mínimo para un JSON de backup: valida versión, `exported_at` y que `workouts` sea array (no valida el resto de tablas). */
 export function isBackupData(v: unknown): v is BackupData {
   if (!v || typeof v !== "object") return false;
   const o = v as Record<string, unknown>;
@@ -36,8 +43,10 @@ const DELETE_TABLES = [
   "exercise_goals", "exercises", "categories",
 ] as const;
 
+/** Repositorio de exportación/restauración total de datos y recálculo de PRs, contra las tablas remotas de Supabase. */
 export function createBackupRepository(client: Client) {
   return {
+    /** Exporta TODAS las tablas de datos del usuario (12 tablas, en paralelo salvo `exercise_goals`) a un único objeto `BackupData` con marca de tiempo. */
     async exportBackup(userId: string): Promise<BackupData> {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const q = (table: string) => (client.from(table as never) as any).select("*").eq("user_id", userId);
@@ -60,6 +69,14 @@ export function createBackupRepository(client: Client) {
       };
     },
 
+    /**
+     * Restaura un `BackupData` sobrescribiendo TODOS los datos actuales del usuario:
+     * primero borra todas las tablas en orden hijos→padres (`DELETE_TABLES`, evita
+     * violar FKs), luego inserta en orden padres→hijos por chunks de 500 filas
+     * (límite de tamaño de payload de Supabase), forzando `user_id` en cada fila
+     * restaurada (por si el backup viene de otra cuenta/export antiguo).
+     * `onStep` permite reportar progreso a la UI; cualquier error aborta lanzando.
+     */
     async restoreBackup(userId: string, data: BackupData, onStep?: (message: string) => void): Promise<void> {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const tbl = (table: string) => client.from(table as never) as any;
@@ -96,6 +113,12 @@ export function createBackupRepository(client: Client) {
       }
     },
 
+    /**
+     * Borra y regenera desde cero todos los `personal_records` del usuario a partir
+     * del historial de sets completos (no warmup, con peso y reps) en `workout_exercises`.
+     * Para cada ejercicio guarda el peso máximo por número de reps.
+     * @returns número de filas de PR insertadas.
+     */
     async recalculatePersonalRecords(userId: string): Promise<number> {
       await client.from("personal_records").delete().eq("user_id", userId);
 

@@ -1,6 +1,13 @@
+/**
+ * Cálculos de fitness puros y sin estado: qué campos exige cada tipo de
+ * ejercicio, formato de sets/duraciones para mostrar en la UI, fórmula de
+ * 1RM (Brzycki) y su inversa, volumen, ritmo/velocidad y el calculador de
+ * discos de barra.
+ */
 import { ExerciseType } from "../types/index.js";
 import type { Set } from "../types/index.js";
 
+/** Qué combinación de campos (peso/reps/distancia/tiempo) debe mostrar/exigir la UI para un `ExerciseType` dado. */
 export interface ExerciseFields {
   weight: boolean;
   reps: boolean;
@@ -8,6 +15,7 @@ export interface ExerciseFields {
   time: boolean;
 }
 
+/** Traduce un `ExerciseType` a qué campos (peso/reps/distancia/tiempo) le corresponden, para pintar los inputs del set. */
 export function getExerciseFields(type: ExerciseType): ExerciseFields {
   const w = [ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHT_ONLY, ExerciseType.WEIGHT_DISTANCE, ExerciseType.WEIGHT_TIME].includes(type);
   const r = [ExerciseType.WEIGHT_REPS, ExerciseType.REPS_ONLY, ExerciseType.REPS_DISTANCE, ExerciseType.REPS_TIME].includes(type);
@@ -44,6 +52,7 @@ export function formatSetTime(secs: number): string {
   return s === 0 ? `${m}min` : `${m}:${String(s).padStart(2, "0")}`;
 }
 
+/** Subconjunto de campos de un `Set` que `formatSetDisplay` necesita para formatear su valor. */
 export interface SetFieldsInput {
   weight?: number;
   reps?: number;

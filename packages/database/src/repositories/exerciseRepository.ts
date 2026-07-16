@@ -1,3 +1,9 @@
+/**
+ * Repositorio remoto de categorías y ejercicios, más las consultas analíticas
+ * ligadas a un ejercicio concreto (historial de sesiones, conversión de unidad
+ * de peso, estadísticas de uso) que en mobile quedan fuera del alcance offline
+ * y se siguen resolviendo contra Supabase.
+ */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../supabase/types.js";
 
@@ -7,7 +13,7 @@ type CategoryUpdate = Database["public"]["Tables"]["categories"]["Update"];
 type ExerciseInsert = Database["public"]["Tables"]["exercises"]["Insert"];
 type ExerciseUpdate = Database["public"]["Tables"]["exercises"]["Update"];
 
-// Supabase row → domain Category (strips user_id, updated_at)
+/** Fila de `categories` mapeada al dominio (sin `user_id`/`updated_at`). */
 export interface CategoryDomain {
   id: string;
   name: string;
@@ -15,7 +21,7 @@ export interface CategoryDomain {
   order_index: number;
 }
 
-// Supabase row → domain Exercise (normalises nullable fields)
+/** Fila de `exercises` mapeada al dominio, con nulos normalizados a `undefined`. */
 export interface ExerciseDomain {
   id: string;
   name: string;
@@ -31,6 +37,7 @@ export function createExerciseRepository(client: Client) {
   return {
     // ─── Categories ────────────────────────────────────────────────────────────
 
+    /** Categorías del usuario ordenadas por `order_index`. */
     async getCategories() {
       return client
         .from("categories")
@@ -38,6 +45,7 @@ export function createExerciseRepository(client: Client) {
         .order("order_index", { ascending: true });
     },
 
+    /** Crea una categoría en `categories`. */
     async createCategory(data: Omit<CategoryInsert, "user_id">, userId: string) {
       return client
         .from("categories")
@@ -46,6 +54,7 @@ export function createExerciseRepository(client: Client) {
         .single();
     },
 
+    /** Actualiza campos de una categoría existente. */
     async updateCategory(id: string, data: CategoryUpdate) {
       return client
         .from("categories")
@@ -55,10 +64,12 @@ export function createExerciseRepository(client: Client) {
         .single();
     },
 
+    /** Borra una categoría (remoto: FK `ON DELETE SET NULL` en `exercises.category_id`, sin necesidad de limpiarlo a mano — a diferencia del repo local, ver bug conocido en CLAUDE.md). */
     async deleteCategory(id: string) {
       return client.from("categories").delete().eq("id", id);
     },
 
+    /** Reordena categorías (una UPDATE de `order_index` por fila, en paralelo). */
     async reorderCategories(updates: { id: string; order_index: number }[]) {
       const promises = updates.map(({ id, order_index }) =>
         client.from("categories").update({ order_index }).eq("id", id)
@@ -68,6 +79,7 @@ export function createExerciseRepository(client: Client) {
 
     // ─── Exercises ─────────────────────────────────────────────────────────────
 
+    /** Ejercicios del usuario ordenados alfabéticamente; opcionalmente filtrados por categoría. */
     async getExercises(categoryId?: string) {
       let query = client
         .from("exercises")
@@ -77,6 +89,7 @@ export function createExerciseRepository(client: Client) {
       return query;
     },
 
+    /** Crea un ejercicio; `type` se recibe como `string` (tipos de ejercicio avanzados aún no reflejados en el enum generado de Supabase) y se castea internamente. */
     async createExercise(
       data: Omit<ExerciseInsert, "user_id" | "type"> & { type: string; notes?: string | null },
       userId: string
@@ -88,6 +101,7 @@ export function createExerciseRepository(client: Client) {
         .single();
     },
 
+    /** Actualiza un ejercicio; mismo cast de `type` que {@link createExercise}. */
     async updateExercise(id: string, data: Omit<ExerciseUpdate, "type"> & { type?: string; notes?: string | null }) {
       return client
         .from("exercises")
@@ -97,10 +111,12 @@ export function createExerciseRepository(client: Client) {
         .single();
     },
 
+    /** Borra un ejercicio (remoto: FK `ON DELETE CASCADE` limpia `workout_exercises`/`sets`/`routine_day_exercises`/`predefined_sets` automáticamente — a diferencia del repo local, ver bug conocido en CLAUDE.md). */
     async deleteExercise(id: string) {
       return client.from("exercises").delete().eq("id", id);
     },
 
+    /** Marca/desmarca un ejercicio como favorito. */
     async toggleFavorite(id: string, isFavorite: boolean) {
       return client
         .from("exercises")
@@ -110,6 +126,12 @@ export function createExerciseRepository(client: Client) {
         .single();
     },
 
+    /**
+     * Historial completo de sesiones de un ejercicio: para cada `workout_exercises`
+     * que lo referencia, trae el workout (fecha/comentario) y sus sets ordenados
+     * por `order_index`, y devuelve las sesiones ordenadas por fecha descendente.
+     * Analítica fuera de alcance offline (ver cabecera del archivo).
+     */
     async getExerciseHistory(exerciseId: string): Promise<{
       data: {
         workout_id: string;
@@ -179,6 +201,11 @@ export function createExerciseRepository(client: Client) {
       return { data: sessions, error: null };
     },
 
+    /**
+     * Reescribe en bloque el peso de todos los sets registrados de un ejercicio,
+     * multiplicando por `factor` (p.ej. cambio kg↔lb) y redondeando a 2 decimales.
+     * Analítica fuera de alcance offline.
+     */
     async convertExerciseWeights(exerciseId: string, factor: number): Promise<{ error: { message: string } | null }> {
       const weRes = await client.from("workout_exercises").select("id").eq("exercise_id", exerciseId);
       if (weRes.error) return { error: weRes.error };
@@ -203,6 +230,12 @@ export function createExerciseRepository(client: Client) {
       return { error: null };
     },
 
+    /**
+     * Para todos los ejercicios del usuario: número de sesiones distintas en que
+     * aparecen y fecha de la última vez usados. Calculado en memoria a partir de
+     * `workout_exercises`/`workouts` completos (sin agregación SQL). Analítica
+     * fuera de alcance offline.
+     */
     async getExerciseStats(): Promise<{
       data: Record<string, { workout_count: number; last_used: string | null }> | null;
       error: { message: string } | null;

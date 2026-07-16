@@ -70,6 +70,7 @@ export function createLocalRoutineRepository(db: SqlExecutor) {
   return {
     // ─── Routines ──────────────────────────────────────────────────────────────
 
+    /** Lee `routines` vivas del usuario, más antigua primero. Solo lectura. */
     async getRoutines(): Promise<{ data: RoutineRow[]; error: RepoError | null }> {
       const rows = await db.getAllAsync<RawRow>(
         `SELECT * FROM routines WHERE _deleted = 0 ORDER BY created_at ASC`
@@ -77,6 +78,7 @@ export function createLocalRoutineRepository(db: SqlExecutor) {
       return { data: rows.map(mapRoutineRow), error: null };
     },
 
+    /** Inserta una nueva rutina en `routines` con UUID de cliente y encola el insert. */
     async createRoutine(
       data: { name: string; notes?: string },
       userId: string
@@ -102,6 +104,7 @@ export function createLocalRoutineRepository(db: SqlExecutor) {
       return { data: row, error: null };
     },
 
+    /** Actualiza nombre/notas de una rutina en `routines` y encola el update. */
     async updateRoutine(
       id: string,
       data: { name?: string; notes?: string }
@@ -120,6 +123,13 @@ export function createLocalRoutineRepository(db: SqlExecutor) {
       return { data: row ? mapRoutineRow(row) : null, error: null };
     },
 
+    /**
+     * Tombstonea una rutina y cascada manual completa hacia abajo: cada
+     * `routine_days` suyo → cada `routine_day_exercises` de ese día →
+     * cada `predefined_sets` de ese ejercicio — espeja el `ON DELETE CASCADE`
+     * remoto en las tres tablas hijas. Un `pending_op` de delete por cada
+     * fila tombstonada en las cuatro tablas.
+     */
     async deleteRoutine(id: string): Promise<{ error: RepoError | null }> {
       await db.withTransactionAsync(async () => {
         const days = await db.getAllAsync<{ id: string }>(
@@ -159,6 +169,13 @@ export function createLocalRoutineRepository(db: SqlExecutor) {
       return { error: null };
     },
 
+    /**
+     * Clona en profundidad una rutina completa (rutina → días → ejercicios de
+     * día → sets predefinidos) con IDs nuevos generados en cliente para cada
+     * fila copiada, todo en una única transacción con un `pending_op` de
+     * insert por cada fila nueva. Falla con `error` si `sourceId` no existe o
+     * está tombstonado.
+     */
     async copyRoutine(
       sourceId: string,
       newName: string,
@@ -267,6 +284,7 @@ export function createLocalRoutineRepository(db: SqlExecutor) {
 
     // ─── Routine Days ──────────────────────────────────────────────────────────
 
+    /** Lee los `routine_days` vivos de una rutina, ordenados por `order_index`. Solo lectura. */
     async getDays(routineId: string): Promise<{ data: RoutineDayRow[]; error: RepoError | null }> {
       const rows = await db.getAllAsync<RawRow>(
         `SELECT * FROM routine_days WHERE routine_id = ? AND _deleted = 0 ORDER BY order_index ASC`,
@@ -275,6 +293,7 @@ export function createLocalRoutineRepository(db: SqlExecutor) {
       return { data: rows.map(mapDayRow), error: null };
     },
 
+    /** Inserta un nuevo día de rutina en `routine_days` con UUID de cliente y encola el insert. */
     async createDay(
       data: { routine_id: string; name: string; order_index: number },
       userId: string
@@ -301,6 +320,7 @@ export function createLocalRoutineRepository(db: SqlExecutor) {
       return { data: row, error: null };
     },
 
+    /** Actualiza campos parciales de un día de rutina (UPDATE dinámico por claves presentes) y encola el update. */
     async updateDay(
       id: string,
       data: { name?: string; order_index?: number }
@@ -322,6 +342,11 @@ export function createLocalRoutineRepository(db: SqlExecutor) {
       return { data: row ? mapDayRow(row) : null, error: null };
     },
 
+    /**
+     * Tombstonea un día de rutina y cascada manual hacia sus
+     * `routine_day_exercises` y los `predefined_sets` de cada uno — espeja el
+     * `ON DELETE CASCADE` remoto. Un `pending_op` de delete por fila afectada.
+     */
     async deleteDay(id: string): Promise<{ error: RepoError | null }> {
       await db.withTransactionAsync(async () => {
         const exercises = await db.getAllAsync<{ id: string }>(
@@ -355,6 +380,7 @@ export function createLocalRoutineRepository(db: SqlExecutor) {
 
     // ─── Routine Day Exercises ─────────────────────────────────────────────────
 
+    /** Lee los `routine_day_exercises` vivos de un día, ordenados por `order_index`. Solo lectura. */
     async getDayExercises(dayId: string): Promise<{ data: RoutineDayExerciseRow[]; error: RepoError | null }> {
       const rows = await db.getAllAsync<RawRow>(
         `SELECT * FROM routine_day_exercises WHERE routine_day_id = ? AND _deleted = 0 ORDER BY order_index ASC`,
@@ -363,6 +389,7 @@ export function createLocalRoutineRepository(db: SqlExecutor) {
       return { data: rows.map(mapDayExerciseRow), error: null };
     },
 
+    /** Añade un ejercicio a un día de rutina en `routine_day_exercises` con UUID de cliente y encola el insert. */
     async addExercise(
       data: { routine_day_id: string; exercise_id: string; order_index: number; group_id?: string },
       userId: string
@@ -391,6 +418,7 @@ export function createLocalRoutineRepository(db: SqlExecutor) {
       return { data: row, error: null };
     },
 
+    /** Actualiza `group_id`/`group_name` (supersets) de un ejercicio de rutina y encola el update. */
     async updateDayExercise(
       id: string,
       data: { group_id?: string | null; group_name?: string | null }
@@ -412,6 +440,7 @@ export function createLocalRoutineRepository(db: SqlExecutor) {
       return { data: row ? mapDayExerciseRow(row) : null, error: null };
     },
 
+    /** Propaga `group_name` a todos los `routine_day_exercises` que comparten `group_id` (superset), un `pending_op` de update por fila. */
     async updateDayGroupName(groupId: string, name: string): Promise<{ error: RepoError | null }> {
       const ts = nowIso();
       await db.withTransactionAsync(async () => {
@@ -430,6 +459,11 @@ export function createLocalRoutineRepository(db: SqlExecutor) {
       return { error: null };
     },
 
+    /**
+     * Tombstonea un `routine_day_exercises` y cascada manual sobre sus
+     * `predefined_sets` — espeja el `ON DELETE CASCADE` remoto. Un
+     * `pending_op` de delete por set más el del propio ejercicio de rutina.
+     */
     async removeExercise(id: string): Promise<{ error: RepoError | null }> {
       await db.withTransactionAsync(async () => {
         const sets = await db.getAllAsync<{ id: string }>(
@@ -450,6 +484,7 @@ export function createLocalRoutineRepository(db: SqlExecutor) {
       return { error: null };
     },
 
+    /** Actualiza `order_index` de varios `routine_day_exercises`, una `pending_op` de update por fila, todo en una transacción. */
     async reorderExercises(updates: { id: string; order_index: number }[]): Promise<{ error: RepoError | null }[]> {
       const ts = nowIso();
       await db.withTransactionAsync(async () => {
@@ -465,6 +500,7 @@ export function createLocalRoutineRepository(db: SqlExecutor) {
       return updates.map(() => ({ error: null }));
     },
 
+    /** Actualiza `order_index` de varios `routine_days`, una `pending_op` de update por fila, todo en una transacción. */
     async reorderDays(updates: { id: string; order_index: number }[]): Promise<{ error: RepoError | null }[]> {
       const ts = nowIso();
       await db.withTransactionAsync(async () => {
@@ -482,6 +518,7 @@ export function createLocalRoutineRepository(db: SqlExecutor) {
 
     // ─── Predefined Sets ───────────────────────────────────────────────────────
 
+    /** Lee los `predefined_sets` vivos de un ejercicio de rutina, ordenados por `order_index`. Solo lectura. */
     async getPredefinedSets(routineDayExerciseId: string): Promise<{ data: PredefinedSetRow[]; error: RepoError | null }> {
       const rows = await db.getAllAsync<RawRow>(
         `SELECT * FROM predefined_sets WHERE routine_day_exercise_id = ? AND _deleted = 0 ORDER BY order_index ASC`,
@@ -490,6 +527,12 @@ export function createLocalRoutineRepository(db: SqlExecutor) {
       return { data: rows.map(mapPredefinedSetRow), error: null };
     },
 
+    /**
+     * Reemplaza todos los `predefined_sets` de un ejercicio de rutina:
+     * tombstonea los existentes (con su `pending_op` de delete) e inserta los
+     * nuevos con UUIDs de cliente — más simple que hacer diff campo a campo,
+     * dado que el set de predefinidos siempre se edita como bloque desde la UI.
+     */
     async savePredefinedSets(
       routineDayExerciseId: string,
       sets: Array<{ weight?: number; reps?: number; distance?: number; time_seconds?: number; order_index: number }>,
@@ -536,4 +579,5 @@ export function createLocalRoutineRepository(db: SqlExecutor) {
   };
 }
 
+/** Tipo del repositorio devuelto por {@link createLocalRoutineRepository}. */
 export type LocalRoutineRepository = ReturnType<typeof createLocalRoutineRepository>;

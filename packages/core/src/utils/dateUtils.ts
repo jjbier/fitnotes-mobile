@@ -1,3 +1,9 @@
+/**
+ * Utilidades de fecha en español (nunca en inglés — ver bug conocido de
+ * `formatWorkoutDate`) para fechas de entrenamiento en formato ISO
+ * (YYYY-MM-DD): formateo largo/corto/relativo, rango de semana y
+ * agrupación por mes.
+ */
 import type { Workout } from "../types/index.js";
 
 const DAYS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"] as const;

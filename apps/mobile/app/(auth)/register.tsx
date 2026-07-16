@@ -4,6 +4,14 @@ import { useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../lib/theme";
 
+/**
+ * Pantalla de registro (`(auth)/register`), alcanzable desde Configuración
+ * ("Crear cuenta"). Valida el formulario, llama a `supabase.auth.signUp` y,
+ * si Supabase requiere confirmación por correo, muestra una pantalla de
+ * "Revisa tu correo" en vez de navegar directamente — el vínculo real de la
+ * identidad de invitado con la cuenta ocurre en `_layout.tsx` raíz cuando la
+ * sesión cambia (tras confirmar el correo e iniciar sesión).
+ */
 export default function RegisterScreen() {
   const router = useRouter();
   const theme = useTheme();
@@ -13,6 +21,7 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
 
+  /** Valida el formulario (campos, coincidencia y longitud de contraseña) y llama a `supabase.auth.signUp`. */
   async function handleSignUp() {
     if (!email || !password || !confirm) { Alert.alert("Error", "Por favor, completa todos los campos"); return; }
     if (password !== confirm) { Alert.alert("Error", "Las contraseñas no coinciden"); return; }

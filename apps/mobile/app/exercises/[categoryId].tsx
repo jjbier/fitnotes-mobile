@@ -32,6 +32,15 @@ const WEIGHT_TYPES = [
   ExerciseType.WEIGHT_TIME,
 ];
 
+/**
+ * Pantalla de ejercicios de una categoría (o de favoritos, cuando `categoryId === "favorites"`):
+ * lista, busca, crea, edita (incluida gestión de cambio de tipo y de unidad de peso con
+ * conversión histórica opcional), elimina y marca como favorito. Al tocar un ejercicio,
+ * navega a añadirlo al entrenamiento activo si hay uno en curso, o a su historial en caso
+ * contrario. CRUD vía `useRepositories()` (local); las estadísticas por ejercicio
+ * (sesiones/última vez) y la conversión de pesos históricos usan un repo remoto ad-hoc
+ * (`createExerciseRepository(supabase)`) por quedar fuera del alcance offline.
+ */
 export default function ExerciseCategoryScreen() {
   const { categoryId } = useLocalSearchParams<{ categoryId: string }>();
   const navigation = useNavigation();
@@ -165,6 +174,11 @@ export default function ExerciseCategoryScreen() {
     setExWeightUnit(ex.weight_unit ?? "kg");
   }
 
+  /**
+   * Persiste la edición del ejercicio. Si se pasa `convertFactor` (el usuario eligió
+   * "Convertir" al cambiar de unidad de peso), además reescala en el repo remoto todos
+   * los valores de peso históricos del ejercicio por ese factor de conversión.
+   */
   async function doEdit(convertFactor?: number) {
     if (!editingExercise || !exName.trim()) return;
     const weightUnit = WEIGHT_TYPES.includes(exType) ? exWeightUnit : "kg";
@@ -190,6 +204,12 @@ export default function ExerciseCategoryScreen() {
     setEditingExercise(null);
   }
 
+  /**
+   * Antes de guardar una edición, detecta si cambió el tipo de ejercicio y/o la unidad
+   * de peso y, en ese caso, pide confirmación: cambiar de tipo advierte de que se
+   * perderán los campos que no existan en el nuevo tipo, y cambiar de unidad ofrece
+   * elegir entre "solo etiqueta" o "convertir" los valores históricos (factor kg↔lb).
+   */
   function handleEdit(ex: Exercise) {
     const typeChanged = exType !== ex.type;
     const isWeightType = WEIGHT_TYPES.includes(exType);

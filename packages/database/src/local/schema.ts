@@ -199,6 +199,11 @@ export const LOCAL_SCHEMA_STATEMENTS: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_exercise_goals_exercise ON exercise_goals(exercise_id)`,
 ];
 
+/**
+ * Tablas de datos de fitness que participan en el SyncEngine (llevan
+ * `_dirty`/`_deleted` y generan `pending_ops`). Excluye `local_identity` y
+ * `user_preferences` — metadato de dispositivo, no datos sincronizables.
+ */
 export const SYNCABLE_TABLES = [
   "categories",
   "exercises",
@@ -215,4 +220,5 @@ export const SYNCABLE_TABLES = [
   "exercise_goals",
 ] as const;
 
+/** Nombre de tabla sincronizable — usado como parámetro de `enqueuePendingOp` para evitar encolar contra tablas fuera de sync por error tipográfico. */
 export type SyncableTable = (typeof SYNCABLE_TABLES)[number];

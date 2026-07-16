@@ -9,10 +9,28 @@ import { useTheme } from "../../lib/theme";
 import { useSyncStatus } from "../../contexts/SyncContext";
 import { useRepositories } from "../../contexts/RepositoryContext";
 
+/** Formatea un número de día/mes con cero a la izquierda (ej. `5` → `"05"`). */
 function pad(n: number): string { return String(n).padStart(2, "0"); }
 
+/** Resumen ligero del entrenamiento de un día concreto, usado en el panel expandible bajo el calendario. */
 type DaySummary = { id: string; date: string; comment: string | null; exercises: { id: string; name: string }[] };
 
+/**
+ * Tab Calendario: vista mensual (grid con puntos de color por categoría
+ * muscular entrenada cada día) o vista de lista (historial cronológico
+ * expandible con detalle de series), alternables con el botón "Mes"/"Lista".
+ * Soporta:
+ * - Navegación entre meses por swipe (`PanResponder` + `Animated`) o flechas.
+ * - Panel del día seleccionado con resumen de ejercicios (navegable al
+ *   historial de cada ejercicio o al entrenamiento completo en la tab Hoy).
+ * - Filtros combinables por categorías musculares (modo "cualquiera"/"todas")
+ *   y por ejercicio con condiciones mínimas de peso/reps.
+ * - Toggles de preferencia (mostrar puntos de categoría, mostrar panel del
+ *   día) persistidos vía `usePreferencesStore` + `preferencesRepo`, y también
+ *   en `user_metadata` de Supabase si hay cuenta real.
+ * - Recarga automática cuando `refetchSignal` indica que un sync trajo datos
+ *   nuevos.
+ */
 export default function CalendarScreen() {
   const theme = useTheme();
   const router = useRouter();
@@ -96,6 +114,7 @@ export default function CalendarScreen() {
   const { exerciseRepo: exRepo, preferencesRepo, isGuest } = useRepositories();
   const today = now.toISOString().split("T")[0]!;
 
+  /** Carga fechas con entrenamiento, colores de categoría por fecha y categorías por fecha para el mes `y`/`m`. */
   const loadMonth = useCallback(async (y: number, m: number) => {
     setIsLoading(true);
     const [workoutsRes, colors, catIds] = await Promise.all([
@@ -151,6 +170,7 @@ export default function CalendarScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listView]);
 
+  /** Alterna la preferencia de mostrar el panel del día seleccionado y la persiste (local + `user_metadata` si hay cuenta). */
   function toggleShowDayPanel() {
     const next = !showDayPanel;
     setPreferenceInStore("calendar_show_day_panel", next);
@@ -158,6 +178,7 @@ export default function CalendarScreen() {
     if (!isGuest) void supabase.auth.updateUser({ data: { calendar_show_day_panel: next } });
   }
 
+  /** Alterna la preferencia de mostrar puntos por categoría (vs. un único indicador) y la persiste. */
   function toggleShowCategoryDots() {
     const next = !showCategoryDots;
     setPreferenceInStore("calendar_show_category_dots", next);
@@ -165,6 +186,7 @@ export default function CalendarScreen() {
     if (!isGuest) void supabase.auth.updateUser({ data: { calendar_show_category_dots: next } });
   }
 
+  /** Selecciona/deselecciona un día del grid y, si tiene entrenamiento, carga su resumen para el panel inferior. */
   async function handleSelectDate(dateStr: string) {
     const newSelected = selectedDate === dateStr ? null : dateStr;
     setSelectedDate(newSelected);
@@ -186,6 +208,7 @@ export default function CalendarScreen() {
     }
   }
 
+  /** Añade/quita una categoría del conjunto de categorías seleccionadas para el filtro. */
   function toggleCategory(id: string) {
     setSelectedCatIds((prev) => {
       const next = new Set(prev);
@@ -194,6 +217,7 @@ export default function CalendarScreen() {
     });
   }
 
+  /** Consulta las fechas en que se entrenó un ejercicio concreto cumpliendo el peso/reps mínimos indicados, y cierra el modal de filtros. */
   async function applyExerciseFilter() {
     if (!filterExId) { setFilteredExDates(null); return; }
     setFilterLoading(true);
@@ -205,6 +229,7 @@ export default function CalendarScreen() {
     setShowFilters(false);
   }
 
+  /** Expande/colapsa una fila del historial (vista lista) y, la primera vez, carga el detalle de series completadas (sin calentamiento) por ejercicio. */
   async function toggleHistoryExpand(workoutId: string) {
     const next = expandedHistoryId === workoutId ? null : workoutId;
     setExpandedHistoryId(next);
@@ -235,6 +260,7 @@ export default function CalendarScreen() {
     }
   }
 
+  /** Limpia todos los filtros activos (categorías, modo de coincidencia, ejercicio y condiciones mínimas). */
   function clearFilters() {
     setSelectedCatIds(new Set());
     setCatMatchMode("any");
@@ -245,6 +271,7 @@ export default function CalendarScreen() {
     setFilteredExDates(null);
   }
 
+  /** Fechas que cumplen el filtro de categorías seleccionadas, según el modo "cualquiera"/"todas"; `null` si no hay filtro de categoría activo. */
   const catFilteredDates = useMemo<Set<string> | null>(() => {
     if (selectedCatIds.size === 0) return null;
     return new Set(
@@ -259,6 +286,7 @@ export default function CalendarScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCatIds, catMatchMode, categoryIdsPerDate]);
 
+  /** Intersección de `catFilteredDates` y `filteredExDates` (filtro combinado); `null` si ningún filtro está activo. */
   const activeFilterDates = useMemo<Set<string> | null>(() => {
     if (!catFilteredDates && !filteredExDates) return null;
     if (catFilteredDates && !filteredExDates) return catFilteredDates;
@@ -267,10 +295,12 @@ export default function CalendarScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [catFilteredDates, filteredExDates]);
 
+  /** Retrocede un mes en la vista de calendario, ajustando el año si corresponde. */
   function prevMonth() {
     if (month === 1) { setYear((y) => y - 1); setMonth(12); }
     else setMonth((m) => m - 1);
   }
+  /** Avanza un mes en la vista de calendario, ajustando el año si corresponde. */
   function nextMonth() {
     if (month === 12) { setYear((y) => y + 1); setMonth(1); }
     else setMonth((m) => m + 1);

@@ -37,6 +37,7 @@ type HistorySession = {
   }[];
 };
 
+/** Formatea una serie de una sesión pasada como texto compacto ("100×5", "5km", "30s"...) para las vistas de última sesión/historial. */
 function formatLastSet(s: LastSet): string {
   const parts: string[] = [];
   if (s.weight != null) parts.push(`${s.weight}`);
@@ -48,6 +49,18 @@ function formatLastSet(s: LastSet): string {
 
 const GROUP_COLORS = ["#6366f1", "#ec4899", "#f59e0b", "#10b981"];
 
+/**
+ * Pantalla de CRUD de series de un ejercicio dentro del entrenamiento activo: alta,
+ * edición inline (con botones +/− por campo), reordenado por drag&drop, marcado de
+ * calentamiento/completada, comentarios por serie y navegación entre los ejercicios
+ * del entrenamiento (incluida gestión de supersets: agrupar, renombrar, avance
+ * automático al siguiente ejercicio del grupo al completar una serie). Incluye
+ * temporizador de descanso manual con persistencia de la última duración usada,
+ * vibración + sonido + haptics al terminar, y pestañas de Historial/Gráfico del
+ * ejercicio. CRUD de series vía `useRepositories()` (local); historial y datos del
+ * gráfico usan repos remotos ad-hoc (`createExerciseRepository`/`createProgressRepository`
+ * sobre `supabase`), fuera del alcance offline por ser lecturas analíticas pesadas.
+ */
 export default function TrainingScreen() {
   const { exerciseId } = useLocalSearchParams<{ exerciseId: string }>();
   const router = useRouter();
@@ -123,6 +136,7 @@ export default function TrainingScreen() {
     groupIds.map((id, i) => [id, GROUP_COLORS[i % GROUP_COLORS.length]!])
   );
 
+  /** Cambia de pestaña y, la primera vez que se visita Historial o Gráfico, dispara la carga perezosa de sus datos remotos (memoizados tras la primera carga). */
   function handleWorkoutTabChange(tab: "sets" | "history" | "chart") {
     setWorkoutTab(tab);
     if (tab === "history" && !historyLoaded && !historyLoading) {
@@ -143,6 +157,8 @@ export default function TrainingScreen() {
     }
   }
 
+  // Al montar, restaura la última duración de descanso usada (persistida en un archivo
+  // JSON vía expo-file-system, no en preferencias) o cae al valor por defecto del usuario.
   useEffect(() => {
     const timerFile = (FileSystem.documentDirectory ?? "") + "last-timer-duration.json";
     FileSystem.readAsStringAsync(timerFile)
@@ -156,6 +172,7 @@ export default function TrainingScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Precarga el sonido de fin de descanso una vez y lo descarga al desmontar la pantalla.
   useEffect(() => {
     Audio.Sound.createAsync(require("../../assets/sounds/timer-end.mp3"), { shouldPlay: false })
       .then(({ sound }) => { timerSoundRef.current = sound; })
@@ -163,9 +180,11 @@ export default function TrainingScreen() {
     return () => { void timerSoundRef.current?.unloadAsync(); };
   }, []);
 
+  // Si se navega a un ejercicio que aún no forma parte del entrenamiento activo, lo añade
+  // automáticamente al abrir la pantalla (evita un paso manual de "añadir ejercicio").
   useEffect(() => {
     if (exercise && userId) {
-      if (activeWorkout && activeWorkout.id && !workoutExercise) {
+      if (activeWorkout && activeWorkout.id && !activeWorkout.end_time && !workoutExercise) {
         async function addToWorkout() {
           if (!activeWorkout?.id) return;
           const { data, error } = await repo.addExercise({
@@ -210,6 +229,14 @@ export default function TrainingScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workoutExercise?.id, activeWorkout?.id]);
 
+  /**
+   * Cuenta atrás del temporizador de descanso: mientras `timerRunning` esté activo,
+   * decrementa cada segundo vía `setInterval`. Al llegar a 0 para el intervalo, detiene
+   * el temporizador y dispara la notificación de fin: vibración de patrón largo,
+   * feedback háptico de éxito y, si el sonido está habilitado en preferencias, reproduce
+   * el sonido precargado al volumen configurado por el usuario. El intervalo se limpia
+   * tanto en la rama de parada como en el cleanup del efecto para evitar fugas.
+   */
   useEffect(() => {
     if (timerRunning) {
       intervalRef.current = setInterval(() => {
@@ -235,6 +262,7 @@ export default function TrainingScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timerRunning]);
 
+  /** Inicia/pausa el temporizador; si ya llegó a 0, reinicia desde `timerDuration` y arranca. */
   function handleTimerToggle() {
     if (timerRemaining === 0) {
       setTimerRemaining(timerDuration);
@@ -251,6 +279,7 @@ export default function TrainingScreen() {
     setTimerRemaining(timerDuration);
   }
 
+  /** Ajusta la duración objetivo del temporizador (mínimo 15s) y persiste el nuevo valor en disco para futuras sesiones. */
   function handleChangeDuration(delta: number) {
     const next = Math.max(15, timerDuration + delta);
     setTimerDuration(next);
@@ -271,8 +300,13 @@ export default function TrainingScreen() {
     ]);
   }
 
+  /**
+   * Añade una serie nueva al final, precargando sus valores desde la última serie ya
+   * creada en esta sesión, o si aún no hay ninguna, desde la última serie de la sesión
+   * anterior (`lastSessionSets`) — para que el usuario solo tenga que ajustar, no rellenar desde cero.
+   */
   async function handleAddSet() {
-    if (!workoutExercise) return;
+    if (!workoutExercise || activeWorkout?.end_time) return;
     setSaving(true);
     const lastCurrentSet = exerciseSets[exerciseSets.length - 1];
     const prefillSource = lastCurrentSet ?? lastSessionSets.at(-1);
@@ -316,6 +350,14 @@ export default function TrainingScreen() {
     await repo.updateSet(setId, patch);
   }
 
+  /**
+   * Marca/desmarca una serie como completada. Al completarla: si el ejercicio pertenece
+   * a un superset, navega automáticamente al siguiente ejercicio del grupo (rotando al
+   * primero si ya estaba en el último); si no, y `autoSelectNextSet` está activo,
+   * selecciona la siguiente serie incompleta; y si con esto se completan todas las
+   * series del ejercicio (fuera de un superset), ofrece pasar al ejercicio siguiente
+   * del entrenamiento.
+   */
   async function handleToggleComplete(setId: string, current: boolean) {
     if (!workoutExercise) return;
     const nowComplete = !current;
@@ -397,6 +439,11 @@ export default function TrainingScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * Menú de superset para el ejercicio actual: si ya está agrupado, ofrece renombrar el
+   * grupo o salir de él; si no, ofrece agruparlo con el ejercicio anterior y/o siguiente
+   * en el orden del entrenamiento (según cuáles existan).
+   */
   function handleGroupMenu() {
     if (!workoutExercise) return;
     const currentIdx = sorted.findIndex((we) => we.id === workoutExercise.id);
@@ -441,6 +488,7 @@ export default function TrainingScreen() {
     }
   }
 
+  /** Une dos ejercicios del entrenamiento al mismo grupo de superset, reutilizando el `group_id` del socio si ya pertenece a uno, o creando uno nuevo. */
   async function handleJoinGroup(weId: string, partnerId: string) {
     const partner = workoutExercises.find((we) => we.id === partnerId);
     if (!partner) return;
@@ -869,14 +917,16 @@ export default function TrainingScreen() {
         )}
 
         {/* Add set */}
-        <TouchableOpacity
-          onPress={handleAddSet}
-          disabled={saving}
-          style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 14, paddingVertical: 14, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 6 }}
-        >
-          {saving ? <ActivityIndicator size="small" color="#6366f1" /> : <Ionicons name="add-circle-outline" size={18} color="#6366f1" />}
-          <Text style={{ fontSize: 14, fontWeight: "500", color: "#6366f1" }}>{saving ? "Añadiendo…" : "Añadir serie"}</Text>
-        </TouchableOpacity>
+        {!activeWorkout?.end_time && (
+          <TouchableOpacity
+            onPress={handleAddSet}
+            disabled={saving}
+            style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 14, paddingVertical: 14, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 6 }}
+          >
+            {saving ? <ActivityIndicator size="small" color="#6366f1" /> : <Ionicons name="add-circle-outline" size={18} color="#6366f1" />}
+            <Text style={{ fontSize: 14, fontWeight: "500", color: "#6366f1" }}>{saving ? "Añadiendo…" : "Añadir serie"}</Text>
+          </TouchableOpacity>
+        )}
       </NestableScrollContainer>
       </>}
 
@@ -1065,6 +1115,7 @@ export default function TrainingScreen() {
   );
 }
 
+/** Fila memoizada del selector de "añadir ejercicio al entrenamiento", para evitar re-renders al filtrar la lista completa por búsqueda. */
 const ExercisePickerItem = memo(function ExercisePickerItem({
   id, name, type, onPress,
 }: {

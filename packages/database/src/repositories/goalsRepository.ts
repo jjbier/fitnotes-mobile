@@ -1,8 +1,15 @@
+/**
+ * Repositorio remoto de objetivos de ejercicio (`exercise_goals`). Usa casts
+ * `as never` en las queries porque esta tabla no está (o no estaba) reflejada
+ * en los tipos generados de Supabase, por lo que cada método remapea las
+ * filas manualmente a {@link ExerciseGoalRow}.
+ */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../supabase/types.js";
 
 type Client = SupabaseClient<Database>;
 
+/** Objetivo de un ejercicio (peso/reps/fecha objetivo), con `achieved_at` marcando si ya se cumplió. */
 export interface ExerciseGoalRow {
   id: string;
   exercise_id: string;
@@ -16,6 +23,7 @@ export interface ExerciseGoalRow {
 
 export function createGoalsRepository(client: Client) {
   return {
+    /** Todos los objetivos del usuario, más recientes primero. */
     async getGoals(): Promise<ExerciseGoalRow[]> {
       const { data } = await client
         .from("exercise_goals" as never)
@@ -34,6 +42,7 @@ export function createGoalsRepository(client: Client) {
       }));
     },
 
+    /** Crea o reemplaza el objetivo de un ejercicio (constraint única `user_id,exercise_id` — un solo objetivo activo por ejercicio). */
     async upsertGoal(goal: Omit<ExerciseGoalRow, "id" | "created_at">, userId: string): Promise<ExerciseGoalRow | null> {
       const { data } = await (client
         .from("exercise_goals" as never) as ReturnType<typeof client.from>)
@@ -61,6 +70,7 @@ export function createGoalsRepository(client: Client) {
       };
     },
 
+    /** Borra el objetivo de un ejercicio. */
     async deleteGoal(exerciseId: string) {
       return client
         .from("exercise_goals" as never)
@@ -68,6 +78,7 @@ export function createGoalsRepository(client: Client) {
         .eq("exercise_id" as never, exerciseId);
     },
 
+    /** Marca el objetivo de un ejercicio como cumplido (`achieved_at = ahora`). */
     async markAchieved(exerciseId: string) {
       return client
         .from("exercise_goals" as never)

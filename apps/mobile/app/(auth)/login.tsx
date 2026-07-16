@@ -4,6 +4,14 @@ import { useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../lib/theme";
 
+/**
+ * Pantalla de inicio de sesión (`(auth)/login`), alcanzable desde Configuración
+ * ("Iniciar sesión para sincronizar"), nunca como paso obligatorio de arranque.
+ * Autentica directamente contra Supabase (`signInWithPassword`) y, si tiene
+ * éxito, vuelve a `(tabs)`. El resto de la lógica de identidad (vincular datos
+ * de invitado a la cuenta real, disparar el sync) vive en `_layout.tsx` raíz,
+ * que reacciona al cambio de sesión — esta pantalla solo dispara el login.
+ */
 export default function LoginScreen() {
   const router = useRouter();
   const theme = useTheme();
@@ -11,6 +19,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
+  /** Valida los campos y llama a `supabase.auth.signInWithPassword`; navega a las tabs si el login es correcto. */
   async function handleSignIn() {
     if (!email || !password) { Alert.alert("Error", "Por favor, completa todos los campos"); return; }
     setLoading(true);

@@ -1,3 +1,8 @@
+/**
+ * Aplicación de las migraciones versionadas de la base SQLite local (ver
+ * MIGRATIONS más abajo) contra una conexión concreta, usando
+ * `PRAGMA user_version` como marcador de versión ya aplicada.
+ */
 import type { SqlExecutor } from "./sqlExecutor.js";
 import { LOCAL_SCHEMA_STATEMENTS } from "./schema.js";
 import { PENDING_OPS_SCHEMA_STATEMENTS } from "./pendingOpsSchema.js";
@@ -35,6 +40,11 @@ const MIGRATIONS: LocalMigration[] = [
   },
 ];
 
+/**
+ * Ejecuta contra `db` las migraciones cuya versión sea mayor que el
+ * `user_version` actual, en orden ascendente, cada una en su propia
+ * transacción — idempotente en cada arranque de la app.
+ */
 export async function runLocalMigrations(db: SqlExecutor): Promise<void> {
   const row = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version");
   const currentVersion = row?.user_version ?? 0;

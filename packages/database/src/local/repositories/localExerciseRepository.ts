@@ -47,6 +47,7 @@ export function createLocalExerciseRepository(db: SqlExecutor) {
   return {
     // ─── Categories ────────────────────────────────────────────────────────────
 
+    /** Lee `categories` vivas ordenadas por `order_index`. Solo lectura. */
     async getCategories(): Promise<{ data: CategoryRow[]; error: RepoError | null }> {
       const rows = await db.getAllAsync<RawRow>(
         `SELECT * FROM categories WHERE _deleted = 0 ORDER BY order_index ASC`
@@ -54,6 +55,7 @@ export function createLocalExerciseRepository(db: SqlExecutor) {
       return { data: rows.map(mapCategoryRow), error: null };
     },
 
+    /** Inserta una nueva categoría en `categories` con UUID de cliente y encola el insert. */
     async createCategory(
       data: { name: string; color?: string; order_index?: number },
       userId: string
@@ -80,6 +82,7 @@ export function createLocalExerciseRepository(db: SqlExecutor) {
       return { data: row, error: null };
     },
 
+    /** Actualiza campos parciales de una categoría (UPDATE dinámico por claves presentes) y encola el update. */
     async updateCategory(
       id: string,
       data: { name?: string; color?: string; order_index?: number }
@@ -101,6 +104,13 @@ export function createLocalExerciseRepository(db: SqlExecutor) {
       return { data: row ? mapCategoryRow(row) : null, error: null };
     },
 
+    /**
+     * Tombstonea una categoría y, a mano, pone `category_id = NULL` en todos
+     * los ejercicios que la referenciaban — espeja el `ON DELETE SET NULL`
+     * de la FK remota (bug conocido corregido: antes solo se tombstonaba la
+     * categoría, dejando ejercicios con un `category_id` colgante). Un
+     * `pending_op` de update por ejercicio afectado más el delete de la categoría.
+     */
     async deleteCategory(id: string): Promise<{ error: RepoError | null }> {
       await db.withTransactionAsync(async () => {
         const ts = nowIso();
@@ -128,6 +138,7 @@ export function createLocalExerciseRepository(db: SqlExecutor) {
       return { error: null };
     },
 
+    /** Actualiza `order_index` de varias categorías, una `pending_op` de update por fila, todo en una transacción. */
     async reorderCategories(updates: { id: string; order_index: number }[]): Promise<{ error: RepoError | null }[]> {
       const ts = nowIso();
       await db.withTransactionAsync(async () => {
@@ -145,6 +156,7 @@ export function createLocalExerciseRepository(db: SqlExecutor) {
 
     // ─── Exercises ─────────────────────────────────────────────────────────────
 
+    /** Lee `exercises` vivos, opcionalmente filtrados por categoría, ordenados por nombre. Solo lectura. */
     async getExercises(categoryId?: string): Promise<{ data: ExerciseRow[]; error: RepoError | null }> {
       const rows = categoryId
         ? await db.getAllAsync<RawRow>(
@@ -155,6 +167,7 @@ export function createLocalExerciseRepository(db: SqlExecutor) {
       return { data: rows.map(mapExerciseRow), error: null };
     },
 
+    /** Inserta un nuevo ejercicio en `exercises` con UUID de cliente y encola el insert. */
     async createExercise(
       data: {
         name: string;
@@ -201,6 +214,7 @@ export function createLocalExerciseRepository(db: SqlExecutor) {
       return { data: row, error: null };
     },
 
+    /** Actualiza campos parciales de un ejercicio (UPDATE dinámico por claves presentes, incluido `category_id`) y encola el update. */
     async updateExercise(
       id: string,
       data: {
@@ -232,6 +246,13 @@ export function createLocalExerciseRepository(db: SqlExecutor) {
       return { data: row ? mapExerciseRow(row) : null, error: null };
     },
 
+    /**
+     * Tombstonea un ejercicio y, a mano, cascada sobre `workout_exercises`→`sets`
+     * y `routine_day_exercises`→`predefined_sets` — espeja el `ON DELETE CASCADE`
+     * remoto (bug conocido corregido: antes no cascadeaba y dejaba filas
+     * huérfanas). Un `pending_op` de delete por cada fila afectada en las
+     * cuatro tablas, más el del propio ejercicio.
+     */
     async deleteExercise(id: string): Promise<{ error: RepoError | null }> {
       await db.withTransactionAsync(async () => {
         const ts = nowIso();
@@ -282,6 +303,7 @@ export function createLocalExerciseRepository(db: SqlExecutor) {
       return { error: null };
     },
 
+    /** Actualiza `is_favorite` de un ejercicio y encola el update correspondiente. */
     async toggleFavorite(id: string, isFavorite: boolean): Promise<{ data: ExerciseRow | null; error: RepoError | null }> {
       const ts = nowIso();
       await db.withTransactionAsync(async () => {
@@ -298,4 +320,5 @@ export function createLocalExerciseRepository(db: SqlExecutor) {
   };
 }
 
+/** Tipo del repositorio devuelto por {@link createLocalExerciseRepository}. */
 export type LocalExerciseRepository = ReturnType<typeof createLocalExerciseRepository>;

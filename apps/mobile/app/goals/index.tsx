@@ -12,6 +12,13 @@ import DateInput from "../../components/DateInput";
 import { useTheme } from "../../lib/theme";
 import { useRepositories } from "../../contexts/RepositoryContext";
 
+/**
+ * Pantalla "Objetivos": CRUD de metas de peso y/o repeticiones por ejercicio, con
+ * barra de progreso frente al mejor registro actual (PR de peso o, si el ejercicio no
+ * tiene PRs con peso —p. ej. REPS_ONLY—, el mejor set directo vía `getBestSetsByExercise`).
+ * Al cargar, comprueba automáticamente (`autoCheckAchievements`) si algún objetivo ya
+ * se ha cumplido con los datos actuales y lo marca como logrado sin intervención del usuario.
+ */
 export default function GoalsScreen() {
   const colors = useTheme();
   const navigation = useNavigation();
@@ -163,6 +170,11 @@ export default function GoalsScreen() {
     setGoals((prev) => prev.map((g) => g.exercise_id === goal.exercise_id ? { ...g, achieved_at: new Date().toISOString() } : g));
   }
 
+  /**
+   * Mejor marca actual de un ejercicio para comparar contra su objetivo: prioriza los
+   * PRs de `useProgressStore` (peso + 1RM estimado); si el ejercicio no tiene PRs
+   * (tipos sin peso), recurre a `bestSets` (mejor cantidad de reps directa).
+   */
   function getCurrentBest(exId: string): { weight: number; reps: number; orm: number } | null {
     const prs = personalRecords[exId];
     if (prs && prs.length > 0) {
@@ -177,6 +189,11 @@ export default function GoalsScreen() {
     return null;
   }
 
+  /**
+   * Revisa todos los objetivos no logrados y marca como alcanzados (`markAchieved`) los
+   * que ya cumplen su peso y/o reps objetivo según los mejores registros conocidos —
+   * se ejecuta automáticamente tras cada carga de la pantalla, sin acción del usuario.
+   */
   async function autoCheckAchievements(
     currentGoals: ExerciseGoalRow[],
     prsByExercise: Record<string, { weight: number; reps: number }[]>

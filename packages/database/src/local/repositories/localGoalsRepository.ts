@@ -25,6 +25,7 @@ function mapGoalRow(row: RawRow): ExerciseGoalRow {
  */
 export function createLocalGoalsRepository(db: SqlExecutor) {
   return {
+    /** Lee todos los goals (`exercise_goals`) del usuario activo, sin cascada ni encolado (solo lectura). */
     async getGoals(): Promise<ExerciseGoalRow[]> {
       const rows = await db.getAllAsync<RawRow>(
         `SELECT * FROM exercise_goals WHERE _deleted = 0 ORDER BY created_at DESC`
@@ -32,6 +33,11 @@ export function createLocalGoalsRepository(db: SqlExecutor) {
       return rows.map(mapGoalRow);
     },
 
+    /**
+     * Crea o actualiza el goal de `(user_id, exercise_id)` en `exercise_goals`
+     * — INSERT si no existe fila viva, UPDATE si ya hay una. Encola el
+     * `pending_op` correspondiente en la misma transacción.
+     */
     async upsertGoal(
       goal: Omit<ExerciseGoalRow, "id" | "created_at">,
       userId: string
@@ -92,6 +98,7 @@ export function createLocalGoalsRepository(db: SqlExecutor) {
       return mapGoalRow(row);
     },
 
+    /** Tombstonea (`_deleted=1`) el goal del ejercicio dado en `exercise_goals` y encola su delete. No-op si no hay goal vivo. */
     async deleteGoal(exerciseId: string): Promise<{ error: RepoError | null }> {
       const existing = await db.getFirstAsync<RawRow>(
         `SELECT id FROM exercise_goals WHERE exercise_id = ? AND _deleted = 0`,
@@ -107,6 +114,7 @@ export function createLocalGoalsRepository(db: SqlExecutor) {
       return { error: null };
     },
 
+    /** Marca `achieved_at` con el timestamp actual en el goal del ejercicio dado y encola el update. No-op si no hay goal vivo. */
     async markAchieved(exerciseId: string): Promise<{ error: RepoError | null }> {
       const existing = await db.getFirstAsync<RawRow>(
         `SELECT id FROM exercise_goals WHERE exercise_id = ? AND _deleted = 0`,
@@ -124,4 +132,5 @@ export function createLocalGoalsRepository(db: SqlExecutor) {
   };
 }
 
+/** Tipo del repositorio devuelto por {@link createLocalGoalsRepository}. */
 export type LocalGoalsRepository = ReturnType<typeof createLocalGoalsRepository>;

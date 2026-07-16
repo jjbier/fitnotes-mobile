@@ -1,3 +1,8 @@
+/**
+ * Fábricas de clientes Supabase tipados (`Database`) para los dos contextos
+ * de Next.js (browser y servidor). Ambas leen la URL/anon key de variables de
+ * entorno `NEXT_PUBLIC_*` y lanzan si faltan, en vez de crear un cliente inválido.
+ */
 import { createBrowserClient as _createBrowserClient } from "@supabase/ssr";
 import { createServerClient as _createServerClient } from "@supabase/ssr";
 import type { Database } from "./types.js";

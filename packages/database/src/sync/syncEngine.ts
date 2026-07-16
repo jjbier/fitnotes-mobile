@@ -33,8 +33,10 @@ import { pullTableChanges } from "./pullChanges.js";
 import { applyRemoteRows } from "./applyRemoteRows.js";
 import { getWatermark, setWatermark } from "./watermarks.js";
 
+/** Estado del motor: `idle` en reposo, `syncing` mientras hay un push o pull en curso, `error` si el último ciclo dejó operaciones sin subir o el pull lanzó. */
 export type SyncStatus = "idle" | "syncing" | "error";
 
+/** Resultado agregado de un ciclo completo de {@link SyncEngine.sync}. */
 export interface SyncResult {
   pushed: number;
   pushFailed: number;
@@ -43,6 +45,7 @@ export interface SyncResult {
   changedTables: Set<string>;
 }
 
+/** Motor de sincronización offline-first entre SQLite local y Supabase — ver doc de cabecera del archivo para el diseño push/pull. */
 export class SyncEngine {
   private client: SupabaseClient<Database>;
   private db: SqlExecutor;
@@ -53,10 +56,12 @@ export class SyncEngine {
     this.db = db;
   }
 
+  /** Estado actual del motor (no dispara ninguna operación). */
   getStatus(): SyncStatus {
     return this.status;
   }
 
+  /** Número de operaciones en la cola local sin subir todavía. */
   async getPendingCount(): Promise<number> {
     return getPendingCount(this.db);
   }

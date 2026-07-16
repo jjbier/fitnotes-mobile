@@ -1,3 +1,16 @@
+/**
+ * Punto de entrada público de `@fitnotes/database`.
+ *
+ * Reexporta, en un único módulo:
+ * - clientes Supabase (browser/server) y tipos generados de la BD remota;
+ * - `SyncEngine` y los repositorios remotos (`createXxxRepository`), usados
+ *   por web para todo el CRUD y por mobile solo para analíticas fuera de
+ *   alcance offline (stats, historial, backup/CSV);
+ * - la mitad "local" (offline): executor SQL agnóstico de plataforma, runner
+ *   de migraciones, esquema/lista de tablas sincronizables, identidad local
+ *   de invitado/cuenta y los repositorios locales (`createLocalXxxRepository`)
+ *   que la UI de mobile usa en su lugar para el resto del CRUD.
+ */
 export { createBrowserClient, createServerClient } from "./supabase/client.js";
 export type { Database } from "./supabase/types.js";
 export { SyncEngine } from "./sync/syncEngine.js";

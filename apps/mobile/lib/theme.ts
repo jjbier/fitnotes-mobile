@@ -1,6 +1,12 @@
+/**
+ * Utilidades de tema/dark-mode de mobile: store del modo elegido por el
+ * usuario, paleta de colores light/dark y hook que resuelve ambos en los
+ * colores efectivos a pintar.
+ */
 import { useColorScheme } from "react-native";
 import { create } from "zustand";
 
+/** Modo de tema persistido: claro, oscuro, o "seguir al sistema". */
 export type ThemeMode = "light" | "dark" | "system";
 
 interface ThemeModeState {
@@ -8,11 +14,23 @@ interface ThemeModeState {
   setMode: (mode: ThemeMode) => void;
 }
 
+/**
+ * Store zustand con el `ThemeMode` elegido por el usuario.
+ *
+ * Vive fuera de `packages/core` (a diferencia del resto de preferencias, que
+ * pasan por `usePreferencesStore` + `LocalPreferencesRepository`) porque
+ * depende de `useColorScheme` de React Native para resolver "system" al color
+ * scheme real del dispositivo — una dependencia de plataforma que no puede
+ * vivir en un paquete puro sin imports de react/react-native. `RepositoryContext`
+ * sincroniza `mode` con el valor persistido en SQLite (`theme_preference`) al
+ * arrancar y tras un wipe; este store en sí no persiste nada por su cuenta.
+ */
 export const useThemeModeStore = create<ThemeModeState>((set) => ({
   mode: "system",
   setMode: (mode) => set({ mode }),
 }));
 
+/** Paleta de colores de la app para los modos claro y oscuro. */
 export const Colors = {
   light: {
     // Backgrounds
@@ -122,8 +140,14 @@ export const Colors = {
   },
 } as const;
 
+/** Forma de un set de colores resuelto (claves de `Colors.light`/`Colors.dark`). */
 export type ThemeColors = { [K in keyof typeof Colors.light]: string };
 
+/**
+ * Hook que resuelve el `ThemeMode` activo (store + `useColorScheme` del SO
+ * cuando el modo es "system") al objeto de colores (`Colors.light` o
+ * `Colors.dark`) que deben usar los componentes.
+ */
 export function useTheme(): ThemeColors {
   const scheme = useColorScheme();
   const mode = useThemeModeStore((s) => s.mode);

@@ -31,6 +31,7 @@ function mapPersonalRecordRow(row: RawRow): PersonalRecordRow {
  */
 export function createLocalProgressRepository(db: SqlExecutor) {
   return {
+    /** Lee de `personal_records` (solo lectura, sin cascada ni pending_ops) los PRs de un ejercicio, un peor-a-mejor por número de reps. */
     async getPersonalRecords(exerciseId: string): Promise<{ data: PersonalRecordRow[]; error: RepoError | null }> {
       const rows = await db.getAllAsync<RawRow>(
         `SELECT * FROM personal_records WHERE exercise_id = ? AND _deleted = 0 ORDER BY reps ASC, weight DESC`,
@@ -39,6 +40,7 @@ export function createLocalProgressRepository(db: SqlExecutor) {
       return { data: rows.map(mapPersonalRecordRow), error: null };
     },
 
+    /** Lee todos los PRs del usuario activo, usado por el badge de PR y el tab Progreso. */
     async getAllPersonalRecords(): Promise<{ data: PersonalRecordRow[]; error: RepoError | null }> {
       const rows = await db.getAllAsync<RawRow>(
         `SELECT * FROM personal_records WHERE _deleted = 0 ORDER BY exercise_id ASC, reps ASC, weight DESC`,
@@ -47,6 +49,11 @@ export function createLocalProgressRepository(db: SqlExecutor) {
       return { data: rows.map(mapPersonalRecordRow), error: null };
     },
 
+    /**
+     * Agrega, por ejercicio, el número de sets completos y el volumen total
+     * (peso×reps) desde `weekStart` — join manual sets→workout_exercises→workouts
+     * en JS, ya que SQLite local no tiene las funciones de agregación de Postgres.
+     */
     async getWeeklyTraining(weekStart: string): Promise<{ exerciseId: string; setCount: number; volume: number }[]> {
       const rows = await db.getAllAsync<{ exercise_id: string; weight: number | null; reps: number | null }>(
         `SELECT we.exercise_id as exercise_id, s.weight as weight, s.reps as reps
@@ -65,6 +72,7 @@ export function createLocalProgressRepository(db: SqlExecutor) {
       return Object.entries(byExercise).map(([exerciseId, vals]) => ({ exerciseId, ...vals }));
     },
 
+    /** Devuelve, por cada ejercicio de `exerciseIds`, el máximo de reps/distancia/tiempo entre sus sets completos no-warmup — usado para calculadoras/récords por tipo de ejercicio avanzado. */
     async getBestSetsByExercise(
       exerciseIds: string[]
     ): Promise<Record<string, { maxReps: number; maxDistance: number; maxTime: number }>> {
@@ -94,4 +102,5 @@ export function createLocalProgressRepository(db: SqlExecutor) {
   };
 }
 
+/** Tipo del repositorio devuelto por {@link createLocalProgressRepository}. */
 export type LocalProgressRepository = ReturnType<typeof createLocalProgressRepository>;

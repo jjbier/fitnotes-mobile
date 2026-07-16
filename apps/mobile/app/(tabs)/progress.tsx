@@ -7,6 +7,14 @@ import { useTheme } from "../../lib/theme";
 import { useSyncStatus } from "../../contexts/SyncContext";
 import { useRepositories } from "../../contexts/RepositoryContext";
 
+/**
+ * Tab Progreso: resumen semanal de series/volumen por categoría muscular y
+ * lista de récords personales (PRs) por ejercicio, expandible para ver el
+ * detalle de cada marca (peso × reps y 1RM estimado con la fórmula de
+ * Brzycki vía `calculate1RM`) ordenado por número de repeticiones. Incluye
+ * acceso a la pantalla de Objetivos (`/goals`). Recarga (con caché de
+ * ejercicios/categorías) al montar y al recibir `refetchSignal` tras un sync.
+ */
 export default function ProgressScreen() {
   const theme = useTheme();
   const router = useRouter();
@@ -25,6 +33,11 @@ export default function ProgressScreen() {
   const { exerciseRepo: exRepo, progressRepo } = useRepositories();
   const { refetchSignal } = useSyncStatus();
 
+  /**
+   * Carga los PRs y el entrenamiento semanal agregado por categoría. Usa la
+   * caché de ejercicios/categorías del store si ya está poblada (evita ir al
+   * repo), salvo que `forceReload` sea `true` (usado tras un sync remoto).
+   */
   const load = useCallback(async (forceReload = false) => {
     setLoading(true);
     const weekStart = getWeekRange(todayISO()).start;
@@ -91,6 +104,7 @@ export default function ProgressScreen() {
 
   const exerciseMap = Object.fromEntries(exercises.map((e) => [e.id, e]));
 
+  /** Para cada ejercicio con PRs, resuelve el ejercicio, ordena sus marcas por reps y calcula cuál tiene el mejor 1RM estimado. */
   const exercisesWithPRs = Object.entries(personalRecords)
     .map(([exId, prs]) => {
       const ex = exerciseMap[exId];

@@ -1,3 +1,10 @@
+/**
+ * Punto de entrada de `@fitnotes/core`: lógica pura (sin dependencias de
+ * React/Next/Expo) compartida entre `apps/web` y `apps/mobile` — tipos de
+ * dominio, stores Zustand, utilidades de cálculo/fecha/UUID y esquemas Zod
+ * de validación.
+ */
+
 // Types
 export * from "./types/index.js";
 

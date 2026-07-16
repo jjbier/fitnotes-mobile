@@ -1,8 +1,20 @@
+/**
+ * Selector de fecha para mobile: un campo tipo botón que, al tocarlo, abre el
+ * `DateTimePicker` nativo del sistema en modo "date" y formatea la fecha
+ * elegida en español.
+ */
 import { useState } from "react";
 import { TouchableOpacity, Text, View } from "react-native";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
 
+/**
+ * Props de `DateInput`.
+ * - `value`: fecha en formato `YYYY-MM-DD`, o `""` si no hay fecha seleccionada.
+ * - `onChange`: recibe la nueva fecha en el mismo formato `YYYY-MM-DD`.
+ * - `placeholder`: texto mostrado cuando `value` está vacío.
+ * - `clearable`: si es `true` y hay valor, muestra un botón para vaciarlo (llama a `onChange("")`).
+ */
 interface Props {
   value: string; // YYYY-MM-DD o ""
   onChange: (value: string) => void;
@@ -10,11 +22,18 @@ interface Props {
   clearable?: boolean;
 }
 
+/**
+ * Campo de fecha con selector nativo. Internamente parsea `value` fijando la
+ * hora a mediodía (`T12:00:00`) para evitar que la conversión UTC del
+ * `Date` empuje la fecha al día anterior/siguiente por zona horaria al
+ * mostrarla o al abrir el picker.
+ */
 export default function DateInput({ value, onChange, placeholder = "Seleccionar fecha", clearable = false }: Props) {
   const [show, setShow] = useState(false);
 
   const parsedDate = value ? new Date(value + "T12:00:00") : new Date();
 
+  /** Cierra el picker y, si el usuario no canceló (`selected` presente), propaga la fecha en formato `YYYY-MM-DD`. */
   function handleChange(_e: DateTimePickerEvent, selected?: Date) {
     setShow(false);
     if (selected) onChange(selected.toISOString().split("T")[0]!);

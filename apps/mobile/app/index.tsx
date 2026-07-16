@@ -3,6 +3,13 @@ import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
+/**
+ * Pantalla de bienvenida en `app/index.tsx` (ruta raíz `/`), con CTAs a
+ * "Iniciar sesión" y "Registrarse". No forma parte del flujo real de arranque:
+ * `_layout.tsx` raíz redirige siempre a `(tabs)` en el primer render (modo
+ * invitado sin cuenta), por lo que esta pantalla solo es alcanzable navegando
+ * explícitamente a `/` (no hay ningún botón de la app que lo haga hoy).
+ */
 export default function LandingScreen() {
   const router = useRouter();
 

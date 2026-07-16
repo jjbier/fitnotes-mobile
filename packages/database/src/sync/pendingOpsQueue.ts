@@ -1,5 +1,12 @@
+/**
+ * Cola durable de operaciones pendientes de subir (`pending_ops`, tabla
+ * SQLite local): cada escritura offline encola una fila aquí; el `SyncEngine`
+ * la procesa en el push y, si falla, la reintenta con backoff exponencial en
+ * vez de descartarla.
+ */
 import type { SqlExecutor } from "../local/sqlExecutor.js";
 
+/** Fila de la cola `pending_ops`: una operación de escritura (insert/update/delete) pendiente de subir a Supabase. */
 export interface PendingOpRow {
   id: number;
   table_name: string;
@@ -23,11 +30,13 @@ export async function getDueOps(db: SqlExecutor): Promise<PendingOpRow[]> {
   );
 }
 
+/** Número total de operaciones en cola (con o sin backoff activo) — usado para el indicador "N cambios sin sincronizar" en la UI. */
 export async function getPendingCount(db: SqlExecutor): Promise<number> {
   const row = await db.getFirstAsync<{ count: number }>(`SELECT COUNT(*) as count FROM pending_ops`);
   return row?.count ?? 0;
 }
 
+/** Retira una operación de la cola tras subirse con éxito. */
 export async function markOpSucceeded(db: SqlExecutor, opId: number): Promise<void> {
   await db.runAsync(`DELETE FROM pending_ops WHERE id = ?`, [opId]);
 }
@@ -45,6 +54,11 @@ export async function hasPendingOpsForRow(
   return (row?.count ?? 0) > 0;
 }
 
+/**
+ * Registra un intento fallido: incrementa `attempts`, guarda el error y fija
+ * `next_retry_at` con backoff exponencial (`BASE_BACKOFF_MS * 2^attempts`,
+ * limitado a `MAX_BACKOFF_MS`) para que {@link getDueOps} la ignore hasta entonces.
+ */
 export async function markOpFailed(
   db: SqlExecutor,
   opId: number,

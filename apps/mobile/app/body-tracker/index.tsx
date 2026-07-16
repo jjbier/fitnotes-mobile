@@ -12,6 +12,11 @@ import DateInput from "../../components/DateInput";
 import { useTheme } from "../../lib/theme";
 import { useRepositories } from "../../contexts/RepositoryContext";
 
+/**
+ * Medida corporal configurable (peso, % de grasa, cintura, etc.), con su unidad,
+ * estado de visibilidad y objetivo asociado (`goal_type`/`goal_value`) usado para
+ * colorear la variación entre registros como progreso positivo o negativo.
+ */
 interface Measurement {
   id: string;
   name: string;
@@ -22,6 +27,7 @@ interface Measurement {
   is_default: boolean;
 }
 
+/** Un valor registrado de una medida en una fecha concreta, con comentario opcional. */
 interface Entry {
   id: string;
   measurement_id: string;
@@ -32,6 +38,14 @@ interface Entry {
 
 const PRESET_UNITS = ["kg", "lbs", "cm", "in", "%"];
 
+/**
+ * Pantalla "Medidas corporales": CRUD de medidas personalizadas y de sus entradas.
+ * Tres pestañas: Registrar (tarjetas con último valor, variación vs. anterior y
+ * reordenables por drag&drop), Historial (registros agrupados por fecha, filtrables
+ * por medida) y Gráfico (evolución temporal de una medida con línea de objetivo; tocar
+ * un punto del gráfico revela el resto de medidas registradas ese mismo día). Usa el
+ * repositorio único `bodyTrackerRepo` de `useRepositories()` (ya resuelto local/remoto).
+ */
 export default function BodyTrackerScreen() {
   const router = useRouter();
   const theme = useTheme();
@@ -66,6 +80,11 @@ export default function BodyTrackerScreen() {
   const [measureGoalValue, setMeasureGoalValue] = useState("");
   const [measureSaving, setMeasureSaving] = useState(false);
 
+  /**
+   * Siembra las medidas por defecto si el usuario no tiene ninguna (primer arranque),
+   * carga todas las medidas y, para cada una habilitada, obtiene en paralelo sus dos
+   * últimas entradas (actual y anterior) para poder mostrar la variación en la tarjeta.
+   */
   const loadData = useCallback(async () => {
     setIsLoading(true);
     await repo.seedDefaultMeasurementsIfNeeded(userId);
@@ -91,11 +110,16 @@ export default function BodyTrackerScreen() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadData(); }, [loadData]);
 
+  /** Carga todas las entradas de todas las medidas del usuario para la pestaña Historial. */
   async function loadHistory() {
     const { data } = await repo.getAllEntries(userId);
     if (data) setHistoryEntries(data as Entry[]);
   }
 
+  /**
+   * Carga las últimas 60 entradas de una medida para el gráfico. El repo las devuelve
+   * más recientes primero; se invierten para que `LineChart` las pinte en orden cronológico.
+   */
   async function loadChart(measurementId: string) {
     setChartMeasurementId(measurementId);
     setChartLoading(true);
@@ -105,6 +129,11 @@ export default function BodyTrackerScreen() {
     setChartLoading(false);
   }
 
+  /**
+   * Al tocar un punto del gráfico, resuelve la fecha de esa entrada y carga el historial
+   * completo para poder listar (vía `groupedHistory`/`historyEntries`) el resto de medidas
+   * registradas ese mismo día — permite comparar varias medidas sin cambiar de pestaña.
+   */
   async function handleChartPointPress(index: number) {
     const entry = chartEntries[index];
     if (!entry) return;
@@ -239,6 +268,11 @@ export default function BodyTrackerScreen() {
     );
   }
 
+  /**
+   * Reordena las medidas habilitadas tras un drag&drop: aplica el nuevo orden de forma
+   * optimista (las deshabilitadas se mantienen al final) y solo si el repo falla al
+   * persistirlo revierte al orden previo, avisando al usuario.
+   */
   async function handleMeasurementDragEnd({ data }: { data: Measurement[] }) {
     const prevOrder = measurements;
     const disabledPart = measurements.filter((m) => !m.is_enabled);
@@ -270,6 +304,7 @@ export default function BodyTrackerScreen() {
   const measurementUnit = (id: string) => measurements.find((m) => m.id === id)?.unit ?? "";
   const measurementById = (id: string) => measurements.find((m) => m.id === id);
 
+  /** Agrupa las entradas del historial por medida, usado para hallar el registro anterior de cada una. */
   const entriesByMeasurement = useMemo(() => {
     const map: Record<string, Entry[]> = {};
     for (const e of historyEntries) (map[e.measurement_id] ??= []).push(e);
@@ -277,6 +312,11 @@ export default function BodyTrackerScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [historyEntries]);
 
+  /**
+   * Determina el color (éxito/peligro) de la variación entre dos valores según el
+   * objetivo de la medida: para `SPECIFIC` es positivo acercarse al valor objetivo,
+   * para `DECREASE` es positivo bajar, y para `INCREASE` (por defecto) es positivo subir.
+   */
   function deltaColorFor(m: Measurement | undefined, current: number, prev: number): string {
     if (!m) return theme.textMuted;
     if (m.goal_type === "SPECIFIC" && m.goal_value != null) {
@@ -288,6 +328,7 @@ export default function BodyTrackerScreen() {
       : (delta >= 0 ? theme.success : theme.danger);
   }
 
+  /** Filtra el historial por la medida seleccionada (si hay filtro) y lo agrupa por fecha para el render. */
   const groupedHistory = useMemo(() => {
     const filtered = historyFilterId ? historyEntries.filter((e) => e.measurement_id === historyFilterId) : historyEntries;
     const groups: { date: string; entries: Entry[] }[] = [];

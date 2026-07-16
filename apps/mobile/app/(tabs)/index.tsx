@@ -12,6 +12,26 @@ import { useRepositories } from "../../contexts/RepositoryContext";
 import DateInput from "../../components/DateInput";
 import { useTheme } from "../../lib/theme";
 
+/**
+ * Tab Hoy ("Home"): entrenamiento activo del día seleccionado, con
+ * navegación entre días (flechas, franja semanal con racha) y todo el ciclo
+ * de vida del entrenamiento. Soporta:
+ * - Iniciar entrenamiento desde una rutina (registra todos sus ejercicios y
+ *   series predefinidas) o vacío; copiar ejercicios desde un entrenamiento
+ *   anterior; mover un entrenamiento a otra fecha.
+ * - Reordenar ejercicios del entrenamiento por drag&drop
+ *   (`NestableDraggableFlatList`), con indicador visual de supersets
+ *   agrupados (`group_id`).
+ * - Selección múltiple de ejercicios del entrenamiento para borrado masivo.
+ * - Temporizador de duración del entrenamiento (play/pause), guardando
+ *   `start_time`/`end_time`/`duration_minutes` al finalizar.
+ * - Resumen final (duración, ejercicios, series, volumen) al finalizar el
+ *   entrenamiento.
+ * - Compartir el entrenamiento como texto (única operación que sigue usando
+ *   el repo remoto directamente, fuera de alcance offline).
+ * - Recarga automática cuando `refetchSignal` indica que un sync trajo
+ *   entrenamientos nuevos (p.ej. historial de una cuenta recién vinculada).
+ */
 export default function HomeScreen() {
   const colors = useTheme();
   const router = useRouter();
@@ -65,6 +85,7 @@ export default function HomeScreen() {
   // shareWorkout sigue requiriendo red (fuera de alcance offline) — usa el repo remoto directamente.
   const remoteWorkoutRepo = useMemo(() => createWorkoutRepository(supabase), []);
 
+  /** Carga (o inicializa vacío) el entrenamiento de `date` junto con sus ejercicios y series, y los vuelca al store. */
   const loadWorkoutForDate = useCallback(async (date: string) => {
     const { data: workout } = await repo.getWorkoutByDate(date);
     if (!workout) {
@@ -90,11 +111,26 @@ export default function HomeScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /** Carga los últimos 60 entrenamientos (para racha/franja semanal/copiar) y sus resúmenes (nº ejercicios, volumen) para "Actividad reciente". */
+  const loadRecentWorkouts = useCallback(async () => {
+    const { data: recent } = await repo.getWorkouts(60);
+    if (recent) {
+      loadWorkouts(recent.map((w) => ({
+        id: w.id, date: w.date, comment: w.comment ?? undefined,
+        start_time: w.start_time ?? undefined, end_time: w.end_time ?? undefined,
+      })));
+    }
+    const { data: summaries } = await repo.getWorkoutsWithSummary(10);
+    const summaryMap: Record<string, { exerciseCount: number; volume: number }> = {};
+    for (const s of summaries) summaryMap[s.id] = { exerciseCount: s.exerciseCount, volume: s.volume };
+    setRecentSummaries(summaryMap);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repo]);
+
   useEffect(() => {
     async function init() {
       setLoading(true);
-      const [recentRes, catRes, exRes] = await Promise.all([
-        repo.getWorkouts(60),
+      const [catRes, exRes] = await Promise.all([
         exercises.length > 0 ? Promise.resolve({ data: null }) : exRepo.getCategories(),
         exercises.length > 0 ? Promise.resolve({ data: null }) : exRepo.getExercises(),
       ]);
@@ -105,16 +141,7 @@ export default function HomeScreen() {
           notes: ex.notes ?? undefined, is_favorite: ex.is_favorite, created_at: ex.created_at,
         })));
       }
-      if (recentRes.data) {
-        loadWorkouts(recentRes.data.map((w) => ({
-          id: w.id, date: w.date, comment: w.comment ?? undefined,
-          start_time: w.start_time ?? undefined, end_time: w.end_time ?? undefined,
-        })));
-      }
-      const { data: summaries } = await repo.getWorkoutsWithSummary(10);
-      const summaryMap: Record<string, { exerciseCount: number; volume: number }> = {};
-      for (const s of summaries) summaryMap[s.id] = { exerciseCount: s.exerciseCount, volume: s.volume };
-      setRecentSummaries(summaryMap);
+      await loadRecentWorkouts();
       await loadWorkoutForDate(params.date || today);
       setLoading(false);
     }
@@ -122,9 +149,13 @@ export default function HomeScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Un pull de sync trae workouts nuevos (p.ej. historial de una cuenta recién
+  // vinculada) — sin esto, "Actividad reciente" y la racha solo reflejaban lo
+  // que había en local al montar la pantalla, hasta el siguiente reinicio.
   useEffect(() => {
     if (refetchSignal === 0) return;
     loadWorkoutForDate(currentDate);
+    void loadRecentWorkouts();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refetchSignal]);
 
@@ -166,6 +197,7 @@ export default function HomeScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timerState]);
 
+  /** Inicia o reanuda el temporizador del entrenamiento; en el primer arranque persiste `start_time` en el entrenamiento. */
   async function handleStartTimer() {
     if (!activeWorkout?.id) return;
     timerSegmentStartRef.current = Date.now();
@@ -177,6 +209,7 @@ export default function HomeScreen() {
     }
   }
 
+  /** Pausa el temporizador, acumulando el tiempo transcurrido del segmento actual en `timerElapsedRef`. */
   function handlePauseTimer() {
     if (timerSegmentStartRef.current !== null) {
       timerElapsedRef.current += Math.floor((Date.now() - timerSegmentStartRef.current) / 1000);
@@ -187,6 +220,7 @@ export default function HomeScreen() {
     setTimerState("paused");
   }
 
+  /** Abre el modal de "iniciar entrenamiento" y carga la lista de rutinas disponibles para registrar. */
   async function openStartModal() {
     setShowStartModal(true);
     setStartModalLoading(true);
@@ -195,6 +229,12 @@ export default function HomeScreen() {
     setStartModalLoading(false);
   }
 
+  /**
+   * Registra un entrenamiento a partir de una rutina: crea el `workout` en la
+   * fecha actual, añade todos los ejercicios únicos de todos los días de la
+   * rutina (deduplicados por `exercise_id`) y sus series predefinidas, y
+   * vuelca el resultado al store como entrenamiento activo.
+   */
   async function handleLogRoutine(routineId: string) {
     setLoggingRoutineId(routineId);
     const { data: days } = await routineRepo.getDays(routineId);
@@ -263,6 +303,13 @@ export default function HomeScreen() {
     setShowStartModal(false);
   }
 
+  /**
+   * Pide confirmación y finaliza el entrenamiento activo: detiene el
+   * temporizador, persiste `end_time`/`duration_minutes`, calcula el resumen
+   * final (series completadas sin calentamiento, volumen total excluyendo
+   * calentamiento) para el modal de resumen, y limpia el entrenamiento activo
+   * del store.
+   */
   async function handleFinish() {
     if (!activeWorkout) return;
     Alert.alert("¿Finalizar entrenamiento?", "¿Estás seguro?", [
@@ -292,11 +339,13 @@ export default function HomeScreen() {
     ]);
   }
 
+  /** Activa/desactiva el modo de selección múltiple de ejercicios del entrenamiento, limpiando la selección al alternar. */
   function toggleSelectMode() {
     setSelectMode((v) => !v);
     setSelectedWEIds(new Set());
   }
 
+  /** Añade/quita un `workout_exercise` del conjunto seleccionado en modo selección múltiple. */
   function toggleSelectWE(id: string) {
     setSelectedWEIds((prev) => {
       const next = new Set(prev);
@@ -305,6 +354,7 @@ export default function HomeScreen() {
     });
   }
 
+  /** Pide confirmación y elimina en bloque todos los ejercicios (y sus series) seleccionados en modo selección múltiple. */
   function handleDeleteSelected() {
     if (selectedWEIds.size === 0) return;
     Alert.alert(
@@ -325,12 +375,14 @@ export default function HomeScreen() {
     );
   }
 
+  /** Aplica el nuevo orden de ejercicios del entrenamiento tras un drag&drop, actualizando store y repo. */
   function handleReorderExercises(data: WorkoutExercise[]) {
     const orderedIds = data.map((we) => we.id);
     reorderExercises(orderedIds);
     void repo.reorderExercises(data.map((we, i) => ({ id: we.id, order_index: i })));
   }
 
+  /** Pide confirmación y elimina un único ejercicio del entrenamiento (y todas sus series). */
   async function handleRemoveExercise(workoutExerciseId: string, exerciseName: string) {
     Alert.alert(`¿Eliminar "${exerciseName}"?`, "Se eliminarán también todas sus series.", [
       { text: "Cancelar", style: "cancel" },
@@ -341,6 +393,7 @@ export default function HomeScreen() {
     ]);
   }
 
+  /** Pide confirmación y elimina permanentemente un entrenamiento completo de "Actividad reciente". */
   async function handleDeleteWorkout(workoutId: string, date: string) {
     Alert.alert(`¿Eliminar entrenamiento del ${formatWorkoutDate(date)}?`, "Se eliminará permanentemente.", [
       { text: "Cancelar", style: "cancel" },
@@ -351,11 +404,13 @@ export default function HomeScreen() {
     ]);
   }
 
+  /** Persiste la nota del entrenamiento activo al perder el foco del campo de comentario. */
   async function handleSaveComment() {
     setWorkoutComment(workoutComment);
     if (activeWorkout?.id) await repo.updateWorkout(activeWorkout.id, { comment: workoutComment || undefined });
   }
 
+  /** Mueve el entrenamiento activo a `moveDate`, cierra el modal y recarga la pantalla en la nueva fecha. */
   async function handleMoveWorkout() {
     if (!activeWorkout?.id || !moveDate) return;
     await repo.moveWorkout(activeWorkout.id, moveDate);
@@ -364,12 +419,18 @@ export default function HomeScreen() {
     await loadWorkoutForDate(moveDate);
   }
 
+  /** Genera un texto compartible del entrenamiento activo vía el repo remoto (`shareWorkout`, requiere red) y abre el share sheet nativo. */
   async function handleShareWorkout() {
     if (!activeWorkout?.id) return;
     const text = await remoteWorkoutRepo.shareWorkout(activeWorkout.id);
     if (text) await Share.share({ message: text });
   }
 
+  /**
+   * Copia los ejercicios (sin series) de `sourceWorkoutId` al entrenamiento
+   * del día actual, creándolo primero si no existe todavía; omite los
+   * ejercicios que ya estén presentes en el destino.
+   */
   async function handleCopyWorkout(sourceWorkoutId: string) {
     setCopyLoading(true);
     setShowCopyModal(false);
@@ -392,6 +453,7 @@ export default function HomeScreen() {
     setCopyLoading(false);
   }
 
+  /** Navega `delta` días desde la fecha actual (negativo = atrás, positivo = adelante) y recarga el entrenamiento de esa fecha. */
   async function handleNavigateDate(delta: number) {
     const date = new Date(currentDate);
     date.setDate(date.getDate() + delta);
@@ -404,6 +466,7 @@ export default function HomeScreen() {
 
   // Streak: consecutive days with workouts ending at today or yesterday
   const workoutDateSet = new Set(workouts.map((w) => w.date));
+  /** Racha de días consecutivos con entrenamiento, contando hacia atrás desde hoy (o desde ayer si hoy aún no tiene entrenamiento). */
   const streak = (() => {
     let count = 0;
     const d = new Date(today + "T00:00:00");
@@ -419,6 +482,7 @@ export default function HomeScreen() {
   })();
 
   // This-week workout days (Mon–Sun of current calendar week)
+  /** Los 7 días (lunes a domingo) de la semana natural actual, con si cada uno tiene entrenamiento, si es hoy y si es futuro — para la franja semanal. */
   const weekDays = (() => {
     const todayDate = new Date(today + "T00:00:00");
     const dow = todayDate.getDay(); // 0=Sun

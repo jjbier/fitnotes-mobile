@@ -118,6 +118,7 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
   return {
     // ─── Workouts ──────────────────────────────────────────────────────────────
 
+    /** Busca el `workouts` vivo de una fecha exacta (el más antiguo si hubiera varios). Solo lectura. */
     async getWorkoutByDate(date: string): Promise<{ data: WorkoutRow | null; error: RepoError | null }> {
       const row = await db.getFirstAsync<RawRow>(
         `SELECT * FROM workouts WHERE date = ? AND _deleted = 0 ORDER BY created_at ASC LIMIT 1`,
@@ -126,6 +127,7 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
       return { data: row ? mapWorkoutRow(row) : null, error: null };
     },
 
+    /** Lee los últimos `limit` `workouts` vivos, más reciente primero. Solo lectura. */
     async getWorkouts(limit = 30): Promise<{ data: WorkoutRow[]; error: RepoError | null }> {
       const rows = await db.getAllAsync<RawRow>(
         `SELECT * FROM workouts WHERE _deleted = 0 ORDER BY date DESC LIMIT ?`,
@@ -134,6 +136,12 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
       return { data: rows.map(mapWorkoutRow), error: null };
     },
 
+    /**
+     * Lee los últimos `limit` entrenamientos con número de ejercicios y
+     * volumen (peso×reps de sets completos no-warmup) agregados en JS —
+     * espeja el resumen que en remoto haría una vista/RPC de Postgres, aquí
+     * como varios joins manuales sobre las tablas locales. Solo lectura.
+     */
     async getWorkoutsWithSummary(limit = 10): Promise<{
       data: { id: string; date: string; exerciseCount: number; volume: number }[];
     }> {
@@ -182,6 +190,7 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
       };
     },
 
+    /** Inserta un nuevo entrenamiento en `workouts` con UUID de cliente y encola el insert. */
     async createWorkout(
       data: { date: string; start_time?: string; comment?: string },
       userId: string
@@ -210,6 +219,7 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
       return { data: row, error: null };
     },
 
+    /** Actualiza campos parciales de un entrenamiento (fecha, horas, duración, comentario) y encola el update. */
     async updateWorkout(
       id: string,
       data: { date?: string; start_time?: string; end_time?: string; duration_minutes?: number; comment?: string }
@@ -232,6 +242,11 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
       return { data: row ? mapWorkoutRow(row) : null, error: null };
     },
 
+    /**
+     * Tombstonea un entrenamiento y cascada manual sobre sus
+     * `workout_exercises` y los `sets` de cada uno — espeja el
+     * `ON DELETE CASCADE` remoto. Un `pending_op` de delete por fila afectada.
+     */
     async deleteWorkout(id: string): Promise<{ error: RepoError | null }> {
       await db.withTransactionAsync(async () => {
         const wes = await db.getAllAsync<{ id: string }>(
@@ -259,6 +274,7 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
 
     // ─── Workout Exercises ─────────────────────────────────────────────────────
 
+    /** Lee los `workout_exercises` vivos de un entrenamiento, ordenados por `order_index`. Solo lectura. */
     async getWorkoutExercises(workoutId: string): Promise<{ data: WorkoutExerciseRow[]; error: RepoError | null }> {
       const rows = await db.getAllAsync<RawRow>(
         `SELECT * FROM workout_exercises WHERE workout_id = ? AND _deleted = 0 ORDER BY order_index ASC`,
@@ -267,6 +283,7 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
       return { data: rows.map(mapWorkoutExerciseRow), error: null };
     },
 
+    /** Añade un ejercicio a un entrenamiento en `workout_exercises` con UUID de cliente y encola el insert. */
     async addExercise(
       data: { workout_id: string; exercise_id: string; order_index: number; group_id?: string; group_name?: string },
       userId: string
@@ -295,6 +312,11 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
       return { data: row, error: null };
     },
 
+    /**
+     * Tombstonea un `workout_exercises` y cascada manual sobre sus `sets` —
+     * espeja el `ON DELETE CASCADE` remoto. Un `pending_op` de delete por set
+     * más el del propio ejercicio de entrenamiento.
+     */
     async removeExercise(id: string): Promise<{ error: RepoError | null }> {
       await db.withTransactionAsync(async () => {
         const ts = nowIso();
@@ -307,6 +329,7 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
       return { error: null };
     },
 
+    /** Actualiza `group_id`/`group_name` (supersets) de un ejercicio de entrenamiento y encola el update. */
     async updateWorkoutExercise(
       id: string,
       patch: { group_id?: string | null; group_name?: string | null }
@@ -324,6 +347,7 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
       return { error: null };
     },
 
+    /** Propaga `group_name` a todos los `workout_exercises` que comparten `group_id` (superset), un `pending_op` de update por fila. */
     async updateGroupName(groupId: string, name: string): Promise<{ error: RepoError | null }> {
       const ts = nowIso();
       await db.withTransactionAsync(async () => {
@@ -340,6 +364,7 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
       return { error: null };
     },
 
+    /** Actualiza `order_index` de varios `workout_exercises`, una `pending_op` de update por fila, todo en una transacción. */
     async reorderExercises(updates: { id: string; order_index: number }[]): Promise<{ error: RepoError | null }> {
       const ts = nowIso();
       await db.withTransactionAsync(async () => {
@@ -355,6 +380,14 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
       return { error: null };
     },
 
+    /**
+     * Copia los ejercicios (y sus sets, reiniciados a incompletos) de
+     * `sourceWorkoutId` hacia `targetWorkoutId`, saltando los ya presentes en
+     * `existingExerciseIds` — usado para "repetir entrenamiento anterior". IDs
+     * nuevos generados en cliente, un `pending_op` de insert por fila nueva.
+     * A diferencia del resto de métodos no devuelve `{ data, error }`: es
+     * fire-and-forget desde la UI.
+     */
     async copyWorkout(
       sourceWorkoutId: string,
       targetWorkoutId: string,
@@ -426,6 +459,7 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
       });
     },
 
+    /** Cambia la fecha de un entrenamiento existente en `workouts` y encola el update. */
     async moveWorkout(workoutId: string, targetDate: string): Promise<{ data: WorkoutRow | null; error: RepoError | null }> {
       const ts = nowIso();
       await db.withTransactionAsync(async () => {
@@ -438,6 +472,7 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
 
     // ─── Sets ──────────────────────────────────────────────────────────────────
 
+    /** Lee los `sets` vivos de un ejercicio de entrenamiento, ordenados por `order_index`. Solo lectura. */
     async getSets(workoutExerciseId: string): Promise<{ data: SetRow[]; error: RepoError | null }> {
       const rows = await db.getAllAsync<RawRow>(
         `SELECT * FROM sets WHERE workout_exercise_id = ? AND _deleted = 0 ORDER BY order_index ASC`,
@@ -446,6 +481,7 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
       return { data: rows.map(mapSetRow), error: null };
     },
 
+    /** Inserta un nuevo set (incompleto, no-warmup) en `sets` con UUID de cliente y encola el insert. No genera PR — solo `updateSet` lo hace, al completarse. */
     async createSet(
       data: {
         workout_exercise_id: string;
@@ -485,6 +521,14 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
       return { data: row, error: null };
     },
 
+    /**
+     * Actualiza campos parciales de un set (UPDATE dinámico por claves
+     * presentes) y encola el update. Tras escribir, relee la fila y llama a
+     * `maybeRecordPersonalRecord` en la misma transacción — si el set queda
+     * completo y supera el PR vigente para esas reps, inserta una fila nueva
+     * en `personal_records` (réplica JS del trigger SQL remoto; puede duplicar
+     * con el PR que genere el trigger tras el push, ver `offline-sync.md`).
+     */
     async updateSet(
       id: string,
       data: {
@@ -517,6 +561,7 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
       return { data: row ? mapSetRow(row) : null, error: null };
     },
 
+    /** Tombstonea un único set y encola el delete. No borra los `personal_records` ya generados por ese set. */
     async deleteSet(id: string): Promise<{ error: RepoError | null }> {
       await db.withTransactionAsync(async () => {
         await db.runAsync(`UPDATE sets SET _deleted = 1, _dirty = 1, updated_at = ? WHERE id = ?`, [nowIso(), id]);
@@ -525,6 +570,7 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
       return { error: null };
     },
 
+    /** Actualiza `order_index` de varios sets, una `pending_op` de update por fila, todo en una transacción. */
     async reorderSets(updates: { id: string; order_index: number }[]): Promise<{ error: RepoError | null }> {
       const ts = nowIso();
       await db.withTransactionAsync(async () => {
@@ -538,6 +584,11 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
 
     // ─── Lecturas auxiliares (dashboard, búsqueda global) ─────────────────────
 
+    /**
+     * Devuelve los sets (peso/reps/distancia/tiempo) de la sesión más
+     * reciente de `exerciseId` distinta de `currentWorkoutId` — alimenta el
+     * placeholder "última vez" al registrar un set nuevo. Solo lectura.
+     */
     async getLastSessionSets(
       exerciseId: string,
       currentWorkoutId: string
@@ -573,6 +624,12 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
       return sets;
     },
 
+    /**
+     * Para cada ejercicio en `exerciseIds`, devuelve fecha, peso/reps máximos
+     * y número de sets de su sesión más reciente — usado por el dashboard y
+     * la búsqueda global para mostrar el último registro sin abrir el
+     * entrenamiento completo. Solo lectura.
+     */
     async getLastWorkoutByExercises(
       exerciseIds: string[]
     ): Promise<Record<string, { date: string; maxWeight: number; maxReps: number; setCount: number }>> {
@@ -614,4 +671,5 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
   };
 }
 
+/** Tipo del repositorio devuelto por {@link createLocalWorkoutRepository}. */
 export type LocalWorkoutRepository = ReturnType<typeof createLocalWorkoutRepository>;

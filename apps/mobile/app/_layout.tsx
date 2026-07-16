@@ -25,8 +25,12 @@ import type { Session } from "@supabase/supabase-js";
 import { RepositoryProvider, useRepositories } from "../contexts/RepositoryContext";
 import { getLocalDb } from "../lib/db/client";
 
-// Claves de UserPreferences que también viven en `user_metadata` de Supabase
-// (mecanismo de sync entre dispositivos para cuentas reales — ver localPreferencesRepository).
+/**
+ * Claves de `UserPreferences` que también viven en `user_metadata` de Supabase
+ * (mecanismo de sync entre dispositivos para cuentas reales — ver
+ * `localPreferencesRepository`). Solo estas claves se leen/escriben en
+ * `user_metadata`; el resto de preferencias quedan solo en SQLite local.
+ */
 const METADATA_PREFERENCE_KEYS = [
   "theme_preference",
   "display_name",
@@ -46,10 +50,15 @@ const METADATA_PREFERENCE_KEYS = [
   "calendar_show_category_dots",
 ] as const satisfies readonly (keyof UserPreferences)[];
 
-// En modo invitado no hay `user_metadata` que leer — la tabla local (ya
-// hidratada por RepositoryContext) sigue siendo el fallback y no se toca.
-// Con cuenta real, el valor remoto gana sobre el local (refleja cambios
-// hechos desde otro dispositivo) y se persiste local para futuras lecturas.
+/**
+ * Hidrata las preferencias locales con los valores de `user_metadata` de la
+ * sesión de Supabase (si existe), y actualiza también el modo de tema en
+ * `useThemeModeStore`. En modo invitado no hay `user_metadata` que leer — la
+ * tabla local (ya hidratada por `RepositoryContext`) sigue siendo el fallback
+ * y no se toca. Con cuenta real, el valor remoto gana sobre el local (refleja
+ * cambios hechos desde otro dispositivo) y se persiste local para futuras
+ * lecturas. Se llama en cada cambio de sesión, vía `handleSessionChange`.
+ */
 async function hydratePreferencesFromSession(session: Session | null) {
   if (!session) return;
   const metadata = session.user.user_metadata as Record<string, unknown> | undefined;
@@ -101,6 +110,14 @@ const styles = StyleSheet.create({
   },
 });
 
+/**
+ * Layout raíz de la app (`app/_layout.tsx`). Envuelve todo el árbol en
+ * `GestureHandlerRootView` (requerido por `react-native-gesture-handler`, usado
+ * en drag&drop de calendario/ejercicios/entrenamiento) y en `RepositoryProvider`
+ * (resuelve la identidad local — invitado o cuenta real — y expone los repos
+ * locales vía `useRepositories()`). Toda la lógica real vive en `AppContent`,
+ * que necesita estar dentro del provider para leer `userId`/`isGuest`.
+ */
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -111,6 +128,25 @@ export default function RootLayout() {
   );
 }
 
+/**
+ * Contenido real del layout raíz: declara el `Stack` de navegación (tabs,
+ * pantallas modales de entrenamiento/ejercicios/rutinas/body-tracker/etc.) y
+ * concentra toda la lógica de sincronización y de identidad de cuenta —
+ * sin gate de autenticación: la app entra siempre en `(tabs)`.
+ *
+ * Responsabilidades:
+ * - Arranque: en el primer render resuelve la sesión de Supabase (si existe),
+ *   hidrata preferencias y redirige a `(tabs)` si aún no se está en `(tabs)`
+ *   ni en `(auth)`.
+ * - Reacciona a `onAuthStateChange` para: vincular datos de invitado a una
+ *   cuenta recién creada/vinculada (`claimGuestIdentity`), vaciar la DB local
+ *   en sign-out real, o cambiar de identidad si se inicia sesión directamente
+ *   en otra cuenta.
+ * - Dispara `runSync()` tras cambios de sesión, al volver la app a primer
+ *   plano y al recuperar conexión — y expone el estado de sync (`syncStatus`,
+ *   `pendingCount`, `lastSyncAt`, `refetchSignal`) vía `SyncContext` para que
+ *   las pantallas puedan refrescar sus datos tras un pull remoto.
+ */
 function AppContent() {
   const router = useRouter();
   const segments = useSegments();
@@ -130,6 +166,29 @@ function AppContent() {
   const loadExercises = useExerciseStore((s) => s.loadExercises);
   const loadRoutines = useRoutineStore((s) => s.loadRoutines);
 
+  /**
+   * Resetea el estado de sync a valores neutros. Tras un wipe (sign-out o
+   * cambio directo de cuenta) el banner de sync no debe seguir mostrando el
+   * estado de la identidad anterior (p.ej. un "Error de sincronización" que
+   * quedó colgado justo antes del wipe). Incrementa `refetchSignal` para que
+   * las pantallas vuelvan a leer de la DB local ya vacía.
+   */
+  const resetSyncState = useCallback(() => {
+    setSyncStatus("idle");
+    setPendingCount(0);
+    setLastSyncAt(null);
+    setRefetchSignal((n) => n + 1);
+  }, []);
+
+  /**
+   * Ejecuta un ciclo de sincronización completo (push + pull) vía
+   * `getSyncEngine().sync(userId)`. No hace nada en modo invitado (RLS/FK de
+   * Supabase rechazarían el push de filas sin cuenta real). Tras sincronizar,
+   * refresca directamente los stores de ejercicios/categorías y rutinas
+   * leyendo de SQLite local (ya actualizado por `applyRemoteRows` durante el
+   * sync, sin volver a pedir a Supabase), y para entrenamientos/series
+   * incrementa `refetchSignal` para que las pantallas relean por su cuenta.
+   */
   const runSync = useCallback(async () => {
     if (isGuest) return; // sin cuenta real todavía — RLS/FK de Supabase rechazarían el push
     setSyncStatus("syncing");
@@ -192,19 +251,24 @@ function AppContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, isGuest]);
 
-  // Reacciona a cambios de sesión de Supabase: si había datos de invitado,
-  // los vincula (claim) a la cuenta recién creada/iniciada antes de
-  // sincronizar. `runInitialBootstrap` no hace falta como paso aparte: al no
-  // haber marca de agua todavía para esta cuenta en este dispositivo, el pull
-  // normal de `runSync()` ya trae el histórico completo la primera vez.
+  /**
+   * Reacciona a cambios de sesión de Supabase: si había datos de invitado,
+   * los vincula (claim) a la cuenta recién creada/iniciada antes de
+   * sincronizar. `runInitialBootstrap` no hace falta como paso aparte: al no
+   * haber marca de agua todavía para esta cuenta en este dispositivo, el pull
+   * normal de `runSync()` ya trae el histórico completo la primera vez.
+   *
+   * @param session Sesión actual de Supabase (o `null` si no hay ninguna).
+   * @param isExplicitSignOut Distingue un `SIGNED_OUT` real (borra la DB
+   * local) de una mera comprobación de sesión sin resultado — p.ej. la sesión
+   * de Supabase no sobrevivió a un `force-stop` (bug pre-existente conocido,
+   * ver CLAUDE.md). Tratar "sin sesión" como sign-out en el arranque en frío
+   * borraría datos de una cuenta real que simplemente no pudo reautenticar en
+   * segundo plano — en ese caso preferimos dejar la identidad como estaba y
+   * que el sync falle silenciosamente hasta que el usuario vuelva a iniciar
+   * sesión manualmente.
+   */
   const handleSessionChange = useCallback(
-    // `isExplicitSignOut` distingue un SIGNED_OUT real (borra la DB local) de
-    // una mera comprobación de sesión sin resultado (p.ej. la sesión de
-    // Supabase no sobrevivió a un `force-stop` — bug pre-existente conocido).
-    // Tratar "sin sesión" como sign-out en el arranque en frío borraría datos
-    // de una cuenta real que simplemente no pudo reautenticar en segundo
-    // plano — en ese caso preferimos dejar la identidad como estaba y que el
-    // sync falle silenciosamente hasta que el usuario vuelva a iniciar sesión.
     async (session: Session | null, isExplicitSignOut: boolean) => {
       await hydratePreferencesFromSession(session);
       if (session && session.user.id !== userId) {
@@ -217,6 +281,7 @@ function AppContent() {
           // Edge case raro: login directo a otra cuenta real sin sign-out previo.
           // No se pueden mezclar datos de una cuenta con otra.
           await wipeAndSetIdentity({ userId: session.user.id, isGuest: false });
+          resetSyncState();
         }
       } else if (!session && !isGuest && isExplicitSignOut) {
         // Sign-out: vaciar la DB local para que la siguiente identidad (un
@@ -224,12 +289,23 @@ function AppContent() {
         // El aviso de "cambios sin sincronizar" ya se mostró en Settings antes
         // de llamar a signOut().
         await wipeAndSetIdentity();
+        resetSyncState();
       }
       void runSync();
     },
-    [userId, isGuest, refreshIdentity, wipeAndSetIdentity, runSync]
+    [userId, isGuest, refreshIdentity, wipeAndSetIdentity, runSync, resetSyncState]
   );
 
+  /**
+   * Efecto de arranque + suscripción a `onAuthStateChange`. En el primer
+   * render resuelve la sesión actual (si sobrevivió), procesa el cambio de
+   * sesión (`isExplicitSignOut = false`, nunca se trata como sign-out real en
+   * frío) y redirige a `(tabs)` si el router aún no está en `(tabs)` ni en
+   * `(auth)` — no hay auth guard, esto solo cubre la ruta raíz `/`. A partir
+   * de ahí, cada evento de Supabase (login, registro, sign-out) reprocesa la
+   * identidad y vuelve a `(tabs)`: ya no existe una pantalla de "deslogueado",
+   * el modo invitado la reemplaza siempre.
+   */
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       void handleSessionChange(session, false);
@@ -253,7 +329,7 @@ function AppContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialized]);
 
-  // Sync al volver la app a primer plano.
+  /** Sync al volver la app a primer plano (transición background/inactive → active). */
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState: AppStateStatus) => {
       if (appState.current.match(/inactive|background/) && nextState === "active") {
@@ -264,8 +340,10 @@ function AppContent() {
     return () => subscription.remove();
   }, [runSync]);
 
-  // Sync al recuperar conexión — puede pasar con la app ya en primer plano
-  // (p.ej. saliendo de modo avión), algo que el listener de AppState no detecta.
+  /**
+   * Sync al recuperar conexión — puede pasar con la app ya en primer plano
+   * (p.ej. saliendo de modo avión), algo que el listener de AppState no detecta.
+   */
   useEffect(() => {
     if (isConnected && wasConnected.current === false) {
       void runSync();

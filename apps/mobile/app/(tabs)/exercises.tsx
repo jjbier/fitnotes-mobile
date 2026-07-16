@@ -17,6 +17,7 @@ import { useTheme } from "../../lib/theme";
 import { useSyncStatus } from "../../contexts/SyncContext";
 import { useRepositories } from "../../contexts/RepositoryContext";
 
+/** Opciones de tipo de ejercicio mostradas en el modal de creación/edición, con su etiqueta en español. */
 const TYPE_OPTIONS: { value: ExerciseType; label: string }[] = [
   { value: ExerciseType.WEIGHT_REPS, label: "Peso × Reps" },
   { value: ExerciseType.REPS_ONLY, label: "Solo reps" },
@@ -30,14 +31,33 @@ const TYPE_OPTIONS: { value: ExerciseType; label: string }[] = [
   { value: ExerciseType.DISTANCE_ONLY, label: "Solo distancia" },
 ];
 
+/** Paleta de colores predefinidos seleccionable al crear/editar una categoría. */
 const PRESET_COLORS = [
   "#6366f1", "#8b5cf6", "#ec4899", "#ef4444",
   "#f97316", "#eab308", "#22c55e", "#14b8a6",
   "#3b82f6", "#64748b",
 ];
 
+/** Tipos de ejercicio que registran peso (muestran selector de unidad kg/lb e incremento de peso en el formulario). */
 const WEIGHT_TYPES = [ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHT_ONLY, ExerciseType.WEIGHT_DISTANCE, ExerciseType.WEIGHT_TIME];
 
+/**
+ * Tab Ejercicios: catálogo de ejercicios agrupado por categoría muscular
+ * (tarjetas de categoría con contador), con búsqueda global que aplana el
+ * catálogo en una lista filtrada. Soporta:
+ * - FAB con menú desplegable para crear ejercicio o categoría nueva.
+ * - Modal de creación/edición de ejercicio (tipo, unidad de peso, incremento,
+ *   descanso por defecto, gráfico predeterminado), con creación de categoría
+ *   inline sin salir del formulario.
+ * - Modal de gestión de categorías con reordenación por drag&drop
+ *   (`DraggableFlatList`), edición inline y borrado.
+ * - Alertas de confirmación al cambiar tipo/unidad de peso de un ejercicio
+ *   existente (ofrece convertir los valores históricos o solo la etiqueta) y
+ *   al eliminar ejercicio/categoría (cascada de historial/PRs/objetivos).
+ * - Favoritos, categorías ocultas (preferencia local) y estadísticas de uso
+ *   (sesiones, última vez usado) por ejercicio, leídas del repo remoto de
+ *   estadísticas.
+ */
 export default function ExercisesScreen() {
   const colors = useTheme();
   const router = useRouter();
@@ -97,6 +117,7 @@ export default function ExercisesScreen() {
   const remoteExerciseRepo = useMemo(() => createExerciseRepository(supabase), []);
   const { refetchSignal } = useSyncStatus();
 
+  /** Carga categorías, ejercicios (repo local) y estadísticas de uso (repo remoto de estadísticas) y los vuelca al store. */
   const load = useCallback(async () => {
     setLoading(true);
     const [catRes, exRes, statsRes] = await Promise.all([
@@ -138,6 +159,7 @@ export default function ExercisesScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refetchSignal]);
 
+  /** Resetea el formulario del modal a valores por defecto y lo abre en modo "crear ejercicio". */
   function openCreateModal() {
     const cats = useExerciseStore.getState().categories;
     setModalCategories(cats);
@@ -156,6 +178,7 @@ export default function ExercisesScreen() {
     setShowModal(true);
   }
 
+  /** Precarga el formulario del modal con los datos de `ex` y lo abre en modo "editar ejercicio". */
   function openEditModal(ex: Exercise) {
     const cats = useExerciseStore.getState().categories;
     setModalCategories(cats);
@@ -174,6 +197,7 @@ export default function ExercisesScreen() {
     setShowModal(true);
   }
 
+  /** Crea una categoría nueva desde el formulario inline dentro del modal de ejercicio y la deja seleccionada. */
   async function handleCreateCategory() {
     if (!newCatName.trim()) return;
     setCatSaving(true);
@@ -189,6 +213,7 @@ export default function ExercisesScreen() {
     setCatSaving(false);
   }
 
+  /** Crea una categoría nueva desde el modal independiente "Nueva categoría" accesible desde el FAB (sin pasar por el formulario de ejercicio). */
   async function handleCreateCategoryStandalone() {
     if (!newCatName.trim()) return;
     setCatSaving(true);
@@ -202,6 +227,11 @@ export default function ExercisesScreen() {
     setShowCategoryOnlyModal(false);
   }
 
+  /**
+   * Valida y persiste el formulario (crea o actualiza el ejercicio según
+   * `editingExercise`). Si se pasa `convertFactor`, además convierte los
+   * pesos históricos del ejercicio tras guardar (cambio de unidad kg↔lb).
+   */
   async function doSave(convertFactor?: number) {
     if (!exName.trim()) { Alert.alert("Error", "El nombre es obligatorio"); return; }
     if (!exCategoryId) { Alert.alert("Error", "Selecciona o crea una categoría"); return; }
@@ -263,6 +293,13 @@ export default function ExercisesScreen() {
     }
   }
 
+  /**
+   * Punto de entrada al guardar desde el modal: si el tipo o la unidad de
+   * peso cambiaron respecto al ejercicio original, muestra alertas de
+   * confirmación (el cambio de tipo puede eliminar campos del historial; el
+   * cambio de unidad ofrece elegir entre solo re-etiquetar o convertir los
+   * valores históricos) antes de llamar a `doSave`.
+   */
   function handleSave() {
     const typeChanged = editingExercise && exType !== editingExercise.type;
     const isWeightType = WEIGHT_TYPES.includes(exType);
@@ -311,11 +348,13 @@ export default function ExercisesScreen() {
     doSave();
   }
 
+  /** Invierte el estado de favorito de un ejercicio, persistiendo en el repo y actualizando el store. */
   async function handleToggleFavorite(id: string, current: boolean) {
     await repo.toggleFavorite(id, !current);
     toggleFavorite(id);
   }
 
+  /** Pide confirmación y elimina un ejercicio junto con su historial, PRs y objetivos asociados (cascada local). */
   async function handleDeleteExercise(id: string, name: string) {
     Alert.alert(
       "Eliminar ejercicio",
@@ -335,18 +374,21 @@ export default function ExercisesScreen() {
   }
 
   // Category management
+  /** Abre el formulario de edición inline para la categoría dada, dentro del modal de gestión de categorías. */
   function startEditCat(cat: Category) {
     setEditingCatId(cat.id);
     setEditCatName(cat.name);
     setEditCatColor(cat.color);
   }
 
+  /** Cierra el formulario de edición inline de categoría y resetea sus campos. */
   function cancelEditCat() {
     setEditingCatId(null);
     setEditCatName("");
     setEditCatColor(PRESET_COLORS[0]!);
   }
 
+  /** Guarda los cambios de nombre/color de la categoría en edición inline. */
   async function handleUpdateCategory() {
     if (!editingCatId || !editCatName.trim()) return;
     setCatEditSaving(true);
@@ -357,6 +399,7 @@ export default function ExercisesScreen() {
     cancelEditCat();
   }
 
+  /** Aplica el nuevo orden de categorías tras un drag&drop (optimista), revirtiendo si el guardado remoto/local falla. */
   async function handleCatDragEnd({ data }: { data: typeof categories }) {
     const prevOrder = categories.map((c) => c.id);
     reorderCategories(data.map((c) => c.id));
@@ -367,6 +410,7 @@ export default function ExercisesScreen() {
     }
   }
 
+  /** Pide confirmación y elimina una categoría junto con todos sus ejercicios e historial (cascada local). */
   async function handleDeleteCategory(id: string, name: string) {
     Alert.alert(
       "Eliminar categoría",
@@ -868,6 +912,7 @@ export default function ExercisesScreen() {
   );
 }
 
+/** Tarjeta de categoría (o "Favoritos") con color, nombre y número de ejercicios; navega al listado de esa categoría. */
 const CategoryCard = memo(function CategoryCard({ name, color, count, onPress }: { name: string; color: string; count: number; onPress: () => void }) {
   return (
     <TouchableOpacity
@@ -885,6 +930,7 @@ const CategoryCard = memo(function CategoryCard({ name, color, count, onPress }:
   );
 });
 
+/** Fila de ejercicio en la lista de resultados de búsqueda: nombre, tipo, estadísticas de uso y acciones (favorito, editar, eliminar). */
 const ExerciseRow = memo(function ExerciseRow({
   ex,
   categories,

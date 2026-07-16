@@ -24,6 +24,13 @@ const TYPE_LABELS: Partial<Record<ExerciseType, string>> = {
   [ExerciseType.DISTANCE_ONLY]: "Distancia",
 };
 
+/**
+ * Búsqueda global de ejercicios: filtra por nombre sobre la lista ya cargada en
+ * `useExerciseStore` (sin llamada a red) y muestra, para cada resultado, la fecha del
+ * último entrenamiento en que se usó junto a su mejor peso/reps de esa sesión. Los
+ * ejercicios con historial reciente aparecen primero (ordenados por fecha descendente),
+ * y el resto alfabéticamente — actuando como acceso rápido a lo entrenado últimamente.
+ */
 export default function SearchScreen() {
   const colors = useTheme();
   const router = useRouter();
@@ -57,7 +64,7 @@ export default function SearchScreen() {
     return exercises.filter((e) => e.name.toLowerCase().includes(q));
   }, [exercises, query]);
 
-  // Sort: exercises with recent history first, then alphabetically
+  /** Ordena los resultados filtrados: primero los que tienen entrenamiento reciente (más reciente primero), luego el resto alfabéticamente. */
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
       const da = lastWorkouts[a.id]?.date ?? "";

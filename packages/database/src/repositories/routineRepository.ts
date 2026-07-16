@@ -1,3 +1,8 @@
+/**
+ * Repositorio remoto de rutinas: rutinas → días → ejercicios de día → sets
+ * predefinidos (jerarquía de 4 niveles), más estadísticas de uso agregadas
+ * desde el historial de entrenamientos.
+ */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PostgrestError } from "@supabase/supabase-js";
 import type { Database } from "../supabase/types.js";
@@ -10,6 +15,7 @@ export function createRoutineRepository(client: Client) {
   return {
     // ─── Routines ──────────────────────────────────────────────────────────────
 
+    /** Rutinas del usuario, en orden de creación. */
     async getRoutines() {
       return client
         .from("routines")
@@ -17,6 +23,7 @@ export function createRoutineRepository(client: Client) {
         .order("created_at", { ascending: true });
     },
 
+    /** Crea una rutina vacía (sin días). */
     async createRoutine(data: { name: string; notes?: string }, userId: string) {
       return client
         .from("routines")
@@ -25,6 +32,7 @@ export function createRoutineRepository(client: Client) {
         .single();
     },
 
+    /** Actualiza nombre/notas de una rutina. */
     async updateRoutine(id: string, data: { name?: string; notes?: string }) {
       return client
         .from("routines")
@@ -34,10 +42,19 @@ export function createRoutineRepository(client: Client) {
         .single();
     },
 
+    /** Borra una rutina (remoto: FK en cascada limpia días/ejercicios/sets predefinidos). */
     async deleteRoutine(id: string) {
       return client.from("routines").delete().eq("id", id);
     },
 
+    /**
+     * Clona una rutina completa bajo un nuevo nombre: recorre rutina → días →
+     * ejercicios de día → sets predefinidos secuencialmente (no en paralelo,
+     * porque cada nivel necesita el id insertado del nivel padre) recreando
+     * cada fila con los mismos datos pero nuevos ids y `user_id`. Si falla
+     * la inserción de un día o ejercicio intermedio, ese subárbol se omite
+     * (`continue`) en vez de abortar toda la copia.
+     */
     async copyRoutine(sourceId: string, newName: string, userId: string): Promise<{ data: RoutineRow | null; error: PostgrestError | null }> {
       const { data: srcRoutine, error: e0 } = await client
         .from("routines")
@@ -114,6 +131,7 @@ export function createRoutineRepository(client: Client) {
 
     // ─── Routine Days ──────────────────────────────────────────────────────────
 
+    /** Días de una rutina, en orden. */
     async getDays(routineId: string) {
       return client
         .from("routine_days")
@@ -122,6 +140,7 @@ export function createRoutineRepository(client: Client) {
         .order("order_index", { ascending: true });
     },
 
+    /** Crea un día dentro de una rutina. */
     async createDay(
       data: { routine_id: string; name: string; order_index: number },
       userId: string
@@ -133,6 +152,7 @@ export function createRoutineRepository(client: Client) {
         .single();
     },
 
+    /** Actualiza nombre/orden de un día de rutina. */
     async updateDay(id: string, data: { name?: string; order_index?: number }) {
       return client
         .from("routine_days")
@@ -142,12 +162,14 @@ export function createRoutineRepository(client: Client) {
         .single();
     },
 
+    /** Borra un día de rutina (cascada limpia sus ejercicios/sets predefinidos). */
     async deleteDay(id: string) {
       return client.from("routine_days").delete().eq("id", id);
     },
 
     // ─── Routine Day Exercises ─────────────────────────────────────────────────
 
+    /** Ejercicios asignados a un día de rutina, en orden. */
     async getDayExercises(dayId: string) {
       return client
         .from("routine_day_exercises")
@@ -156,6 +178,7 @@ export function createRoutineRepository(client: Client) {
         .order("order_index", { ascending: true });
     },
 
+    /** Añade un ejercicio a un día de rutina; `group_id` opcional lo agrupa con otros ejercicios (superset). */
     async addExercise(
       data: {
         routine_day_id: string;
@@ -172,6 +195,7 @@ export function createRoutineRepository(client: Client) {
         .single();
     },
 
+    /** Cambia el grupo/superset (o nombre de grupo) de un ejercicio de día. */
     async updateDayExercise(id: string, data: { group_id?: string | null; group_name?: string | null }) {
       return client
         .from("routine_day_exercises")
@@ -181,6 +205,7 @@ export function createRoutineRepository(client: Client) {
         .single();
     },
 
+    /** Renombra un grupo/superset entero (todos los ejercicios que comparten `group_id`); nombre vacío lo limpia a `null`. */
     async updateDayGroupName(groupId: string, name: string) {
       return client
         .from("routine_day_exercises")
@@ -188,10 +213,12 @@ export function createRoutineRepository(client: Client) {
         .eq("group_id", groupId);
     },
 
+    /** Quita un ejercicio de un día de rutina (cascada limpia sus sets predefinidos). */
     async removeExercise(id: string) {
       return client.from("routine_day_exercises").delete().eq("id", id);
     },
 
+    /** Reordena ejercicios dentro de un día (una UPDATE por fila, en paralelo). */
     async reorderExercises(updates: { id: string; order_index: number }[]) {
       return Promise.all(
         updates.map(({ id, order_index }) =>
@@ -200,6 +227,7 @@ export function createRoutineRepository(client: Client) {
       );
     },
 
+    /** Reordena los días de una rutina (una UPDATE por fila, en paralelo). */
     async reorderDays(updates: { id: string; order_index: number }[]) {
       return Promise.all(
         updates.map(({ id, order_index }) =>
@@ -210,6 +238,7 @@ export function createRoutineRepository(client: Client) {
 
     // ─── Predefined Sets ───────────────────────────────────────────────────────
 
+    /** Sets predefinidos de un ejercicio de día, en orden. */
     async getPredefinedSets(routineDayExerciseId: string) {
       return client
         .from("predefined_sets")
@@ -218,6 +247,12 @@ export function createRoutineRepository(client: Client) {
         .order("order_index", { ascending: true });
     },
 
+    /**
+     * Reemplaza TODOS los sets predefinidos de un ejercicio de día: borra los
+     * existentes e inserta la lista dada. Con `sets` vacío hace un no-op de
+     * lectura (`select().eq("id","none")`, siempre 0 filas) tras el borrado,
+     * en vez de un insert vacío.
+     */
     async savePredefinedSets(
       routineDayExerciseId: string,
       sets: Array<{
@@ -246,6 +281,13 @@ export function createRoutineRepository(client: Client) {
       return client.from("predefined_sets").insert(rows).select();
     },
 
+    /**
+     * Para cada rutina: última fecha de uso y número de sesiones, calculado
+     * cruzando en memoria los ejercicios de sus días con el historial completo
+     * de `workout_exercises`/`workouts` (una sesión cuenta si contiene CUALQUIER
+     * ejercicio de la rutina, no necesariamente todos). Analítica fuera de
+     * alcance offline.
+     */
     async getRoutineStats(routineIds: string[]): Promise<{
       data: { routineId: string; lastUsed: string | null; sessionCount: number }[];
     }> {

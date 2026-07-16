@@ -1,3 +1,8 @@
+/**
+ * Repositorio remoto de consultas orientadas al calendario/historial: agrega
+ * entrenamientos, colores/categorías por día y detalle de sesión, a partir de
+ * joins anidados de Supabase (`workouts` → `workout_exercises` → `exercises` → `categories`).
+ */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../supabase/types.js";
 
@@ -7,6 +12,7 @@ type Client = SupabaseClient<Database>;
 // timezone con offset positivo (p.ej. Europe/Madrid, UTC+2) esto resta un día
 // al último día del mes, excluyéndolo de los rangos de fecha. `.getDate()`
 // lee el día del mes en hora local, sin pasar por UTC.
+/** Fecha ISO (YYYY-MM-DD) del último día del mes, calculada en hora local (ver nota arriba sobre el bug de UTC). */
 function lastDayOfMonth(year: number, month: number): string {
   const day = new Date(year, month, 0).getDate();
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -14,6 +20,7 @@ function lastDayOfMonth(year: number, month: number): string {
 
 export function createCalendarRepository(client: Client) {
   return {
+    /** Entrenamientos del mes (solo id/fecha/comentario) para pintar el calendario. */
     getWorkoutsForMonth(year: number, month: number) {
       const start = `${year}-${String(month).padStart(2, "0")}-01`;
       const end = lastDayOfMonth(year, month);
@@ -25,6 +32,7 @@ export function createCalendarRepository(client: Client) {
         .order("date", { ascending: true });
     },
 
+    /** Colores de categoría únicos por fecha en el mes (para los puntos de color del calendario), deduplicados por categoría dentro de cada día. */
     async getWorkoutCategoryColorsForMonth(year: number, month: number): Promise<Record<string, string[]>> {
       const start = `${year}-${String(month).padStart(2, "0")}-01`;
       const end = lastDayOfMonth(year, month);
@@ -52,6 +60,7 @@ export function createCalendarRepository(client: Client) {
       return result;
     },
 
+    /** Entrenamiento de una fecha con sus ejercicios (nombre + id), sin sets — resumen rápido de día. */
     getWorkoutSummary(date: string) {
       return client
         .from("workouts")
@@ -60,6 +69,7 @@ export function createCalendarRepository(client: Client) {
         .single();
     },
 
+    /** Últimos `limit` entrenamientos (id/fecha/comentario), sin detalle de ejercicios. */
     getWorkoutHistory(limit = 30) {
       return client
         .from("workouts")
@@ -68,6 +78,7 @@ export function createCalendarRepository(client: Client) {
         .limit(limit);
     },
 
+    /** Como {@link getWorkoutHistory} pero con las categorías (id/nombre/color) trabajadas de cada entrenamiento, deduplicadas por sesión. */
     async getWorkoutHistoryDetailed(limit = 30): Promise<{
       id: string; date: string; comment: string | null;
       categories: { id: string; name: string; color: string }[];
@@ -93,6 +104,7 @@ export function createCalendarRepository(client: Client) {
       });
     },
 
+    /** Detalle completo de una sesión: ejercicios en orden y, para cada uno, todos sus sets (peso/reps/distancia/tiempo/estado). */
     getWorkoutSetDetail(workoutId: string) {
       return client
         .from("workouts")
@@ -102,6 +114,7 @@ export function createCalendarRepository(client: Client) {
         .single();
     },
 
+    /** Fechas (sin deduplicar ni ordenar) en que se entrenó un ejercicio, vía inner join a `workouts`. */
     getWorkoutDatesForExercise(exerciseId: string) {
       return client
         .from("workout_exercises")
@@ -109,6 +122,7 @@ export function createCalendarRepository(client: Client) {
         .eq("exercise_id", exerciseId);
     },
 
+    /** Igual que {@link getWorkoutCategoryColorsForMonth} pero devolviendo solo los ids de categoría por fecha (para filtrado, no para pintar). */
     async getWorkoutCategoryIdsForMonth(year: number, month: number): Promise<Record<string, string[]>> {
       const start = `${year}-${String(month).padStart(2, "0")}-01`;
       const end = lastDayOfMonth(year, month);
@@ -133,6 +147,12 @@ export function createCalendarRepository(client: Client) {
       return result;
     },
 
+    /**
+     * Fechas únicas en que se entrenó un ejercicio, filtradas en memoria (no en SQL)
+     * por peso/reps mínimos: si se pasa `minWeight` y/o `minReps`, una fecha solo
+     * cuenta si al menos un set de esa sesión cumple TODAS las condiciones dadas.
+     * Sin filtros, incluye cualquier fecha con el ejercicio registrado.
+     */
     async getWorkoutDatesForExerciseWithConditions(
       exerciseId: string,
       minWeight?: number,

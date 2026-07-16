@@ -11,6 +11,11 @@ import type { SqlExecutor } from "../sqlExecutor.js";
  */
 export function createLocalPreferencesRepository(db: SqlExecutor) {
   return {
+    /**
+     * Lee todas las preferencias en `user_preferences` y las funde sobre
+     * `DEFAULT_PREFERENCES` — claves nunca escritas (primer arranque, o
+     * añadidas en una versión posterior) caen al valor por defecto.
+     */
     async getAll(): Promise<UserPreferences> {
       const rows = await db.getAllAsync<{ key: string; value: string }>(
         `SELECT key, value FROM user_preferences`
@@ -19,6 +24,7 @@ export function createLocalPreferencesRepository(db: SqlExecutor) {
       return { ...DEFAULT_PREFERENCES, ...stored } as UserPreferences;
     },
 
+    /** Escribe una única preferencia (upsert por `key`). No encola `pending_ops` — tabla fuera de sync. */
     async set<K extends keyof UserPreferences>(key: K, value: UserPreferences[K]): Promise<void> {
       await db.runAsync(
         `INSERT INTO user_preferences (key, value) VALUES (?, ?)
@@ -27,6 +33,7 @@ export function createLocalPreferencesRepository(db: SqlExecutor) {
       );
     },
 
+    /** Escribe varias preferencias en una sola transacción (upsert por `key` cada una). */
     async setMany(partial: Partial<UserPreferences>): Promise<void> {
       await db.withTransactionAsync(async () => {
         for (const [key, value] of Object.entries(partial)) {
@@ -41,4 +48,5 @@ export function createLocalPreferencesRepository(db: SqlExecutor) {
   };
 }
 
+/** Tipo del repositorio devuelto por {@link createLocalPreferencesRepository}. */
 export type LocalPreferencesRepository = ReturnType<typeof createLocalPreferencesRepository>;

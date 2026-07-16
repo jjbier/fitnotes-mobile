@@ -24,6 +24,11 @@ import { useTheme } from "../lib/theme";
 import type { LocalWorkoutRepository } from "@fitnotes/database";
 import { useRepositories } from "../contexts/RepositoryContext";
 
+/**
+ * Carga perezosamente (una sola vez, vía `ensureLoaded`) la lista de ejercicios del
+ * usuario ordenada alfabéticamente, para los selectores de "añadir a entrenamiento de
+ * hoy" y "seleccionar máximo desde PRs" de la calculadora de series.
+ */
 function useExerciseOptions() {
   const { exerciseRepo } = useRepositories();
   const [exercises, setExercises] = useState<{ id: string; name: string }[]>([]);
@@ -38,6 +43,11 @@ function useExerciseOptions() {
   return { exercises, ensureLoaded };
 }
 
+/**
+ * Añade una serie con el peso/reps calculados a la sesión de hoy: reutiliza el
+ * entrenamiento del día si ya existe (si no, lo crea), reutiliza el `workout_exercise`
+ * del ejercicio si ya está en la sesión (si no, lo añade) y crea la serie al final.
+ */
 async function addSetToTodayWorkout(
   workoutRepo: LocalWorkoutRepository,
   userId: string,
@@ -75,6 +85,14 @@ async function addSetToTodayWorkout(
 
 type Tab = "1rm" | "set" | "plates" | "bmi";
 
+/**
+ * Pantalla "Herramientas": cuatro calculadoras independientes bajo pestañas — 1RM
+ * (fórmula de Brzycki + tabla de máximos por repetición), Set % (pesos de trabajo
+ * como porcentaje de un peso base, con opción de añadir el resultado directamente al
+ * entrenamiento de hoy), discos de barra (desglose de discos por lado para un peso
+ * objetivo) e IMC (índice de masa corporal + rango de peso normal). Toda la lógica de
+ * cálculo vive en `@fitnotes/core`; esta pantalla solo gestiona inputs y presentación.
+ */
 export default function CalculatorsScreen() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("1rm");
@@ -111,6 +129,7 @@ export default function CalculatorsScreen() {
   );
 }
 
+/** Calculadora de 1RM (Brzycki) a partir de peso y reps, con tabla de máximos estimados de 1 a 15 reps. */
 function OneRMCalculator() {
   const [weight, setWeight] = useState("");
   const [reps, setReps] = useState("");
@@ -177,6 +196,12 @@ function OneRMCalculator() {
 const PERCENTAGES = [50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
 const INCREMENTS = [0.5, 1, 1.25, 2.5, 5];
 
+/**
+ * Calculadora de series: a partir de un peso base (manual o cargado desde el mejor PR
+ * de un ejercicio) genera una tabla de pesos de trabajo por porcentaje (50–100%),
+ * redondeados al incremento elegido, y permite añadir cualquiera de esos pesos como
+ * serie nueva al entrenamiento de hoy para el ejercicio seleccionado.
+ */
 function SetCalculator() {
   const { workoutRepo, progressRepo, userId } = useRepositories();
   const [baseWeight, setBaseWeight] = useState("");
@@ -192,6 +217,7 @@ function SetCalculator() {
   const base = parseFloat(baseWeight);
   const inc = INCREMENTS[incrementIdx]!;
 
+  /** Carga los PRs del ejercicio elegido y usa el de mayor peso como peso base. */
   async function handleSelectMax() {
     if (!maxExerciseId) return;
     setMaxLoading(true);
@@ -204,6 +230,7 @@ function SetCalculator() {
     setShowMaxPicker(false);
   }
 
+  /** Añade el peso calculado para un porcentaje como serie del entrenamiento de hoy y muestra una confirmación temporal. */
   async function handleAdd(pct: number, weight: number) {
     if (!addExerciseId) return;
     const reps = parseInt(addReps, 10) || undefined;
@@ -341,6 +368,11 @@ function SetCalculator() {
   );
 }
 
+/**
+ * Calculadora de discos: dado un peso objetivo, el peso de la barra y los discos
+ * disponibles, calcula qué discos poner por lado (visualizados como una barra) y
+ * muestra el peso realmente alcanzable si no se puede llegar exacto al objetivo.
+ */
 function PlateCalculatorPanel() {
   const [targetWeight, setTargetWeight] = useState("");
   const [barWeight, setBarWeight] = useState("20");
@@ -455,6 +487,7 @@ const PLATE_COLORS: Record<number, string> = {
   0.5: "#f8fafc",
 };
 
+/** Calculadora de IMC a partir de peso y altura (cm o m), con categoría y rango de peso normal correspondiente. */
 function BMICalculator() {
   const [weight, setWeight] = useState("");
   const [height, setHeight] = useState("");
@@ -558,6 +591,7 @@ function BMICalculator() {
   );
 }
 
+/** Bloque visual de un disco individual en la visualización de la barra; su altura escala con el peso y su color viene de `PLATE_COLORS`. */
 function PlateBlock({ weight }: { weight: number }) {
   const color = PLATE_COLORS[weight] ?? "#94a3b8";
   const height = Math.min(80, Math.max(32, weight * 2.5));
