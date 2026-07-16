@@ -18,7 +18,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 import { useTheme, useThemeModeStore, type ThemeMode } from "../../lib/theme";
-import { usePreferencesStore, type UserPreferences } from "@fitnotes/core";
+import { usePreferencesStore, computeDefaultCatalogSeedPlan, type UserPreferences, type DefaultCatalogSeedPlan } from "@fitnotes/core";
 import { createWorkoutRepository, createBackupRepository, createBodyTrackerRepository, isBackupData, type BackupData } from "@fitnotes/database";
 import { useRepositories } from "../../contexts/RepositoryContext";
 import { useSyncStatus } from "../../contexts/SyncContext";
@@ -68,7 +68,7 @@ function parseCSVRows(csv: string) {
 export default function SettingsScreen() {
   const colors = useTheme();
   const router = useRouter();
-  const { exerciseRepo, preferencesRepo, isGuest } = useRepositories();
+  const { exerciseRepo, preferencesRepo, isGuest, userId } = useRepositories();
   const { pendingCount } = useSyncStatus();
 
   /** Backup/CSV/recalcular PRs/restaurar/eliminar historial siguen siendo remote-only (fuera de alcance offline) — requieren cuenta real. */
@@ -130,6 +130,8 @@ export default function SettingsScreen() {
   const [recalcStatus, setRecalcStatus] = useState<"idle" | "running" | "done" | "error">("idle");
   const [fullBackupLoading, setFullBackupLoading] = useState(false);
   const [bodyExportLoading, setBodyExportLoading] = useState(false);
+  const [catalogChecking, setCatalogChecking] = useState(false);
+  const [catalogImporting, setCatalogImporting] = useState(false);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [restorePaste, setRestorePaste] = useState("");
   const [restoreParsed, setRestoreParsed] = useState<BackupData | null>(null);
@@ -345,6 +347,81 @@ export default function SettingsScreen() {
       await Share.share({ message: csv, title: "FitNotes Body Tracker Export" });
     } finally {
       setBodyExportLoading(false);
+    }
+  }
+
+  /**
+   * Consulta las categorías/ejercicios locales actuales, calcula (vía
+   * `computeDefaultCatalogSeedPlan`) qué falta por crear del catálogo por
+   * defecto, y pide confirmación con un resumen antes de ejecutar
+   * `executeCatalogImport`. Funciona sin cuenta (repos locales), a diferencia
+   * de backup/restore/CSV en esta misma sección.
+   */
+  async function handleCheckCatalogImport() {
+    setCatalogChecking(true);
+    try {
+      const [{ data: cats }, { data: exs }] = await Promise.all([exerciseRepo.getCategories(), exerciseRepo.getExercises()]);
+      const plan = computeDefaultCatalogSeedPlan(cats, exs);
+      if (plan.categoriesToCreateCount === 0 && plan.exercisesToCreateCount === 0) {
+        Alert.alert("Ya tienes todo el catálogo", "Todas las categorías y ejercicios por defecto ya existen.");
+        return;
+      }
+      const skippedNote =
+        plan.categoriesSkippedCount > 0 || plan.exercisesSkippedCount > 0
+          ? `\n${plan.categoriesSkippedCount} categoría(s) y ${plan.exercisesSkippedCount} ejercicio(s) ya existen y se omitirán.`
+          : "";
+      Alert.alert(
+        "Importar catálogo por defecto",
+        `Se crearán ${plan.categoriesToCreateCount} categoría(s) y ${plan.exercisesToCreateCount} ejercicio(s) nuevo(s).${skippedNote}`,
+        [
+          { text: "Cancelar", style: "cancel" },
+          { text: "Importar", onPress: () => executeCatalogImport(plan) },
+        ]
+      );
+    } finally {
+      setCatalogChecking(false);
+    }
+  }
+
+  /** Ejecuta el plan confirmado por el usuario: crea las categorías que faltan (una a una, para asignar el `id` real a sus ejercicios) y luego sus ejercicios, saltando lo que ya exista. */
+  async function executeCatalogImport(plan: DefaultCatalogSeedPlan) {
+    setCatalogImporting(true);
+    try {
+      const { data: existingCategories } = await exerciseRepo.getCategories();
+      const categoryIdByName = new Map(existingCategories.map((c) => [c.name.trim().toLowerCase(), c.id]));
+      let createdCategories = 0;
+      let createdExercises = 0;
+
+      for (const catPlan of plan.categories) {
+        const key = catPlan.name.trim().toLowerCase();
+        let categoryId = categoryIdByName.get(key);
+        if (!categoryId) {
+          const { data, error } = await exerciseRepo.createCategory(
+            { name: catPlan.name, order_index: existingCategories.length + createdCategories },
+            userId
+          );
+          if (error || !data) throw new Error(`Error creando categoría "${catPlan.name}"`);
+          categoryId = data.id;
+          categoryIdByName.set(key, categoryId);
+          createdCategories++;
+        }
+        for (const ex of catPlan.exercisesToCreate) {
+          const { error } = await exerciseRepo.createExercise(
+            { name: ex.name, category_id: categoryId, type: ex.type, weight_unit: "kg", is_favorite: false },
+            userId
+          );
+          if (error) throw new Error(`Error creando ejercicio "${ex.name}"`);
+          createdExercises++;
+        }
+      }
+
+      const { data: refreshedCats } = await exerciseRepo.getCategories();
+      setCategoryOptions(refreshedCats);
+      Alert.alert("Importación completada", `${createdCategories} categoría(s) y ${createdExercises} ejercicio(s) creados.`);
+    } catch (err) {
+      Alert.alert("Error", err instanceof Error ? err.message : "Error desconocido durante la importación.");
+    } finally {
+      setCatalogImporting(false);
     }
   }
 
@@ -735,6 +812,20 @@ export default function SettingsScreen() {
               <>
                 <Ionicons name="body-outline" size={16} color={colors.textSecondary} />
                 <Text style={styles.btnOutlineText}>Exportar medidas corporales (CSV)</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleCheckCatalogImport}
+            disabled={catalogChecking || catalogImporting}
+            style={[styles.btn, styles.btnOutline]}
+          >
+            {catalogChecking || catalogImporting ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <>
+                <Ionicons name="list-outline" size={16} color={colors.textSecondary} />
+                <Text style={styles.btnOutlineText}>Importar catálogo de ejercicios por defecto</Text>
               </>
             )}
           </TouchableOpacity>
