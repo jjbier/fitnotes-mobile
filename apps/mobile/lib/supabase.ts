@@ -7,13 +7,23 @@
  * porque los síntomas observados (sesión corrupta/perdida tras un
  * `force-stop`) apuntaban a escrituras solapadas y truncadas de GoTrue; este
  * adaptador ataca ambos problemas directamente y evita además el enlazado de
- * módulos nativos de `AsyncStorage`. Pese al fix, la sesión real sigue sin
- * sobrevivir de forma fiable a un `force-stop` (ver CLAUDE.md, bug conocido
- * sin solución de fondo).
+ * módulos nativos de `AsyncStorage`.
+ *
+ * 2026-07-16: encontrada y corregida la causa raíz concreta del intento de
+ * fix anterior — `writeAll` borraba el archivo real antes de mover el
+ * temporal encima, reabriendo (con otra forma) la misma ventana sin archivo
+ * en disco que decía cerrar; un `force-stop` justo ahí perdía la sesión por
+ * completo. En Android, `moveAsync` ya hace un `rename(2)` atómico que
+ * sobrescribe el destino (confirmado en el código nativo de
+ * `expo-file-system`), así que el borrado previo era innecesario y activamente
+ * peligroso — eliminado. Se añade también gating de `startAutoRefresh()` por
+ * conectividad real, no solo primer plano. Sin dispositivo físico en este
+ * entorno para confirmar el arreglo end-to-end; ver CLAUDE.md.
  */
 import { createClient } from "@supabase/supabase-js";
 import * as FileSystem from "expo-file-system";
 import { AppState } from "react-native";
+import NetInfo from "@react-native-community/netinfo";
 import type { Database } from "@fitnotes/database";
 
 const supabaseUrl = process.env["EXPO_PUBLIC_SUPABASE_URL"]!;
@@ -51,13 +61,19 @@ async function readAll(): Promise<Record<string, string>> {
 }
 
 // Escribe en un archivo temporal y lo renombra al final: si el proceso muere
-// a mitad de `writeAsStringAsync` (p.ej. `force-stop`), el archivo temporal
-// queda corrupto pero el real (aún no reemplazado) sigue intacto — sin esto,
-// una escritura interrumpida deja el JSON truncado y `readAll` lo pierde para
-// siempre (causa raíz del bug "sesión no sobrevive a force-stop").
+// a mitad de `writeAsStringAsync` (p.ej. `force-stop`), el temporal queda
+// corrupto pero el real (aún no tocado) sigue intacto.
+//
+// IMPORTANTE: no borrar STORAGE_PATH antes del `moveAsync`. En Android,
+// `moveAsync` llama a `File.renameTo` (expo-file-system, FileSystemModule.kt),
+// que es un `rename(2)` atómico a nivel de SO y ya sobrescribe el destino si
+// existe — no hace falta borrarlo antes. Un `deleteAsync` previo (como tenía
+// esta función anteriormente) abre una ventana real entre "borrar el real" y
+// "mover el temporal encima": un `force-stop` justo en ese hueco deja CERO
+// archivos en disco, perdiendo la sesión por completo — el propio bug que
+// este `writeAll` decía arreglar. Quitar el borrado cierra esa ventana.
 async function writeAll(data: Record<string, string>): Promise<void> {
   await FileSystem.writeAsStringAsync(STORAGE_TMP_PATH, JSON.stringify(data));
-  await FileSystem.deleteAsync(STORAGE_PATH, { idempotent: true });
   await FileSystem.moveAsync({ from: STORAGE_TMP_PATH, to: STORAGE_PATH });
 }
 
@@ -107,13 +123,34 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
 // `document.visibilitychange`), pero seguimos la recomendación oficial de
 // pausarlo en background: evita refrescos/escrituras de sesión innecesarias
 // mientras la app no está en primer plano.
-if (AppState.currentState === "active") {
-  void supabase.auth.startAutoRefresh();
-}
-AppState.addEventListener("change", (state) => {
-  if (state === "active") {
+//
+// También se pausa sin conectividad real (no solo enlace, ver `netinfo.ts`):
+// `startAutoRefresh()` dispara un intento de refresco inmediato si el token
+// está cerca de expirar, algo muy probable justo tras un cold start (el
+// dispositivo puede tardar un momento en tener red utilizable). Casos
+// reportados en el ecosistema Supabase+RN muestran refrescos fallidos por
+// falta de red arrancando el ciclo de vida antes de tiempo (p.ej.
+// supabase/supabase-js#1509, supabase orgs discussion #36906); esta versión
+// de auth-js ya protege el propio `_callRefreshToken` contra fallos de red
+// (no borra la sesión si el error es reintentable), pero evitar el intento
+// mientras no hay red confirmada es una salvaguarda adicional sin coste.
+let isAppActive = AppState.currentState === "active";
+let isNetworkReachable = false;
+
+function syncAutoRefresh() {
+  if (isAppActive && isNetworkReachable) {
     void supabase.auth.startAutoRefresh();
   } else {
     void supabase.auth.stopAutoRefresh();
   }
+}
+
+AppState.addEventListener("change", (state) => {
+  isAppActive = state === "active";
+  syncAutoRefresh();
+});
+
+NetInfo.addEventListener((state) => {
+  isNetworkReachable = Boolean(state.isConnected && state.isInternetReachable !== false);
+  syncAutoRefresh();
 });
