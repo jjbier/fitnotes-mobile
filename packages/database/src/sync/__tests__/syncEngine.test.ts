@@ -60,8 +60,12 @@ describe("SyncEngine.pushLocalChanges", () => {
     expect(localRow?._dirty).toBe(0);
 
     // Simulate another device editing the now-synced row remotely, then this device pulling.
+    // The remote updated_at must be strictly after the local row's real updated_at (set via
+    // nowIso() in createWorkout) for last-write-wins to apply — a fixed past-dated literal here
+    // would eventually be overtaken by the real clock and make this test flake/fail (as happened
+    // with a previous "2026-07-04" literal), so compute it relative to now instead.
     fake._db["workouts"]![workout!.id]!.comment = "Editado desde otro dispositivo";
-    fake._db["workouts"]![workout!.id]!.updated_at = "2026-07-04T00:00:00Z";
+    fake._db["workouts"]![workout!.id]!.updated_at = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     await engine.pullRemoteChanges("user-1");
 
     const afterPull = await db.getFirstAsync<{ comment: string }>(
