@@ -100,6 +100,12 @@ export function createWorkoutRepository(client: Client) {
   return {
     // ─── Workouts ──────────────────────────────────────────────────────────────
 
+    /** Entrenamiento por id. */
+    async getWorkout(id: string) {
+      const { data, error } = await client.from("workouts").select("*").eq("id", id).maybeSingle();
+      return { data, error };
+    },
+
     /** Entrenamiento de una fecha exacta; si hay duplicados (sin constraint UNIQUE, ver comentario abajo) devuelve el más antiguo por `created_at`. */
     async getWorkoutByDate(date: string) {
       // No hay constraint UNIQUE(user_id, date) en DB — .maybeSingle() lanzaría error

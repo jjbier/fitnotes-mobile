@@ -40,6 +40,21 @@ describe("localWorkoutRepository", () => {
     expect(ops).toEqual([{ row_id: data!.id, op_type: "insert" }]);
   });
 
+  it("getWorkout finds a live workout by id and excludes tombstoned ones", async () => {
+    const { data: workout } = await repo.createWorkout({ date: "2026-07-19" }, USER_ID);
+    const { data: found } = await repo.getWorkout(workout!.id);
+    expect(found?.id).toBe(workout!.id);
+
+    await repo.deleteWorkout(workout!.id);
+    const { data: afterDelete } = await repo.getWorkout(workout!.id);
+    expect(afterDelete).toBeNull();
+  });
+
+  it("getWorkout returns null for an unknown id", async () => {
+    const { data } = await repo.getWorkout("00000000-0000-0000-0000-000000000000");
+    expect(data).toBeNull();
+  });
+
   it("getWorkoutByDate excludes tombstoned rows", async () => {
     const { data: workout } = await repo.createWorkout({ date: "2026-07-11" }, USER_ID);
     await repo.deleteWorkout(workout!.id);

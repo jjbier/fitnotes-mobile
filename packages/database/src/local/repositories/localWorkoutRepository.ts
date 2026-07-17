@@ -175,6 +175,15 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
   return {
     // ─── Workouts ──────────────────────────────────────────────────────────────
 
+    /** Busca un `workouts` vivo por id. Solo lectura. */
+    async getWorkout(id: string): Promise<{ data: WorkoutRow | null; error: RepoError | null }> {
+      const row = await db.getFirstAsync<RawRow>(
+        `SELECT * FROM workouts WHERE id = ? AND _deleted = 0`,
+        [id]
+      );
+      return { data: row ? mapWorkoutRow(row) : null, error: null };
+    },
+
     /** Busca el `workouts` vivo de una fecha exacta (el más antiguo si hubiera varios). Solo lectura. */
     async getWorkoutByDate(date: string): Promise<{ data: WorkoutRow | null; error: RepoError | null }> {
       const row = await db.getFirstAsync<RawRow>(
