@@ -73,6 +73,7 @@ export default function HomeScreen() {
   const [copyLoading, setCopyLoading] = useState(false);
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [moveDate, setMoveDate] = useState("");
+  const [moveConflict, setMoveConflict] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
   const [summaryStats, setSummaryStats] = useState<{ duration: number; exercises: number; sets: number; volume: number } | null>(null);
   const [recentSummaries, setRecentSummaries] = useState<Record<string, { exerciseCount: number; volume: number }>>({});
@@ -173,6 +174,15 @@ export default function HomeScreen() {
     setWorkoutCommentLocal(activeWorkout?.comment ?? "");
   }, [activeWorkout?.id]);
 
+  // Comprueba en cada cambio de fecha destino si ya hay otro entrenamiento ese día (mismo patrón que `MoveWorkoutModal` en web).
+  useEffect(() => {
+    if (!showMoveModal || !moveDate || moveDate === activeWorkout?.date) { setMoveConflict(false); return; }
+    let cancelled = false;
+    repo.getWorkoutByDate(moveDate).then(({ data }) => { if (!cancelled) setMoveConflict(!!data); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moveDate, showMoveModal]);
+
   // Reset timer when workout changes
   useEffect(() => {
     if (durationRef.current) clearInterval(durationRef.current);
@@ -229,17 +239,20 @@ export default function HomeScreen() {
     setStartModalLoading(false);
   }
 
-  /** Inicia un entrenamiento vacío en la fecha actual, sin pasar por ninguna rutina (paridad con "Iniciar entrenamiento" en web). */
+  /** Inicia un entrenamiento vacío en la fecha actual, sin pasar por ninguna rutina (paridad con "Iniciar entrenamiento" en web). Reutiliza el entrenamiento existente en vez de duplicarlo si ya hay uno para la fecha. */
   async function handleStartBlankWorkout() {
     setLoggingRoutineId("blank");
-    const { data: workout, error } = await repo.createWorkout({ date: currentDate }, userId);
-    if (error || !workout) {
-      Alert.alert("Error", error?.message ?? "No se pudo crear el entrenamiento");
-      setLoggingRoutineId(null);
-      return;
+    const { data: existing } = await repo.getWorkoutByDate(currentDate);
+    if (!existing) {
+      const { data: workout, error } = await repo.createWorkout({ date: currentDate }, userId);
+      if (error || !workout) {
+        Alert.alert("Error", error?.message ?? "No se pudo crear el entrenamiento");
+        setLoggingRoutineId(null);
+        return;
+      }
+      loadWorkouts([{ id: workout.id, date: workout.date }]);
     }
-    loadWorkout({ id: workout.id, date: workout.date }, [], {});
-    loadWorkouts([{ id: workout.id, date: workout.date }]);
+    await loadWorkoutForDate(currentDate);
     setLoggingRoutineId(null);
     setShowStartModal(false);
   }
@@ -267,52 +280,36 @@ export default function HomeScreen() {
       setLoggingRoutineId(null);
       return;
     }
-    const { data: workout, error: wError } = await repo.createWorkout(
-      { date: currentDate }, userId
-    );
-    if (wError || !workout) {
-      Alert.alert("Error", wError?.message ?? "No se pudo crear el entrenamiento");
-      setLoggingRoutineId(null);
-      return;
+    const { data: existingWorkout } = await repo.getWorkoutByDate(currentDate);
+    let workout = existingWorkout;
+    if (!workout) {
+      const { data: created, error: wError } = await repo.createWorkout({ date: currentDate }, userId);
+      if (wError || !created) {
+        Alert.alert("Error", wError?.message ?? "No se pudo crear el entrenamiento");
+        setLoggingRoutineId(null);
+        return;
+      }
+      workout = created;
     }
-    const workoutExercisesCreated: Parameters<typeof loadWorkout>[1] = [];
-    const setsMap: Parameters<typeof loadWorkout>[2] = {};
+    const { data: existingWEs } = await repo.getWorkoutExercises(workout.id);
+    const orderBase = existingWEs?.length ?? 0;
     for (let i = 0; i < allDayExercises.length; i++) {
       const rde = allDayExercises[i]!;
       const { data: we } = await repo.addExercise(
-        { workout_id: workout.id, exercise_id: rde.exercise_id, order_index: i, group_id: rde.group_id, group_name: rde.group_name }, userId
+        { workout_id: workout.id, exercise_id: rde.exercise_id, order_index: orderBase + i, group_id: rde.group_id, group_name: rde.group_name }, userId
       );
       if (!we) continue;
-      workoutExercisesCreated.push({
-        id: we.id, workout_id: we.workout_id, exercise_id: we.exercise_id,
-        order_index: we.order_index, group_id: we.group_id ?? undefined, group_name: we.group_name ?? undefined,
-      });
       const { data: pSets } = await routineRepo.getPredefinedSets(rde.id);
-      const createdSets: Parameters<typeof loadWorkout>[2][string] = [];
       for (const ps of pSets ?? []) {
-        const { data: newSet } = await repo.createSet({
+        await repo.createSet({
           workout_exercise_id: we.id,
           weight: ps.weight ?? undefined, reps: ps.reps ?? undefined,
           distance: ps.distance ?? undefined, time_seconds: ps.time_seconds ?? undefined,
           order_index: ps.order_index,
         }, userId);
-        if (newSet) {
-          createdSets.push({
-            id: newSet.id, workout_exercise_id: newSet.workout_exercise_id,
-            weight: newSet.weight ?? undefined, reps: newSet.reps ?? undefined,
-            distance: newSet.distance ?? undefined, time_seconds: newSet.time_seconds ?? undefined,
-            is_complete: newSet.is_complete, is_warmup: newSet.is_warmup ?? false,
-            comment: newSet.comment ?? undefined, order_index: newSet.order_index,
-          });
-        }
       }
-      setsMap[we.id] = createdSets;
     }
-    loadWorkout(
-      { id: workout.id, date: workout.date },
-      workoutExercisesCreated,
-      setsMap
-    );
+    await loadWorkoutForDate(currentDate);
     loadWorkouts([{ id: workout.id, date: workout.date }]);
     setLoggingRoutineId(null);
     setShowStartModal(false);
@@ -427,7 +424,7 @@ export default function HomeScreen() {
 
   /** Mueve el entrenamiento activo a `moveDate`, cierra el modal y recarga la pantalla en la nueva fecha. */
   async function handleMoveWorkout() {
-    if (!activeWorkout?.id || !moveDate) return;
+    if (!activeWorkout?.id || !moveDate || moveDate === activeWorkout.date || moveConflict) return;
     await repo.moveWorkout(activeWorkout.id, moveDate);
     setShowMoveModal(false);
     setCurrentDate(moveDate);
@@ -906,6 +903,11 @@ export default function HomeScreen() {
             <View style={{ gap: 6 }}>
               <Text style={{ fontSize: 12, color: "#64748b" }}>Nueva fecha</Text>
               <DateInput value={moveDate} onChange={setMoveDate} />
+              {moveConflict && (
+                <Text style={{ fontSize: 12, color: "#ef4444" }}>
+                  Ya existe un entrenamiento en esa fecha. Elige otra.
+                </Text>
+              )}
             </View>
             <View style={{ flexDirection: "row", gap: 10 }}>
               <TouchableOpacity onPress={() => setShowMoveModal(false)} style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: "#e2e8f0", alignItems: "center" }}>
@@ -913,10 +915,10 @@ export default function HomeScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleMoveWorkout}
-                disabled={!moveDate}
-                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: moveDate ? "#6366f1" : "#e2e8f0", alignItems: "center" }}
+                disabled={!moveDate || moveDate === activeWorkout?.date || moveConflict}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: moveDate && moveDate !== activeWorkout?.date && !moveConflict ? "#6366f1" : "#e2e8f0", alignItems: "center" }}
               >
-                <Text style={{ fontSize: 14, fontWeight: "600", color: moveDate ? "#fff" : "#94a3b8" }}>Mover</Text>
+                <Text style={{ fontSize: 14, fontWeight: "600", color: moveDate && moveDate !== activeWorkout?.date && !moveConflict ? "#fff" : "#94a3b8" }}>Mover</Text>
               </TouchableOpacity>
             </View>
           </View>
