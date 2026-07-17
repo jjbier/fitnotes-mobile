@@ -110,3 +110,20 @@ export function formatDaysAgo(iso: string): string {
   if (diff < 365) return `hace ${Math.floor(diff / 30)} mes`;
   return `hace ${Math.floor(diff / 365)} año`;
 }
+
+/**
+ * Etiqueta la franja horaria de un `Workout.start_time` (ISO datetime completo, en
+ * hora local) para distinguir de un vistazo varios entrenamientos del mismo día — ver
+ * docs/implementation-plan-multi-workout-per-day.md, Fase 7. "Sin hora" si no hay
+ * `start_time` o no es parseable (workouts creados antes de que se empezara a rellenar
+ * de forma fiable, o filas sincronizadas sin ese dato).
+ */
+export function labelWorkoutByTime(startTime?: string | null): string {
+  if (!startTime) return "Sin hora";
+  const date = new Date(startTime);
+  if (Number.isNaN(date.getTime())) return "Sin hora";
+  const hour = date.getHours();
+  if (hour >= 5 && hour < 14) return "Mañana";
+  if (hour >= 14 && hour < 21) return "Tarde";
+  return "Noche";
+}

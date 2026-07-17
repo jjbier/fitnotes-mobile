@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Dimensions, PanResponder, SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator, Modal, TextInput } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { formatWorkoutDate, useExerciseStore, usePreferencesStore, ExerciseType } from "@fitnotes/core";
+import { formatWorkoutDate, labelWorkoutByTime, useExerciseStore, usePreferencesStore, ExerciseType } from "@fitnotes/core";
 import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../lib/theme";
 import { useSyncStatus } from "../../contexts/SyncContext";
@@ -541,14 +541,17 @@ export default function CalendarScreen() {
                   {dayWorkoutsMulti.map((w) => {
                     const time = w.start_time && !Number.isNaN(new Date(w.start_time).getTime())
                       ? new Date(w.start_time).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })
-                      : "Sin hora";
+                      : "";
                     return (
                       <TouchableOpacity
                         key={w.id}
                         onPress={() => router.push({ pathname: "/(tabs)", params: { date: selectedDate, workoutId: w.id } })}
                         style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: theme.borderLight, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 }}
                       >
-                        <Text style={{ fontSize: 13, fontWeight: "600", color: theme.text }}>{time}</Text>
+                        <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
+                          <Text style={{ fontSize: 13, fontWeight: "600", color: theme.text }}>{labelWorkoutByTime(w.start_time)}</Text>
+                          {time !== "" && <Text style={{ fontSize: 11, color: theme.textMuted }}>{time}</Text>}
+                        </View>
                         {w.comment ? (
                           <Text style={{ fontSize: 12, color: theme.textMuted, flexShrink: 1, marginLeft: 8 }} numberOfLines={1}>{w.comment}</Text>
                         ) : null}

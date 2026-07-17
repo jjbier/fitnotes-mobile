@@ -6,6 +6,7 @@
  * mostrar este modal (resuelve directo).
  */
 import { Modal, View, Text, TouchableOpacity, FlatList } from "react-native";
+import { labelWorkoutByTime } from "@fitnotes/core";
 
 export interface PickableWorkout {
   id: string;
@@ -22,11 +23,11 @@ interface Props {
   onClose: () => void;
 }
 
-/** "18:32" a partir de un ISO datetime, o "Sin hora" si no hay `start_time` o no es parseable. */
+/** "18:32" a partir de un ISO datetime, o cadena vacía si no hay `start_time` o no es parseable. */
 function formatTime(startTime?: string | null): string {
-  if (!startTime) return "Sin hora";
+  if (!startTime) return "";
   const d = new Date(startTime);
-  if (Number.isNaN(d.getTime())) return "Sin hora";
+  if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
 }
 
@@ -57,9 +58,14 @@ export default function WorkoutPickerModal({ visible, workouts, creating, onChoo
                   marginBottom: 8,
                 }}
               >
-                <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>{formatTime(item.start_time)}</Text>
+                <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>{labelWorkoutByTime(item.start_time)}</Text>
+                  {formatTime(item.start_time) !== "" && (
+                    <Text style={{ fontSize: 12, color: "#64748b" }}>{formatTime(item.start_time)}</Text>
+                  )}
+                </View>
                 {item.comment && (
-                  <Text style={{ fontSize: 12, color: "#64748b", maxWidth: "60%" }} numberOfLines={1}>
+                  <Text style={{ fontSize: 12, color: "#64748b", maxWidth: "45%" }} numberOfLines={1}>
                     {item.comment}
                   </Text>
                 )}

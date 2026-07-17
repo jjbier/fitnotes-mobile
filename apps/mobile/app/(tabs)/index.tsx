@@ -501,7 +501,7 @@ export default function HomeScreen() {
     setShowCopyModal(false);
     let workoutId = activeWorkout?.id;
     if (!workoutId) {
-      const { data, error } = await repo.createWorkout({ date: currentDate }, userId);
+      const { data, error } = await repo.createWorkout({ date: currentDate, start_time: new Date().toISOString() }, userId);
       if (error || !data) { Alert.alert("Error", error?.message ?? "No se pudo crear el entrenamiento"); setCopyLoading(false); return; }
       workoutId = data.id;
     }

@@ -5,6 +5,7 @@ import {
   groupWorkoutsByMonth,
   todayISO,
   daysBetween,
+  labelWorkoutByTime,
 } from "../utils/dateUtils.js";
 import type { Workout } from "../types/index.js";
 
@@ -129,5 +130,37 @@ describe("daysBetween", () => {
 
   it("returns 366 for a leap year", () => {
     expect(daysBetween("2024-01-01", "2025-01-01")).toBe(366);
+  });
+});
+
+// ─── labelWorkoutByTime ────────────────────────────────────────────────────────
+
+describe("labelWorkoutByTime", () => {
+  it('returns "Sin hora" for null/undefined', () => {
+    expect(labelWorkoutByTime(null)).toBe("Sin hora");
+    expect(labelWorkoutByTime(undefined)).toBe("Sin hora");
+  });
+
+  it('returns "Sin hora" for an unparseable string', () => {
+    expect(labelWorkoutByTime("not-a-date")).toBe("Sin hora");
+  });
+
+  it('returns "Mañana" for hours in [5, 14)', () => {
+    expect(labelWorkoutByTime("2026-07-17T05:00:00")).toBe("Mañana");
+    expect(labelWorkoutByTime("2026-07-17T08:30:00")).toBe("Mañana");
+    expect(labelWorkoutByTime("2026-07-17T13:59:00")).toBe("Mañana");
+  });
+
+  it('returns "Tarde" for hours in [14, 21)', () => {
+    expect(labelWorkoutByTime("2026-07-17T14:00:00")).toBe("Tarde");
+    expect(labelWorkoutByTime("2026-07-17T18:00:00")).toBe("Tarde");
+    expect(labelWorkoutByTime("2026-07-17T20:59:00")).toBe("Tarde");
+  });
+
+  it('returns "Noche" for hours in [21, 24) and [0, 5)', () => {
+    expect(labelWorkoutByTime("2026-07-17T21:00:00")).toBe("Noche");
+    expect(labelWorkoutByTime("2026-07-17T23:30:00")).toBe("Noche");
+    expect(labelWorkoutByTime("2026-07-17T00:00:00")).toBe("Noche");
+    expect(labelWorkoutByTime("2026-07-17T04:59:00")).toBe("Noche");
   });
 });
