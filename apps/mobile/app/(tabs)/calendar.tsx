@@ -43,6 +43,9 @@ export default function CalendarScreen() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [daySummary, setDaySummary] = useState<DaySummary | null>(null);
   const [daySummaryLoading, setDaySummaryLoading] = useState(false);
+  // Cuando el día tiene más de un entrenamiento (ver docs/implementation-plan-multi-workout-per-day.md,
+  // Fase 6): lista corta en vez del resumen de ejercicios de uno solo.
+  const [dayWorkoutsMulti, setDayWorkoutsMulti] = useState<{ id: string; start_time: string | null; comment: string | null }[] | null>(null);
   const [listView, setListView] = useState(false);
   const [history, setHistory] = useState<{ id: string; date: string; comment: string | null; categories: { id: string; name: string; color: string }[] }[]>([]);
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
@@ -109,7 +112,7 @@ export default function CalendarScreen() {
 
   const { refetchSignal } = useSyncStatus();
 
-  const { calendarRepo: repo, exerciseRepo: exRepo, preferencesRepo, isGuest } = useRepositories();
+  const { calendarRepo: repo, workoutRepo, exerciseRepo: exRepo, preferencesRepo, isGuest } = useRepositories();
   const today = now.toISOString().split("T")[0]!;
 
   /** Carga fechas con entrenamiento, colores de categoría por fecha y categorías por fecha para el mes `y`/`m`. */
@@ -196,13 +199,24 @@ export default function CalendarScreen() {
     if (!isGuest) void supabase.auth.updateUser({ data: { calendar_show_category_dots: next } });
   }
 
-  /** Selecciona/deselecciona un día del grid y, si tiene entrenamiento, carga su resumen para el panel inferior. */
+  /**
+   * Selecciona/deselecciona un día del grid. Si tiene un único entrenamiento, carga su
+   * resumen de ejercicios para el panel inferior (comportamiento de siempre); si tiene
+   * varios, muestra la lista corta (`dayWorkoutsMulti`) en vez de asumir que solo hay uno.
+   */
   async function handleSelectDate(dateStr: string) {
     const newSelected = selectedDate === dateStr ? null : dateStr;
     setSelectedDate(newSelected);
     setDaySummary(null);
+    setDayWorkoutsMulti(null);
     if (newSelected && workoutDates.has(newSelected)) {
       setDaySummaryLoading(true);
+      const { data: dayWorkouts } = await workoutRepo.getWorkoutsByDate(newSelected);
+      if ((dayWorkouts ?? []).length > 1) {
+        setDayWorkoutsMulti(dayWorkouts!);
+        setDaySummaryLoading(false);
+        return;
+      }
       const { data } = await repo.getWorkoutSummary(newSelected);
       if (data) {
         type WE = { exercise_id: string; exercises: { name: string } | null };
@@ -400,7 +414,7 @@ export default function CalendarScreen() {
                         <Text style={{ fontSize: 11, color: theme.textMuted }} numberOfLines={1}>{w.comment}</Text>
                       )}
                     </View>
-                    <TouchableOpacity onPress={() => router.push({ pathname: "/(tabs)", params: { date: w.date } })} style={{ padding: 4 }}>
+                    <TouchableOpacity onPress={() => router.push({ pathname: "/(tabs)", params: { date: w.date, workoutId: w.id } })} style={{ padding: 4 }}>
                       <Ionicons name="open-outline" size={16} color={theme.primary} />
                     </TouchableOpacity>
                     <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={14} color={theme.textMuted} style={{ marginLeft: 8 }} />
@@ -512,7 +526,7 @@ export default function CalendarScreen() {
             <View style={{ borderWidth: 1, borderColor: theme.borderLight, borderRadius: 16, padding: 14, marginTop: 8 }}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
                 <Text style={{ fontSize: 13, fontWeight: "600", color: theme.text }}>{formatWorkoutDate(selectedDate)}</Text>
-                {workoutDates.has(selectedDate) && (
+                {workoutDates.has(selectedDate) && !dayWorkoutsMulti && (
                   <TouchableOpacity onPress={() => router.push({ pathname: "/(tabs)", params: { date: selectedDate } })}>
                     <Text style={{ fontSize: 12, color: theme.primary, fontWeight: "600" }}>Ver →</Text>
                   </TouchableOpacity>
@@ -522,6 +536,27 @@ export default function CalendarScreen() {
                 <Text style={{ fontSize: 12, color: theme.textMuted }}>Sin entrenamiento este día</Text>
               ) : daySummaryLoading ? (
                 <ActivityIndicator size="small" color={theme.primary} style={{ marginTop: 8, alignSelf: "flex-start" }} />
+              ) : dayWorkoutsMulti ? (
+                <View style={{ gap: 6, marginTop: 2 }}>
+                  {dayWorkoutsMulti.map((w) => {
+                    const time = w.start_time && !Number.isNaN(new Date(w.start_time).getTime())
+                      ? new Date(w.start_time).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })
+                      : "Sin hora";
+                    return (
+                      <TouchableOpacity
+                        key={w.id}
+                        onPress={() => router.push({ pathname: "/(tabs)", params: { date: selectedDate, workoutId: w.id } })}
+                        style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: theme.borderLight, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 }}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: "600", color: theme.text }}>{time}</Text>
+                        {w.comment ? (
+                          <Text style={{ fontSize: 12, color: theme.textMuted, flexShrink: 1, marginLeft: 8 }} numberOfLines={1}>{w.comment}</Text>
+                        ) : null}
+                        <Ionicons name="chevron-forward" size={14} color={theme.textDisabled} style={{ marginLeft: 6 }} />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               ) : daySummary ? (
                 <View style={{ gap: 4, marginTop: 2 }}>
                   {daySummary.comment ? (

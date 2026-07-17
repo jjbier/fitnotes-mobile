@@ -8,6 +8,7 @@ import { useRoutineStore, useExerciseStore, useWorkoutStore, ExerciseType, today
 import type { PredefinedSet, RoutineDay, RoutineDayExercise } from "@fitnotes/core";
 import { useTheme } from "../../lib/theme";
 import { useRepositories } from "../../contexts/RepositoryContext";
+import { useWorkoutForDate } from "../../hooks/useWorkoutForDate";
 
 /** Representación de un `PredefinedSet` en el formulario del modal: valores como texto editable y un id local estable para las filas. */
 type LocalPS = { localId: string; weight: string; reps: string; distance: string; time_seconds: string };
@@ -75,6 +76,7 @@ export default function RoutineDetailScreen() {
   const [renamingGroup, setRenamingGroup] = useState<{ dayId: string; groupId: string } | null>(null);
 
   const { routineRepo, exerciseRepo: exRepo, workoutRepo, userId } = useRepositories();
+  const { resolveWorkoutForDate, pickerModal } = useWorkoutForDate(workoutRepo);
 
   const routine = routines.find((r) => r.id === routineId);
   const days = (routineDays[routineId ?? ""] ?? []).slice().sort((a, b) => a.order_index - b.order_index);
@@ -336,12 +338,15 @@ export default function RoutineDetailScreen() {
   }
 
   /**
-   * Registra un día de la rutina como un entrenamiento nuevo: crea el workout de hoy,
-   * añade cada ejercicio seleccionado del día (con su grupo de superset si lo tiene) y,
-   * por cada uno, crea sus series predefinidas ya con los valores guardados. Tras crear
-   * las series, reescribe las series predefinidas del ejercicio con los valores
-   * realmente aplicados (para que la próxima vez arranquen desde ahí). Al terminar,
-   * hidrata `useWorkoutStore` con el entrenamiento recién creado para que quede activo.
+   * Registra un día de la rutina como un entrenamiento (resuelto vía `useWorkoutForDate`
+   * con `forceAskIfAny` — crea uno si no hay hoy, y si ya hay alguno pregunta si añadir
+   * a ese o crear uno nuevo, Fase 5 de docs/implementation-plan-multi-workout-per-day.md;
+   * antes creaba siempre uno nuevo, duplicando el de hoy sin avisar): añade cada ejercicio
+   * seleccionado del día (con su grupo de superset si lo tiene) y, por cada uno, crea sus
+   * series predefinidas ya con los valores guardados. Tras crear las series, reescribe las
+   * series predefinidas del ejercicio con los valores realmente aplicados (para que la
+   * próxima vez arranquen desde ahí). Al terminar, hidrata `useWorkoutStore` con el
+   * entrenamiento resultante para que quede activo.
    */
   async function handleLogDay(dayId: string, selectedIds: string[]) {
     const allDayExs = (routineDayExercises[dayId] ?? []).slice().sort((a, b) => a.order_index - b.order_index);
@@ -354,31 +359,24 @@ export default function RoutineDetailScreen() {
     setLoggingDayId(dayId);
     const today = todayISO();
 
-    const { data: workout, error: wError } = await workoutRepo.createWorkout(
-      { date: today, start_time: new Date().toISOString() },
-      userId
-    );
-    if (wError || !workout) {
-      Alert.alert("Error", wError?.message ?? "No se pudo crear el entrenamiento");
+    const workoutId = await resolveWorkoutForDate(today, userId, { forceAskIfAny: true });
+    if (!workoutId) { setLoggingDayId(null); return; }
+    const { data: workout } = await workoutRepo.getWorkout(workoutId);
+    if (!workout) {
+      Alert.alert("Error", "No se pudo abrir el entrenamiento");
       setLoggingDayId(null);
       return;
     }
-
-    const workoutExercisesCreated: Parameters<typeof loadWorkout>[1] = [];
-    const setsMap: Parameters<typeof loadWorkout>[2] = {};
+    const { data: existingWEs } = await workoutRepo.getWorkoutExercises(workoutId);
+    const orderBase = existingWEs?.length ?? 0;
 
     for (let i = 0; i < dayExs.length; i++) {
       const rde = dayExs[i]!;
       const { data: we, error: weError } = await workoutRepo.addExercise(
-        { workout_id: workout.id, exercise_id: rde.exercise_id, order_index: i, group_id: rde.group_id, group_name: rde.group_name },
+        { workout_id: workout.id, exercise_id: rde.exercise_id, order_index: orderBase + i, group_id: rde.group_id, group_name: rde.group_name },
         userId
       );
       if (weError || !we) continue;
-
-      workoutExercisesCreated.push({
-        id: we.id, workout_id: we.workout_id, exercise_id: we.exercise_id,
-        order_index: we.order_index, group_id: we.group_id ?? undefined, group_name: we.group_name ?? undefined,
-      });
 
       const { data: pSets } = await routineRepo.getPredefinedSets(rde.id);
       const createdSets: Parameters<typeof loadWorkout>[2][string] = [];
@@ -404,8 +402,6 @@ export default function RoutineDetailScreen() {
         }
       }
 
-      setsMap[we.id] = createdSets;
-
       // Auto-update predefined sets with the values actually applied
       if ((pSets ?? []).length > 0 && createdSets.length > 0) {
         const updatedPs = createdSets.map((cs, pi) => ({
@@ -421,10 +417,28 @@ export default function RoutineDetailScreen() {
       }
     }
 
+    // Relee TODOS los ejercicios/series del workout (no solo los que acaba de crear esta
+    // llamada) — si se reutilizó uno ya existente con ejercicios previos, hidratar el
+    // store solo con lo recién creado los habría hecho desaparecer de la UI.
+    const { data: allWEs } = await workoutRepo.getWorkoutExercises(workoutId);
+    const fullSetsMap: Parameters<typeof loadWorkout>[2] = {};
+    for (const we of allWEs ?? []) {
+      const { data: weSets } = await workoutRepo.getSets(we.id);
+      fullSetsMap[we.id] = (weSets ?? []).map((s) => ({
+        id: s.id, workout_exercise_id: s.workout_exercise_id,
+        weight: s.weight ?? undefined, reps: s.reps ?? undefined,
+        distance: s.distance ?? undefined, time_seconds: s.time_seconds ?? undefined,
+        is_complete: s.is_complete, is_warmup: s.is_warmup ?? false, comment: s.comment ?? undefined,
+        order_index: s.order_index,
+      }));
+    }
     loadWorkout(
       { id: workout.id, date: workout.date, start_time: workout.start_time ?? undefined },
-      workoutExercisesCreated,
-      setsMap
+      (allWEs ?? []).map((we) => ({
+        id: we.id, workout_id: we.workout_id, exercise_id: we.exercise_id,
+        order_index: we.order_index, group_id: we.group_id ?? undefined, group_name: we.group_name ?? undefined,
+      })),
+      fullSetsMap
     );
     loadWorkouts([{ id: workout.id, date: workout.date }]);
 
@@ -867,6 +881,8 @@ export default function RoutineDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      {pickerModal}
     </SafeAreaView>
   );
 }

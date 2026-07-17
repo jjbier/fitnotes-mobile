@@ -32,7 +32,13 @@ export function createCalendarRepository(client: Client) {
         .order("date", { ascending: true });
     },
 
-    /** Colores de categoría únicos por fecha en el mes (para los puntos de color del calendario), deduplicados por categoría dentro de cada día. */
+    /**
+     * Colores de categoría únicos por fecha en el mes (para los puntos de color del
+     * calendario), deduplicados por categoría dentro de cada día — acumulando entre
+     * TODOS los entrenamientos de la fecha si hay varios (un `result[w.date] = ...`
+     * por fila de workout perdería las categorías de los demás entrenamientos de ese
+     * mismo día).
+     */
     async getWorkoutCategoryColorsForMonth(year: number, month: number): Promise<Record<string, string[]>> {
       const start = `${year}-${String(month).padStart(2, "0")}-01`;
       const end = lastDayOfMonth(year, month);
@@ -44,18 +50,17 @@ export function createCalendarRepository(client: Client) {
         .order("date", { ascending: true });
       if (!data) return {};
       const result: Record<string, string[]> = {};
+      const seenByDate: Record<string, Set<string>> = {};
       type Row = { date: string; workout_exercises: { exercises: { categories: { id: string; color: string } | null } | null }[] | null };
       for (const w of data as Row[]) {
-        const seen = new Set<string>();
-        const colors: string[] = [];
+        const seen = (seenByDate[w.date] ??= new Set());
         for (const we of w.workout_exercises ?? []) {
           const cat = we.exercises?.categories;
           if (cat && !seen.has(cat.id)) {
             seen.add(cat.id);
-            colors.push(cat.color);
+            (result[w.date] ??= []).push(cat.color);
           }
         }
-        if (colors.length > 0) result[w.date] = colors;
       }
       return result;
     },
@@ -122,7 +127,11 @@ export function createCalendarRepository(client: Client) {
         .eq("exercise_id", exerciseId);
     },
 
-    /** Igual que {@link getWorkoutCategoryColorsForMonth} pero devolviendo solo los ids de categoría por fecha (para filtrado, no para pintar). */
+    /**
+     * Igual que {@link getWorkoutCategoryColorsForMonth} pero devolviendo solo los ids
+     * de categoría por fecha (para filtrado, no para pintar) — misma acumulación entre
+     * varios entrenamientos de la fecha.
+     */
     async getWorkoutCategoryIdsForMonth(year: number, month: number): Promise<Record<string, string[]>> {
       const start = `${year}-${String(month).padStart(2, "0")}-01`;
       const end = lastDayOfMonth(year, month);
@@ -134,15 +143,14 @@ export function createCalendarRepository(client: Client) {
         .order("date", { ascending: true });
       if (!data) return {};
       const result: Record<string, string[]> = {};
+      const seenByDate: Record<string, Set<string>> = {};
       type Row = { date: string; workout_exercises: { exercises: { categories: { id: string } | null } | null }[] | null };
       for (const w of data as Row[]) {
-        const seen = new Set<string>();
-        const ids: string[] = [];
+        const seen = (seenByDate[w.date] ??= new Set());
         for (const we of w.workout_exercises ?? []) {
           const cat = we.exercises?.categories;
-          if (cat && !seen.has(cat.id)) { seen.add(cat.id); ids.push(cat.id); }
+          if (cat && !seen.has(cat.id)) { seen.add(cat.id); (result[w.date] ??= []).push(cat.id); }
         }
-        if (ids.length > 0) result[w.date] = ids;
       }
       return result;
     },

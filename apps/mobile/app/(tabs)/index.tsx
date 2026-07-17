@@ -37,7 +37,7 @@ import WorkoutPickerModal, { type PickableWorkout } from "../../components/worko
 export default function HomeScreen() {
   const colors = useTheme();
   const router = useRouter();
-  const params = useLocalSearchParams<{ date?: string }>();
+  const params = useLocalSearchParams<{ date?: string; workoutId?: string }>();
   const today = todayISO();
 
   const activeWorkout = useWorkoutStore((s) => s.activeWorkout);
@@ -192,7 +192,13 @@ export default function HomeScreen() {
         })));
       }
       await loadRecentWorkouts();
-      await loadWorkoutForDate(params.date || today);
+      // Si venimos del calendario con un workoutId concreto (varios ese día,
+      // ya elegido allí), cargarlo directo evita volver a preguntar aquí.
+      if (params.workoutId) {
+        await loadWorkoutById(params.workoutId);
+      } else {
+        await loadWorkoutForDate(params.date || today);
+      }
       setLoading(false);
     }
     init();
@@ -209,14 +215,20 @@ export default function HomeScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refetchSignal]);
 
-  // Navegación desde Calendario ("Ver →") — la tab ya montada solo recibe params nuevos
+  // Navegación desde Calendario ("Ver →" o un entrenamiento concreto de la lista
+  // multi-día) — la tab ya montada solo recibe params nuevos. Con `workoutId` (varios
+  // entrenamientos ese día, ya elegido en Calendario) carga ese directo, sin volver a
+  // preguntar; solo con `date` sigue el flujo normal de `loadWorkoutForDate`.
   useEffect(() => {
-    if (params.date && params.date !== currentDate) {
+    if (params.workoutId) {
+      if (params.date) setCurrentDate(params.date);
+      loadWorkoutById(params.workoutId);
+    } else if (params.date && params.date !== currentDate) {
       setCurrentDate(params.date);
       loadWorkoutForDate(params.date);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.date]);
+  }, [params.date, params.workoutId]);
 
   // Sync local comment with store
   useEffect(() => {
