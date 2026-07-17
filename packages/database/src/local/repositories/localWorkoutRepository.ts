@@ -1,4 +1,4 @@
-import { generateUUID, computePersonalRecordUpdate } from "@fitnotes/core";
+import { generateUUID, computePersonalRecordUpdate, recomputePersonalRecordLedger } from "@fitnotes/core";
 import type { SqlExecutor } from "../sqlExecutor.js";
 import { enqueuePendingOp } from "../pendingOps.js";
 import type { Database } from "../../supabase/types.js";
@@ -55,6 +55,63 @@ async function maybeRecordPersonalRecord(db: SqlExecutor, setRow: RawRow): Promi
     [prRow.id, prRow.user_id, prRow.exercise_id, prRow.weight, prRow.reps, prRow.achieved_at, prRow.created_at, prRow.updated_at]
   );
   await enqueuePendingOp(db, "personal_records", id, "insert", prRow);
+}
+
+/**
+ * `personal_records` no referencia el set que la generó (ni aquí ni en
+ * remoto) — no hay forma de saber "qué fila borrar" cuando se borra un set.
+ * En su lugar, se tombstonan TODAS las filas vigentes del ejercicio y se
+ * reconstruye el ledger completo desde los `sets` vivos que queden
+ * (`recomputePersonalRecordLedger`, misma regla que `maybeRecordPersonalRecord`
+ * pero en bloque). Debe llamarse dentro de la misma transacción que borra el
+ * set/workout, después de tombstonar `sets`/`workout_exercises`.
+ */
+async function resyncPersonalRecordsForExercise(db: SqlExecutor, exerciseId: string, userId: string): Promise<void> {
+  const ts = nowIso();
+  const existing = await db.getAllAsync<{ id: string }>(
+    `SELECT id FROM personal_records WHERE exercise_id = ? AND user_id = ? AND _deleted = 0`,
+    [exerciseId, userId]
+  );
+  for (const pr of existing) {
+    await db.runAsync(`UPDATE personal_records SET _deleted = 1, _dirty = 1, updated_at = ? WHERE id = ?`, [ts, pr.id]);
+    await enqueuePendingOp(db, "personal_records", pr.id, "delete", null);
+  }
+
+  const liveSets = await db.getAllAsync<{ weight: number; reps: number; created_at: string }>(
+    `SELECT s.weight as weight, s.reps as reps, s.created_at as created_at
+     FROM sets s JOIN workout_exercises we ON we.id = s.workout_exercise_id
+     WHERE we.exercise_id = ? AND we.user_id = ? AND we._deleted = 0 AND s._deleted = 0
+       AND s.is_complete = 1 AND s.weight IS NOT NULL AND s.reps IS NOT NULL`,
+    [exerciseId, userId]
+  );
+  const ledger = recomputePersonalRecordLedger(
+    liveSets.map((s) => ({ exercise_id: exerciseId, reps: s.reps, weight: s.weight, created_at: s.created_at }))
+  );
+  for (const entry of ledger) {
+    const id = generateUUID();
+    const prRow: PersonalRecordRow = {
+      id, user_id: userId, exercise_id: entry.exercise_id,
+      weight: entry.weight, reps: entry.reps, achieved_at: entry.achieved_at, created_at: ts, updated_at: ts,
+    };
+    await db.runAsync(
+      `INSERT INTO personal_records (id, user_id, exercise_id, weight, reps, achieved_at, created_at, updated_at, _dirty, _deleted)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0)`,
+      [prRow.id, prRow.user_id, prRow.exercise_id, prRow.weight, prRow.reps, prRow.achieved_at, prRow.created_at, prRow.updated_at]
+    );
+    await enqueuePendingOp(db, "personal_records", id, "insert", prRow);
+  }
+}
+
+/** Pares (ejercicio, usuario) distintos entre los `sets` dados que podrían haber generado un PR (completos, con peso y reps). */
+async function distinctPRExercises(db: SqlExecutor, setIds: string[]): Promise<{ exercise_id: string; user_id: string }[]> {
+  if (setIds.length === 0) return [];
+  const placeholders = setIds.map(() => "?").join(",");
+  return db.getAllAsync<{ exercise_id: string; user_id: string }>(
+    `SELECT DISTINCT we.exercise_id as exercise_id, we.user_id as user_id
+     FROM sets s JOIN workout_exercises we ON we.id = s.workout_exercise_id
+     WHERE s.id IN (${placeholders}) AND s.is_complete = 1 AND s.weight IS NOT NULL AND s.reps IS NOT NULL`,
+    setIds
+  );
 }
 
 function mapWorkoutRow(row: RawRow): WorkoutRow {
@@ -253,12 +310,14 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
           `SELECT id FROM workout_exercises WHERE workout_id = ? AND _deleted = 0`,
           [id]
         );
+        const allSetIds: string[] = [];
         for (const we of wes) {
+          const setRows = await db.getAllAsync<{ id: string }>(`SELECT id FROM sets WHERE workout_exercise_id = ?`, [we.id]);
+          allSetIds.push(...setRows.map((s) => s.id));
           await db.runAsync(`UPDATE sets SET _deleted = 1, _dirty = 1, updated_at = ? WHERE workout_exercise_id = ?`, [
             nowIso(),
             we.id,
           ]);
-          const setRows = await db.getAllAsync<{ id: string }>(`SELECT id FROM sets WHERE workout_exercise_id = ?`, [we.id]);
           for (const s of setRows) await enqueuePendingOp(db, "sets", s.id, "delete", null);
           await db.runAsync(`UPDATE workout_exercises SET _deleted = 1, _dirty = 1, updated_at = ? WHERE id = ?`, [
             nowIso(),
@@ -266,6 +325,8 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
           ]);
           await enqueuePendingOp(db, "workout_exercises", we.id, "delete", null);
         }
+        const affected = await distinctPRExercises(db, allSetIds);
+        for (const a of affected) await resyncPersonalRecordsForExercise(db, a.exercise_id, a.user_id);
         await db.runAsync(`UPDATE workouts SET _deleted = 1, _dirty = 1, updated_at = ? WHERE id = ?`, [nowIso(), id]);
         await enqueuePendingOp(db, "workouts", id, "delete", null);
       });
@@ -320,11 +381,13 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
     async removeExercise(id: string): Promise<{ error: RepoError | null }> {
       await db.withTransactionAsync(async () => {
         const ts = nowIso();
-        await db.runAsync(`UPDATE sets SET _deleted = 1, _dirty = 1, updated_at = ? WHERE workout_exercise_id = ?`, [ts, id]);
         const setRows = await db.getAllAsync<{ id: string }>(`SELECT id FROM sets WHERE workout_exercise_id = ?`, [id]);
+        await db.runAsync(`UPDATE sets SET _deleted = 1, _dirty = 1, updated_at = ? WHERE workout_exercise_id = ?`, [ts, id]);
         for (const s of setRows) await enqueuePendingOp(db, "sets", s.id, "delete", null);
         await db.runAsync(`UPDATE workout_exercises SET _deleted = 1, _dirty = 1, updated_at = ? WHERE id = ?`, [ts, id]);
         await enqueuePendingOp(db, "workout_exercises", id, "delete", null);
+        const affected = await distinctPRExercises(db, setRows.map((s) => s.id));
+        for (const a of affected) await resyncPersonalRecordsForExercise(db, a.exercise_id, a.user_id);
       });
       return { error: null };
     },
@@ -561,11 +624,13 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
       return { data: row ? mapSetRow(row) : null, error: null };
     },
 
-    /** Tombstonea un único set y encola el delete. No borra los `personal_records` ya generados por ese set. */
+    /** Tombstonea un único set, encola el delete y recalcula los PRs del ejercicio si el set borrado pudo haber generado uno. */
     async deleteSet(id: string): Promise<{ error: RepoError | null }> {
       await db.withTransactionAsync(async () => {
         await db.runAsync(`UPDATE sets SET _deleted = 1, _dirty = 1, updated_at = ? WHERE id = ?`, [nowIso(), id]);
         await enqueuePendingOp(db, "sets", id, "delete", null);
+        const affected = await distinctPRExercises(db, [id]);
+        for (const a of affected) await resyncPersonalRecordsForExercise(db, a.exercise_id, a.user_id);
       });
       return { error: null };
     },

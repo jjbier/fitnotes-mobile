@@ -6,6 +6,7 @@
  * las operaciones analíticas/CSV fuera de alcance offline.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { recomputePersonalRecordLedger } from "@fitnotes/core";
 import type { Database } from "../supabase/types.js";
 
 type Client = SupabaseClient<Database>;
@@ -14,6 +15,86 @@ type WorkoutUpdate = Database["public"]["Tables"]["workouts"]["Update"];
 type WorkoutExerciseInsert = Database["public"]["Tables"]["workout_exercises"]["Insert"];
 type SetInsert = Database["public"]["Tables"]["sets"]["Insert"];
 type SetUpdate = Database["public"]["Tables"]["sets"]["Update"];
+type PersonalRecordInsert = Database["public"]["Tables"]["personal_records"]["Insert"];
+
+/**
+ * `personal_records` no referencia el set que la generó — no hay forma de
+ * saber "qué fila borrar" cuando se borra un set/ejercicio/entrenamiento.
+ * Estas utilidades identifican qué `(exercise_id, user_id)` podrían haber
+ * generado un PR a partir de los sets que se van a borrar, y reconstruyen su
+ * ledger completo desde los sets vivos que queden (misma regla que el
+ * trigger SQL `update_personal_record`, ver `packages/core/src/utils/personalRecords.ts`).
+ */
+async function prExercisesFromSetIds(client: Client, setIds: string[]): Promise<{ exercise_id: string; user_id: string }[]> {
+  if (setIds.length === 0) return [];
+  const { data } = await client
+    .from("sets")
+    .select("is_complete, weight, reps, workout_exercises(exercise_id, user_id)")
+    .in("id", setIds);
+  type Row = { is_complete: boolean; weight: number | null; reps: number | null; workout_exercises: { exercise_id: string; user_id: string } | null };
+  return dedupePRExercises((data ?? []) as Row[]);
+}
+
+/** Igual que {@link prExercisesFromSetIds} pero partiendo de `workout_exercises.id` en vez de `sets.id`. */
+async function prExercisesFromWorkoutExerciseIds(client: Client, workoutExerciseIds: string[]): Promise<{ exercise_id: string; user_id: string }[]> {
+  if (workoutExerciseIds.length === 0) return [];
+  const { data } = await client
+    .from("workout_exercises")
+    .select("exercise_id, user_id, sets(is_complete, weight, reps)")
+    .in("id", workoutExerciseIds);
+  type Row = { exercise_id: string; user_id: string; sets: { is_complete: boolean; weight: number | null; reps: number | null }[] | null };
+  const rows = (data ?? []) as Row[];
+  const seen = new Set<string>();
+  const result: { exercise_id: string; user_id: string }[] = [];
+  for (const we of rows) {
+    const hasPRCandidate = (we.sets ?? []).some((s) => s.is_complete && s.weight != null && s.reps != null);
+    if (!hasPRCandidate) continue;
+    const key = `${we.exercise_id}:${we.user_id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push({ exercise_id: we.exercise_id, user_id: we.user_id });
+  }
+  return result;
+}
+
+function dedupePRExercises(
+  rows: { is_complete: boolean; weight: number | null; reps: number | null; workout_exercises: { exercise_id: string; user_id: string } | null }[]
+): { exercise_id: string; user_id: string }[] {
+  const seen = new Set<string>();
+  const result: { exercise_id: string; user_id: string }[] = [];
+  for (const s of rows) {
+    if (!s.is_complete || s.weight == null || s.reps == null || !s.workout_exercises) continue;
+    const we = s.workout_exercises;
+    const key = `${we.exercise_id}:${we.user_id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push({ exercise_id: we.exercise_id, user_id: we.user_id });
+  }
+  return result;
+}
+
+/** Borra todos los `personal_records` vigentes de un ejercicio y los reconstruye desde los sets vivos restantes. Llamar DESPUÉS de borrar los sets/workout que motivaron el recálculo. */
+async function resyncPersonalRecordsForExercise(client: Client, exerciseId: string, userId: string): Promise<void> {
+  await client.from("personal_records").delete().eq("exercise_id", exerciseId).eq("user_id", userId);
+
+  const { data } = await client
+    .from("workout_exercises")
+    .select("sets(weight, reps, created_at, is_complete)")
+    .eq("exercise_id", exerciseId)
+    .eq("user_id", userId);
+  type Row = { sets: { weight: number | null; reps: number | null; created_at: string; is_complete: boolean }[] | null };
+  const liveSets = ((data ?? []) as Row[])
+    .flatMap((we) => we.sets ?? [])
+    .filter((s) => s.is_complete && s.weight != null && s.reps != null)
+    .map((s) => ({ exercise_id: exerciseId, weight: s.weight as number, reps: s.reps as number, created_at: s.created_at }));
+
+  const ledger = recomputePersonalRecordLedger(liveSets);
+  if (ledger.length === 0) return;
+  const inserts: PersonalRecordInsert[] = ledger.map((e) => ({
+    user_id: userId, exercise_id: e.exercise_id, weight: e.weight, reps: e.reps, achieved_at: e.achieved_at,
+  }));
+  await client.from("personal_records").insert(inserts);
+}
 
 export function createWorkoutRepository(client: Client) {
   return {
@@ -109,9 +190,13 @@ export function createWorkoutRepository(client: Client) {
       return client.from("workouts").update(update).eq("id", id).select().single();
     },
 
-    /** Borra un entrenamiento (cascada limpia sus workout_exercises/sets). */
+    /** Borra un entrenamiento (cascada limpia sus workout_exercises/sets) y recalcula los PRs de los ejercicios afectados. */
     async deleteWorkout(id: string) {
-      return client.from("workouts").delete().eq("id", id);
+      const { data: wes } = await client.from("workout_exercises").select("id").eq("workout_id", id);
+      const affected = await prExercisesFromWorkoutExerciseIds(client, (wes ?? []).map((w) => w.id));
+      const result = await client.from("workouts").delete().eq("id", id);
+      for (const a of affected) await resyncPersonalRecordsForExercise(client, a.exercise_id, a.user_id);
+      return result;
     },
 
     // ─── Workout Exercises ─────────────────────────────────────────────────────
@@ -140,9 +225,12 @@ export function createWorkoutRepository(client: Client) {
       return client.from("workout_exercises").insert(insert).select().single();
     },
 
-    /** Quita un ejercicio de un entrenamiento (cascada limpia sus sets). */
+    /** Quita un ejercicio de un entrenamiento (cascada limpia sus sets) y recalcula los PRs de ese ejercicio. */
     async removeExercise(id: string) {
-      return client.from("workout_exercises").delete().eq("id", id);
+      const affected = await prExercisesFromWorkoutExerciseIds(client, [id]);
+      const result = await client.from("workout_exercises").delete().eq("id", id);
+      for (const a of affected) await resyncPersonalRecordsForExercise(client, a.exercise_id, a.user_id);
+      return result;
     },
 
     /** Cambia el grupo/superset de un ejercicio de entrenamiento. */
@@ -287,9 +375,12 @@ export function createWorkoutRepository(client: Client) {
       return client.from("sets").update(update).eq("id", id).select().single();
     },
 
-    /** Borra un set. */
+    /** Borra un set y recalcula los PRs del ejercicio si podía haber generado uno. */
     async deleteSet(id: string) {
-      return client.from("sets").delete().eq("id", id);
+      const affected = await prExercisesFromSetIds(client, [id]);
+      const result = await client.from("sets").delete().eq("id", id);
+      for (const a of affected) await resyncPersonalRecordsForExercise(client, a.exercise_id, a.user_id);
+      return result;
     },
 
     /** Reordena los sets de un ejercicio de entrenamiento (una UPDATE por fila, en paralelo). */

@@ -218,5 +218,62 @@ describe("localWorkoutRepository", () => {
       const prs = await personalRecordsFor("ex-1");
       expect(prs).toEqual([expect.objectContaining({ reps: 10, weight: 40 })]);
     });
+
+    it("deleting the workout that generated the only PR removes it", async () => {
+      const { data: workout } = await repo.createWorkout({ date: "2026-07-25" }, USER_ID);
+      const { data: we } = await repo.addExercise({ workout_id: workout!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+      const { data: set } = await repo.createSet({ workout_exercise_id: we!.id, order_index: 0 }, USER_ID);
+      await repo.updateSet(set!.id, { is_complete: true, weight: 80, reps: 8 });
+      expect(await personalRecordsFor("ex-1")).toHaveLength(1);
+
+      await repo.deleteWorkout(workout!.id);
+
+      expect(await personalRecordsFor("ex-1")).toEqual([]);
+    });
+
+    it("deleting the workout with the current-best PR reveals the previous best from another workout", async () => {
+      const { data: workoutA } = await repo.createWorkout({ date: "2026-07-26" }, USER_ID);
+      const { data: weA } = await repo.addExercise({ workout_id: workoutA!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+      const { data: setA } = await repo.createSet({ workout_exercise_id: weA!.id, order_index: 0 }, USER_ID);
+      await repo.updateSet(setA!.id, { is_complete: true, weight: 80, reps: 8 });
+
+      const { data: workoutB } = await repo.createWorkout({ date: "2026-07-27" }, USER_ID);
+      const { data: weB } = await repo.addExercise({ workout_id: workoutB!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+      const { data: setB } = await repo.createSet({ workout_exercise_id: weB!.id, order_index: 0 }, USER_ID);
+      await repo.updateSet(setB!.id, { is_complete: true, weight: 90, reps: 8 });
+      expect(await personalRecordsFor("ex-1")).toHaveLength(2);
+
+      await repo.deleteWorkout(workoutB!.id);
+
+      const prs = await personalRecordsFor("ex-1");
+      expect(prs).toEqual([expect.objectContaining({ reps: 8, weight: 80 })]);
+    });
+
+    it("deleteSet recalculates PRs for the affected exercise", async () => {
+      const { data: workout } = await repo.createWorkout({ date: "2026-07-28" }, USER_ID);
+      const { data: we } = await repo.addExercise({ workout_id: workout!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+      const { data: set1 } = await repo.createSet({ workout_exercise_id: we!.id, order_index: 0 }, USER_ID);
+      await repo.updateSet(set1!.id, { is_complete: true, weight: 80, reps: 8 });
+      const { data: set2 } = await repo.createSet({ workout_exercise_id: we!.id, order_index: 1 }, USER_ID);
+      await repo.updateSet(set2!.id, { is_complete: true, weight: 90, reps: 8 });
+      expect(await personalRecordsFor("ex-1")).toHaveLength(2);
+
+      await repo.deleteSet(set2!.id);
+
+      const prs = await personalRecordsFor("ex-1");
+      expect(prs).toEqual([expect.objectContaining({ reps: 8, weight: 80 })]);
+    });
+
+    it("removeExercise recalculates PRs for the removed exercise", async () => {
+      const { data: workout } = await repo.createWorkout({ date: "2026-07-29" }, USER_ID);
+      const { data: we } = await repo.addExercise({ workout_id: workout!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+      const { data: set } = await repo.createSet({ workout_exercise_id: we!.id, order_index: 0 }, USER_ID);
+      await repo.updateSet(set!.id, { is_complete: true, weight: 80, reps: 8 });
+      expect(await personalRecordsFor("ex-1")).toHaveLength(1);
+
+      await repo.removeExercise(we!.id);
+
+      expect(await personalRecordsFor("ex-1")).toEqual([]);
+    });
   });
 });
