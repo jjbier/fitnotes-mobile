@@ -114,6 +114,23 @@ export function createWorkoutRepository(client: Client) {
       return { data: data?.[0] ?? null, error };
     },
 
+    /**
+     * Todos los entrenamientos de una fecha exacta (0, 1 o varios — soporte
+     * para varios entrenamientos el mismo día, ver
+     * docs/implementation-plan-multi-workout-per-day.md). Orden: por
+     * `start_time` ascendente (los que no tienen hora, al final), y entre
+     * empates o sin hora, por `created_at` ascendente.
+     */
+    async getWorkoutsByDate(date: string) {
+      const { data, error } = await client
+        .from("workouts")
+        .select("*")
+        .eq("date", date)
+        .order("start_time", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: true });
+      return { data: data ?? [], error };
+    },
+
     /** Últimos `limit` entrenamientos, más recientes primero. */
     async getWorkouts(limit = 30) {
       return client

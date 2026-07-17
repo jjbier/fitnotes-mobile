@@ -184,6 +184,22 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
       return { data: row ? mapWorkoutRow(row) : null, error: null };
     },
 
+    /**
+     * Todos los `workouts` vivos de una fecha exacta (0, 1 o varios —
+     * soporte para varios entrenamientos el mismo día, ver
+     * docs/implementation-plan-multi-workout-per-day.md). Orden: por
+     * `start_time` ascendente (los que no tienen hora, al final), y entre
+     * empates o sin hora, por `created_at` ascendente. Solo lectura.
+     */
+    async getWorkoutsByDate(date: string): Promise<{ data: WorkoutRow[]; error: RepoError | null }> {
+      const rows = await db.getAllAsync<RawRow>(
+        `SELECT * FROM workouts WHERE date = ? AND _deleted = 0
+         ORDER BY (start_time IS NULL), start_time ASC, created_at ASC`,
+        [date]
+      );
+      return { data: rows.map(mapWorkoutRow), error: null };
+    },
+
     /** Lee los últimos `limit` `workouts` vivos, más reciente primero. Solo lectura. */
     async getWorkouts(limit = 30): Promise<{ data: WorkoutRow[]; error: RepoError | null }> {
       const rows = await db.getAllAsync<RawRow>(

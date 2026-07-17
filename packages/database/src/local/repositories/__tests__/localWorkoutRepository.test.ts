@@ -48,6 +48,35 @@ describe("localWorkoutRepository", () => {
     expect(data).toBeNull();
   });
 
+  it("getWorkoutsByDate returns all live workouts for a date ordered by start_time, undated last", async () => {
+    const { data: afternoon } = await repo.createWorkout(
+      { date: "2026-07-17", start_time: "18:00" },
+      USER_ID
+    );
+    const { data: noTime } = await repo.createWorkout({ date: "2026-07-17" }, USER_ID);
+    const { data: morning } = await repo.createWorkout(
+      { date: "2026-07-17", start_time: "08:00" },
+      USER_ID
+    );
+
+    const { data, error } = await repo.getWorkoutsByDate("2026-07-17");
+    expect(error).toBeNull();
+    expect(data.map((w) => w.id)).toEqual([morning!.id, afternoon!.id, noTime!.id]);
+  });
+
+  it("getWorkoutsByDate excludes tombstoned rows and returns [] when none live", async () => {
+    const { data: workout } = await repo.createWorkout({ date: "2026-07-18" }, USER_ID);
+    await repo.deleteWorkout(workout!.id);
+
+    const { data } = await repo.getWorkoutsByDate("2026-07-18");
+    expect(data).toEqual([]);
+  });
+
+  it("getWorkoutsByDate returns [] for a date with no workouts", async () => {
+    const { data } = await repo.getWorkoutsByDate("2026-01-01");
+    expect(data).toEqual([]);
+  });
+
   it("creating an exercise + sets, then deleting the workout, cascades tombstones and enqueues deletes for all rows", async () => {
     const { data: workout } = await repo.createWorkout({ date: "2026-07-12" }, USER_ID);
     const { data: we } = await repo.addExercise(
