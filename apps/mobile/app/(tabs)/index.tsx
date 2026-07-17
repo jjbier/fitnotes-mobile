@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator, Alert, TextInput, Share, Modal, FlatList } from "react-native";
 import { NestableScrollContainer, NestableDraggableFlatList, ScaleDecorator, type RenderItemParams } from "react-native-draggable-flatlist";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useWorkoutStore, useExerciseStore, usePreferencesStore, formatWorkoutDate, todayISO, ExerciseType, formatClockDuration } from "@fitnotes/core";
 import type { WorkoutExercise } from "@fitnotes/core";
@@ -118,6 +118,18 @@ export default function HomeScreen() {
   }, []);
 
   /**
+   * Vuelve a leer `dayWorkouts` de `date` sin tocar el store — usado tras crear un
+   * entrenamiento adicional desde `handleStartBlankWorkout`/`handleLogRoutine` (que
+   * cargan directo el resuelto vía `loadWorkoutById`, sin pasar por `loadWorkoutForDate`):
+   * sin esto, el chip "Cambiar" no aparecería hasta salir y volver a esta fecha.
+   */
+  const refreshDayWorkouts = useCallback(async (date: string) => {
+    const { data } = await repo.getWorkoutsByDate(date);
+    setDayWorkouts(data ?? []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /**
    * Resuelve y carga el entrenamiento de `date`: si no hay ninguno, deja el
    * store vacío (aparece la opción de iniciar uno); si hay exactamente uno,
    * lo carga directo (sin cambio de UX); si hay varios (Fase 4 de
@@ -230,6 +242,17 @@ export default function HomeScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.date, params.workoutId]);
 
+  // Refresca el conteo de `dayWorkouts` (chip "Cambiar") al recuperar el foco — p.ej.
+  // volviendo desde el editor de una rutina, que registra un día directo en el store sin
+  // pasar por esta tab. No recarga el store (solo el conteo), para no reabrir el picker
+  // de vista en cada refoco.
+  useFocusEffect(
+    useCallback(() => {
+      refreshDayWorkouts(currentDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentDate])
+  );
+
   // Sync local comment with store
   useEffect(() => {
     setWorkoutCommentLocal(activeWorkout?.comment ?? "");
@@ -313,6 +336,7 @@ export default function HomeScreen() {
     if (!workoutId) { setLoggingRoutineId(null); return; }
     loadWorkouts([{ id: workoutId, date: currentDate }]);
     await loadWorkoutById(workoutId);
+    await refreshDayWorkouts(currentDate);
     setLoggingRoutineId(null);
     setShowStartModal(false);
   }
@@ -364,6 +388,7 @@ export default function HomeScreen() {
     }
     await loadWorkoutById(workoutId);
     loadWorkouts([{ id: workoutId, date: currentDate }]);
+    await refreshDayWorkouts(currentDate);
     setLoggingRoutineId(null);
     setShowStartModal(false);
   }
@@ -458,13 +483,27 @@ export default function HomeScreen() {
     ]);
   }
 
-  /** Pide confirmación y elimina permanentemente un entrenamiento completo de "Actividad reciente". */
+  /**
+   * Pide confirmación y elimina permanentemente un entrenamiento completo de "Actividad
+   * reciente". Si es de `currentDate`: si era el activo, recarga la vista con
+   * `loadWorkoutForDate` (resuelve el que quede, o el estado vacío si no queda ninguno —
+   * sin esto, borrar el que se estaba viendo dejaba "Sin entrenamiento aún" aunque el día
+   * todavía tuviera otro); si no era el activo, solo refresca `dayWorkouts` para que el
+   * chip "Cambiar" no siga contando uno ya borrado.
+   */
   async function handleDeleteWorkout(workoutId: string, date: string) {
     Alert.alert(`¿Eliminar entrenamiento del ${formatWorkoutDate(date)}?`, "Se eliminará permanentemente.", [
       { text: "Cancelar", style: "cancel" },
       { text: "Eliminar", style: "destructive", onPress: async () => {
         removeWorkoutFromHistory(workoutId);
         await repo.deleteWorkout(workoutId);
+        if (date === currentDate) {
+          if (workoutId === activeWorkout?.id) {
+            await loadWorkoutForDate(currentDate);
+          } else {
+            await refreshDayWorkouts(currentDate);
+          }
+        }
       }},
     ]);
   }
