@@ -11,17 +11,20 @@ interface WorkoutForDateRepo {
 
 /**
  * Resuelve "el" entrenamiento de una fecha para acciones rápidas (añadir una
- * serie desde la calculadora, copiar una serie del historial…) sin asumir
- * que solo puede haber uno — ver docs/implementation-plan-multi-workout-per-day.md,
- * Fase 4.
+ * serie desde la calculadora, registrar una rutina, copiar una serie del
+ * historial…) sin asumir que solo puede haber uno — ver
+ * docs/implementation-plan-multi-workout-per-day.md, Fases 4 y 5.
  *
- * `resolveWorkoutForDate(date, userId)`:
+ * `resolveWorkoutForDate(date, userId, opts?)`:
  * - 0 entrenamientos ese día → crea uno y devuelve su id (comportamiento de
  *   siempre).
- * - 1 → devuelve su id directo, sin preguntar nada (sin cambio de UX).
- * - ≥2 → muestra el picker (renderizar `pickerModal` en el JSX del que llama)
- *   y espera a que el usuario elija uno o cree uno nuevo; devuelve `null` si
- *   cierra el modal sin elegir.
+ * - 1 → devuelve su id directo, sin preguntar nada — salvo que se pase
+ *   `forceAskIfAny: true` (Fase 5: acciones que "empiezan algo nuevo", como
+ *   registrar una rutina, deben preguntar incluso con uno solo, en vez de
+ *   asumir que hay que seguir añadiendo al mismo).
+ * - ≥2 (o 1 con `forceAskIfAny`) → muestra el picker (renderizar
+ *   `pickerModal` en el JSX del que llama) y espera a que el usuario elija
+ *   uno o cree uno nuevo; devuelve `null` si cierra el modal sin elegir.
  */
 export function useWorkoutForDate(repo: WorkoutForDateRepo) {
   const [pending, setPending] = useState<PickableWorkout[] | null>(null);
@@ -29,14 +32,14 @@ export function useWorkoutForDate(repo: WorkoutForDateRepo) {
   const resolveRef = useRef<((id: string | null) => void) | null>(null);
 
   const resolveWorkoutForDate = useCallback(
-    async (date: string, userId: string): Promise<string | null> => {
+    async (date: string, userId: string, opts?: { forceAskIfAny?: boolean }): Promise<string | null> => {
       const { data } = await repo.getWorkoutsByDate(date);
       const workouts = data ?? [];
       if (workouts.length === 0) {
         const { data: created } = await repo.createWorkout({ date, start_time: new Date().toISOString() }, userId);
         return created?.id ?? null;
       }
-      if (workouts.length === 1) return workouts[0]!.id;
+      if (workouts.length === 1 && !opts?.forceAskIfAny) return workouts[0]!.id;
 
       return new Promise<string | null>((resolve) => {
         resolveRef.current = async (id: string | null) => {

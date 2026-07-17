@@ -290,13 +290,14 @@ export default function HomeScreen() {
 
   /**
    * Inicia un entrenamiento vacío en la fecha actual, sin pasar por ninguna rutina
-   * (paridad con "Iniciar entrenamiento" en web). Reutiliza el entrenamiento existente
-   * en vez de duplicarlo si ya hay exactamente uno para la fecha; si hay varios,
-   * pregunta a cuál añadirlo o si crear uno nuevo (`useWorkoutForDate`, Fase 4).
+   * (paridad con "Iniciar entrenamiento" en web). Si ya hay algún entrenamiento esa
+   * fecha, siempre pregunta a cuál añadirlo o si crear uno nuevo (`useWorkoutForDate`
+   * con `forceAskIfAny`, Fase 5) — evita que "+ Nuevo" reutilice en silencio el que ya
+   * se estaba viendo.
    */
   async function handleStartBlankWorkout() {
     setLoggingRoutineId("blank");
-    const workoutId = await resolveWorkoutForDate(currentDate, userId);
+    const workoutId = await resolveWorkoutForDate(currentDate, userId, { forceAskIfAny: true });
     if (!workoutId) { setLoggingRoutineId(null); return; }
     loadWorkouts([{ id: workoutId, date: currentDate }]);
     await loadWorkoutById(workoutId);
@@ -306,8 +307,9 @@ export default function HomeScreen() {
 
   /**
    * Registra una rutina en el entrenamiento de la fecha actual (resuelto vía
-   * `useWorkoutForDate` — crea uno si no hay, pregunta a cuál si hay varios,
-   * Fase 4): añade todos los ejercicios únicos de todos los días de la
+   * `useWorkoutForDate` con `forceAskIfAny` — crea uno si no hay, y si ya hay
+   * alguno (aunque sea solo uno) pregunta si añadir a ese o crear uno nuevo,
+   * Fase 5): añade todos los ejercicios únicos de todos los días de la
    * rutina (deduplicados por `exercise_id`) y sus series predefinidas, y
    * vuelca el resultado al store como entrenamiento activo.
    */
@@ -328,7 +330,7 @@ export default function HomeScreen() {
       setLoggingRoutineId(null);
       return;
     }
-    const workoutId = await resolveWorkoutForDate(currentDate, userId);
+    const workoutId = await resolveWorkoutForDate(currentDate, userId, { forceAskIfAny: true });
     if (!workoutId) { setLoggingRoutineId(null); return; }
     const { data: existingWEs } = await repo.getWorkoutExercises(workoutId);
     const orderBase = existingWEs?.length ?? 0;
@@ -680,6 +682,14 @@ export default function HomeScreen() {
                 <TouchableOpacity onPress={handleShareWorkout} style={{ flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
                   <Ionicons name="share-outline" size={16} color="#64748b" />
                   <Text style={{ fontSize: 13, color: "#64748b" }}>Compartir</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={openStartModal}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}
+                  accessibilityLabel="Añadir otro entrenamiento este día"
+                >
+                  <Ionicons name="add-circle-outline" size={16} color="#64748b" />
+                  <Text style={{ fontSize: 13, color: "#64748b" }}>Nuevo</Text>
                 </TouchableOpacity>
                 {workoutExercises.length > 0 && (
                   <TouchableOpacity
