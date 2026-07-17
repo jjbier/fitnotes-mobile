@@ -19,7 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { useTheme, useThemeModeStore, type ThemeMode } from "../../lib/theme";
-import { usePreferencesStore, computeDefaultCatalogSeedPlan, type UserPreferences, type DefaultCatalogSeedPlan } from "@fitnotes/core";
+import { usePreferencesStore, computeDefaultCatalogSeedPlan, resolveDefaultExerciseCatalog, type UserPreferences, type DefaultCatalogSeedPlan } from "@fitnotes/core";
 import { createWorkoutRepository, createBackupRepository, createBodyTrackerRepository, isBackupData, type BackupData } from "@fitnotes/database";
 import { useRepositories } from "../../contexts/RepositoryContext";
 import { useSyncStatus } from "../../contexts/SyncContext";
@@ -369,7 +369,11 @@ export default function SettingsScreen() {
     setCatalogChecking(true);
     try {
       const [{ data: cats }, { data: exs }] = await Promise.all([exerciseRepo.getCategories(), exerciseRepo.getExercises()]);
-      const plan = computeDefaultCatalogSeedPlan(cats, exs);
+      const catalog = resolveDefaultExerciseCatalog(
+        t("exerciseCatalog:categories", { returnObjects: true }) as Record<string, string>,
+        t("exerciseCatalog:exercises", { returnObjects: true }) as Record<string, string>
+      );
+      const plan = computeDefaultCatalogSeedPlan(cats, exs, catalog);
       if (plan.categoriesToCreateCount === 0 && plan.exercisesToCreateCount === 0) {
         Alert.alert(t("settings:catalogImport.alreadyDoneTitle"), t("settings:catalogImport.alreadyDoneMessage"));
         return;

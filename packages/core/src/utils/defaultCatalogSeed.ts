@@ -8,7 +8,10 @@
  * app, porque el repo remoto (web) y el local (mobile) no comparten un tipo
  * exacto pese a espejar los mismos métodos.
  */
-import { DEFAULT_EXERCISE_CATALOG, type DefaultCatalogCategory, type DefaultCatalogExercise } from "../data/defaultExerciseCatalog.js";
+import { resolveDefaultExerciseCatalog, type DefaultCatalogCategory, type DefaultCatalogExercise } from "../data/defaultExerciseCatalog.js";
+import { es } from "../i18n/locales/es.js";
+
+const DEFAULT_RESOLVED_CATALOG = resolveDefaultExerciseCatalog(es.exerciseCatalog.categories, es.exerciseCatalog.exercises);
 
 /** Plan de una categoría del catálogo: si ya existía, y qué ejercicios suyos faltan por crear. */
 export interface DefaultCatalogSeedCategoryPlan {
@@ -33,16 +36,16 @@ function normalizeName(name: string): string {
 }
 
 /**
- * Calcula el plan de importación comparando `catalog` (por defecto,
- * `DEFAULT_EXERCISE_CATALOG`) contra las categorías/ejercicios ya existentes
- * del usuario. Un ejercicio se considera existente solo si coincide su
- * nombre Y el nombre de su categoría (así "Press Banca" en dos categorías
- * distintas no se pisan entre sí).
+ * Calcula el plan de importación comparando `catalog` (por defecto, el catálogo resuelto en
+ * español — los llamadores reales pasan `resolveDefaultExerciseCatalog(...)` con los nombres ya
+ * traducidos al idioma activo, ver `Settings`) contra las categorías/ejercicios ya existentes del
+ * usuario. Un ejercicio se considera existente solo si coincide su nombre Y el nombre de su
+ * categoría (así "Press Banca" en dos categorías distintas no se pisan entre sí).
  */
 export function computeDefaultCatalogSeedPlan(
   existingCategories: { id: string; name: string }[],
   existingExercises: { name: string; category_id: string | null }[],
-  catalog: DefaultCatalogCategory[] = DEFAULT_EXERCISE_CATALOG
+  catalog: DefaultCatalogCategory[] = DEFAULT_RESOLVED_CATALOG
 ): DefaultCatalogSeedPlan {
   const categoryIdToNormalizedName = new Map(existingCategories.map((c) => [c.id, normalizeName(c.name)]));
   const existingCategoryNames = new Set(existingCategories.map((c) => normalizeName(c.name)));

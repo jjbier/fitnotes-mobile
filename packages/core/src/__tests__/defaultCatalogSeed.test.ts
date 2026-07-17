@@ -94,9 +94,12 @@ describe("computeDefaultCatalogSeedPlan", () => {
     expect(chestPlan.exercisesToCreate).toEqual(CATALOG[0]!.exercises);
   });
 
-  it("defaults to the real DEFAULT_EXERCISE_CATALOG (8 categories, 96 exercises) when no catalog is passed", () => {
+  it("defaults to the real catalog resolved in Spanish (8 categories, 96 exercises) when no catalog is passed", () => {
     const plan = computeDefaultCatalogSeedPlan([], []);
     expect(plan.categoriesToCreateCount).toBe(8);
     expect(plan.exercisesToCreateCount).toBe(96);
+    // Spot-check a couple of real translated names, not just counts.
+    expect(plan.categories.map((c) => c.name)).toContain("Pecho");
+    expect(plan.categories.find((c) => c.name === "Pecho")!.exercisesToCreate.map((e) => e.name)).toContain("Cruce de poleas");
   });
 });
