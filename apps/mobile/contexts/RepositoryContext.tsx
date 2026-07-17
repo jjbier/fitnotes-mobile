@@ -25,6 +25,7 @@ import type {
   LocalGoalsRepository,
   LocalProgressRepository,
   LocalPreferencesRepository,
+  LocalCalendarRepository,
 } from "@fitnotes/database";
 import {
   createLocalWorkoutRepository,
@@ -34,6 +35,7 @@ import {
   createLocalGoalsRepository,
   createLocalProgressRepository,
   createLocalPreferencesRepository,
+  createLocalCalendarRepository,
   getOrCreateLocalIdentity,
   setActiveIdentity,
 } from "@fitnotes/database";
@@ -52,6 +54,7 @@ interface RepositoryContextValue {
   goalsRepo: LocalGoalsRepository;
   progressRepo: LocalProgressRepository;
   preferencesRepo: LocalPreferencesRepository;
+  calendarRepo: LocalCalendarRepository;
   userId: string;
   isGuest: boolean;
   /** Vuelve a leer `local_identity` — llamar tras un claim. */
@@ -176,6 +179,7 @@ function RepositoryProviderReady({
   const goalsRepo = useMemo(() => createLocalGoalsRepository(db), [db]);
   const progressRepo = useMemo(() => createLocalProgressRepository(db), [db]);
   const preferencesRepo = useMemo(() => createLocalPreferencesRepository(db), [db]);
+  const calendarRepo = useMemo(() => createLocalCalendarRepository(db), [db]);
   const [identity, setIdentity] = useState<{ userId: string; isGuest: boolean } | null>(null);
 
   const refreshIdentity = useMemo(
@@ -221,6 +225,7 @@ function RepositoryProviderReady({
         goalsRepo,
         progressRepo,
         preferencesRepo,
+        calendarRepo,
         userId: identity.userId,
         isGuest: identity.isGuest,
         refreshIdentity,

@@ -56,3 +56,5 @@ export { createLocalProgressRepository } from "./local/repositories/localProgres
 export type { LocalProgressRepository } from "./local/repositories/localProgressRepository.js";
 export { createLocalPreferencesRepository } from "./local/repositories/localPreferencesRepository.js";
 export type { LocalPreferencesRepository } from "./local/repositories/localPreferencesRepository.js";
+export { createLocalCalendarRepository } from "./local/repositories/localCalendarRepository.js";
+export type { LocalCalendarRepository } from "./local/repositories/localCalendarRepository.js";

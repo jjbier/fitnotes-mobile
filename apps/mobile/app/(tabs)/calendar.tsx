@@ -3,7 +3,6 @@ import { Animated, Dimensions, PanResponder, SafeAreaView, ScrollView, Text, Vie
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { formatWorkoutDate, useExerciseStore, usePreferencesStore, ExerciseType } from "@fitnotes/core";
-import { createCalendarRepository } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../lib/theme";
 import { useSyncStatus } from "../../contexts/SyncContext";
@@ -110,8 +109,7 @@ export default function CalendarScreen() {
 
   const { refetchSignal } = useSyncStatus();
 
-  const repo = useMemo(() => createCalendarRepository(supabase), []);
-  const { exerciseRepo: exRepo, preferencesRepo, isGuest } = useRepositories();
+  const { calendarRepo: repo, exerciseRepo: exRepo, preferencesRepo, isGuest } = useRepositories();
   const today = now.toISOString().split("T")[0]!;
 
   /** Carga fechas con entrenamiento, colores de categoría por fecha y categorías por fecha para el mes `y`/`m`. */
