@@ -18,7 +18,7 @@ const deviceLanguage = Localization.getLocales()[0]?.languageCode === "en" ? "en
 if (!i18next.isInitialized) {
   void i18next.use(initReactI18next).init({
     resources: { es, en },
-    ns: ["common", "settings"],
+    ns: ["common", "settings", "exercises"],
     defaultNS: "common",
     lng: deviceLanguage,
     fallbackLng: "es",

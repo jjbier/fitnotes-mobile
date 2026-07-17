@@ -5,6 +5,7 @@ import {
   Platform, Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import DraggableFlatList, { ScaleDecorator } from "react-native-draggable-flatlist";
 import type { RenderItemParams } from "react-native-draggable-flatlist";
@@ -16,20 +17,6 @@ import type { Category, Exercise } from "@fitnotes/core";
 import { useTheme } from "../../lib/theme";
 import { useSyncStatus } from "../../contexts/SyncContext";
 import { useRepositories } from "../../contexts/RepositoryContext";
-
-/** Opciones de tipo de ejercicio mostradas en el modal de creación/edición, con su etiqueta en español. */
-const TYPE_OPTIONS: { value: ExerciseType; label: string }[] = [
-  { value: ExerciseType.WEIGHT_REPS, label: "Peso × Reps" },
-  { value: ExerciseType.REPS_ONLY, label: "Solo reps" },
-  { value: ExerciseType.WEIGHT_ONLY, label: "Solo peso" },
-  { value: ExerciseType.DISTANCE_TIME, label: "Distancia / Tiempo" },
-  { value: ExerciseType.TIME_ONLY, label: "Solo tiempo" },
-  { value: ExerciseType.WEIGHT_DISTANCE, label: "Peso + Distancia" },
-  { value: ExerciseType.WEIGHT_TIME, label: "Peso + Tiempo" },
-  { value: ExerciseType.REPS_DISTANCE, label: "Reps + Distancia" },
-  { value: ExerciseType.REPS_TIME, label: "Reps + Tiempo" },
-  { value: ExerciseType.DISTANCE_ONLY, label: "Solo distancia" },
-];
 
 /** Paleta de colores predefinidos seleccionable al crear/editar una categoría. */
 const PRESET_COLORS = [
@@ -61,6 +48,7 @@ const WEIGHT_TYPES = [ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHT_ONLY, Exerci
 export default function ExercisesScreen() {
   const colors = useTheme();
   const router = useRouter();
+  const { t } = useTranslation();
   const categories = useExerciseStore((s) => s.categories);
   const exercises = useExerciseStore((s) => s.exercises);
   const isLoading = useExerciseStore((s) => s.isLoading);
@@ -116,6 +104,20 @@ export default function ExercisesScreen() {
   const { exerciseRepo: repo, userId } = useRepositories();
   const remoteExerciseRepo = useMemo(() => createExerciseRepository(supabase), []);
   const { refetchSignal } = useSyncStatus();
+
+  /** Opciones de tipo de ejercicio mostradas en el modal de creación/edición, con su etiqueta traducida. */
+  const TYPE_OPTIONS: { value: ExerciseType; label: string }[] = useMemo(() => [
+    { value: ExerciseType.WEIGHT_REPS, label: t("exercises:types.WEIGHT_REPS") },
+    { value: ExerciseType.REPS_ONLY, label: t("exercises:types.REPS_ONLY") },
+    { value: ExerciseType.WEIGHT_ONLY, label: t("exercises:types.WEIGHT_ONLY") },
+    { value: ExerciseType.DISTANCE_TIME, label: t("exercises:types.DISTANCE_TIME") },
+    { value: ExerciseType.TIME_ONLY, label: t("exercises:types.TIME_ONLY") },
+    { value: ExerciseType.WEIGHT_DISTANCE, label: t("exercises:types.WEIGHT_DISTANCE") },
+    { value: ExerciseType.WEIGHT_TIME, label: t("exercises:types.WEIGHT_TIME") },
+    { value: ExerciseType.REPS_DISTANCE, label: t("exercises:types.REPS_DISTANCE") },
+    { value: ExerciseType.REPS_TIME, label: t("exercises:types.REPS_TIME") },
+    { value: ExerciseType.DISTANCE_ONLY, label: t("exercises:types.DISTANCE_ONLY") },
+  ], [t]);
 
   /** Carga categorías, ejercicios (repo local) y estadísticas de uso (repo remoto de estadísticas) y los vuelca al store. */
   const load = useCallback(async () => {
@@ -202,7 +204,7 @@ export default function ExercisesScreen() {
     if (!newCatName.trim()) return;
     setCatSaving(true);
     const { data, error } = await repo.createCategory({ name: newCatName.trim(), color: newCatColor }, userId);
-    if (error || !data) { Alert.alert("Error", error?.message ?? "Ha ocurrido un error"); setCatSaving(false); return; }
+    if (error || !data) { Alert.alert("Error", error?.message ?? t("exercises:genericError")); setCatSaving(false); return; }
     const cat: Category = { id: data.id, name: data.name, color: data.color, order_index: data.order_index };
     addCategory(cat);
     setModalCategories((prev) => [...prev, cat]);
@@ -218,7 +220,7 @@ export default function ExercisesScreen() {
     if (!newCatName.trim()) return;
     setCatSaving(true);
     const { data, error } = await repo.createCategory({ name: newCatName.trim(), color: newCatColor }, userId);
-    if (error || !data) { Alert.alert("Error", error?.message ?? "Ha ocurrido un error"); setCatSaving(false); return; }
+    if (error || !data) { Alert.alert("Error", error?.message ?? t("exercises:genericError")); setCatSaving(false); return; }
     const cat: Category = { id: data.id, name: data.name, color: data.color, order_index: data.order_index };
     addCategory(cat);
     setNewCatName("");
@@ -233,8 +235,8 @@ export default function ExercisesScreen() {
    * pesos históricos del ejercicio tras guardar (cambio de unidad kg↔lb).
    */
   async function doSave(convertFactor?: number) {
-    if (!exName.trim()) { Alert.alert("Error", "El nombre es obligatorio"); return; }
-    if (!exCategoryId) { Alert.alert("Error", "Selecciona o crea una categoría"); return; }
+    if (!exName.trim()) { Alert.alert("Error", t("exercises:nameRequired")); return; }
+    if (!exCategoryId) { Alert.alert("Error", t("exercises:categoryRequired")); return; }
 
     const weightUnit = WEIGHT_TYPES.includes(exType) ? exWeightUnit : "kg";
     setSaving(true);
@@ -253,7 +255,7 @@ export default function ExercisesScreen() {
         default_rest_seconds: defaultRest,
         default_chart: exDefaultChart,
       });
-      if (error || !data) { Alert.alert("Error", error?.message ?? "Ha ocurrido un error"); setSaving(false); return; }
+      if (error || !data) { Alert.alert("Error", error?.message ?? t("exercises:genericError")); setSaving(false); return; }
       updateExercise(editingExercise.id, {
         name: data.name,
         notes: data.notes ?? undefined,
@@ -274,7 +276,7 @@ export default function ExercisesScreen() {
         { name: exName.trim(), notes: exNotes.trim() || null, category_id: exCategoryId, type: exType, weight_unit: weightUnit, weight_increment: weightIncrement, default_rest_seconds: defaultRest, default_chart: exDefaultChart },
         userId
       );
-      if (error || !data) { Alert.alert("Error", error?.message ?? "Ha ocurrido un error"); setSaving(false); return; }
+      if (error || !data) { Alert.alert("Error", error?.message ?? t("exercises:genericError")); setSaving(false); return; }
       addExercise({
         id: data.id,
         name: data.name,
@@ -310,24 +312,24 @@ export default function ExercisesScreen() {
 
     function showUnitAlert(onConfirm: () => void, onConfirmConvert: () => void) {
       Alert.alert(
-        "Cambiar unidad",
-        `¿Cómo actualizar los valores históricos al cambiar a ${exWeightUnit}?`,
+        t("exercises:changeWeightUnitTitleMobile"),
+        t("exercises:changeWeightUnitMessageMobile", { unit: exWeightUnit }),
         [
-          { text: "Cancelar", style: "cancel" },
-          { text: "Solo etiqueta", onPress: onConfirm },
-          { text: "Convertir", onPress: onConfirmConvert },
+          { text: t("common:cancel"), style: "cancel" },
+          { text: t("exercises:changeWeightUnitLabelOnlyMobile"), onPress: onConfirm },
+          { text: t("exercises:changeWeightUnitConvertMobile"), onPress: onConfirmConvert },
         ]
       );
     }
 
     if (typeChanged) {
       Alert.alert(
-        "Cambiar tipo",
-        "Los campos que no existen en el nuevo tipo serán eliminados del historial de este ejercicio. ¿Continuar?",
+        t("exercises:changeTypeTitleMobile"),
+        t("exercises:changeTypeMessageMobile"),
         [
-          { text: "Cancelar", style: "cancel" },
+          { text: t("common:cancel"), style: "cancel" },
           {
-            text: "Cambiar", style: "destructive", onPress: () => {
+            text: t("exercises:changeTypeConfirmMobile"), style: "destructive", onPress: () => {
               if (unitChanged) {
                 showUnitAlert(() => doSave(), () => doSave(convFactor));
               } else {
@@ -357,12 +359,12 @@ export default function ExercisesScreen() {
   /** Pide confirmación y elimina un ejercicio junto con su historial, PRs y objetivos asociados (cascada local). */
   async function handleDeleteExercise(id: string, name: string) {
     Alert.alert(
-      "Eliminar ejercicio",
-      `¿Eliminar "${name}" y todo su historial, PRs y objetivos?`,
+      t("exercises:deleteExerciseTitleMobile"),
+      t("exercises:deleteExerciseConfirmFullMobile", { name }),
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: t("common:cancel"), style: "cancel" },
         {
-          text: "Eliminar",
+          text: t("common:delete"),
           style: "destructive",
           onPress: async () => {
             await repo.deleteExercise(id);
@@ -406,19 +408,19 @@ export default function ExercisesScreen() {
     const results = await repo.reorderCategories(data.map((c, i) => ({ id: c.id, order_index: i })));
     if (results.some((r) => r.error)) {
       reorderCategories(prevOrder);
-      Alert.alert("Error", "No se pudo guardar el orden. Inténtalo de nuevo.");
+      Alert.alert("Error", t("exercises:reorderFailedMobile"));
     }
   }
 
   /** Pide confirmación y elimina una categoría junto con todos sus ejercicios e historial (cascada local). */
   async function handleDeleteCategory(id: string, name: string) {
     Alert.alert(
-      "Eliminar categoría",
-      `¿Eliminar "${name}" y todos sus ejercicios e historial?`,
+      t("exercises:deleteCategoryTitleMobile"),
+      t("exercises:deleteCategoryConfirmMobile", { name }),
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: t("common:cancel"), style: "cancel" },
         {
-          text: "Eliminar",
+          text: t("common:delete"),
           style: "destructive",
           onPress: async () => {
             await repo.deleteCategory(id);
@@ -440,7 +442,7 @@ export default function ExercisesScreen() {
           <TextInput
             testID="exercises-search-input"
             style={{ flex: 1, paddingVertical: 12, fontSize: 14 }}
-            placeholder="Buscar ejercicios…"
+            placeholder={t("exercises:searchPlaceholderCatalogMobile")}
             value={search}
             onChangeText={setSearch}
             clearButtonMode="while-editing"
@@ -451,12 +453,12 @@ export default function ExercisesScreen() {
           onPress={() => router.push("/search" as any)}
           style={{ padding: 8 }}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityLabel="Historial de búsqueda"
+          accessibilityLabel={t("exercises:searchHistoryLabel")}
         >
           <Ionicons name="time-outline" size={20} color={colors.primary} />
         </TouchableOpacity>
         {categories.length > 0 && (
-          <TouchableOpacity onPress={() => setShowCatModal(true)} style={{ padding: 8 }} accessibilityLabel="Gestionar categorías">
+          <TouchableOpacity onPress={() => setShowCatModal(true)} style={{ padding: 8 }} accessibilityLabel={t("exercises:manageCategoriesLabelMobile")}>
             <Ionicons name="settings-outline" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
         )}
@@ -472,7 +474,7 @@ export default function ExercisesScreen() {
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100, gap: 8 }}>
           {filteredAll.length === 0 ? (
             <View style={{ paddingVertical: 40, alignItems: "center" }}>
-              <Text style={{ color: colors.textMuted, fontSize: 14 }}>Sin ejercicios que coincidan con "{search}"</Text>
+              <Text style={{ color: colors.textMuted, fontSize: 14 }}>{t("exercises:noExercisesMatchMobile", { search })}</Text>
             </View>
           ) : (
             filteredAll.map((ex) => (
@@ -497,16 +499,16 @@ export default function ExercisesScreen() {
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100, gap: 8, paddingTop: 4 }}>
           {categories.length === 0 ? (
             <View style={{ paddingVertical: 40, alignItems: "center", gap: 12 }}>
-              <Text style={{ color: colors.textMuted, fontSize: 14 }}>Sin categorías aún</Text>
+              <Text style={{ color: colors.textMuted, fontSize: 14 }}>{t("exercises:emptyCategoriesTitle")}</Text>
               <TouchableOpacity onPress={openCreateModal} style={{ backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 }}>
-                <Text style={{ color: colors.background, fontSize: 14, fontWeight: "600" }}>Crear primer ejercicio</Text>
+                <Text style={{ color: colors.background, fontSize: 14, fontWeight: "600" }}>{t("exercises:emptyCategoriesActionMobile")}</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <>
               {exercises.some((e) => e.is_favorite) && (
                 <CategoryCard
-                  name="Favoritos"
+                  name={t("exercises:favoritesLabel")}
                   color="#6366f1"
                   count={exercises.filter((e) => e.is_favorite).length}
                   onPress={() => router.push({ pathname: "/exercises/[categoryId]", params: { categoryId: "favorites" } } as never)}
@@ -529,7 +531,7 @@ export default function ExercisesScreen() {
                   style={{ alignSelf: "center", marginTop: 8, paddingVertical: 6, paddingHorizontal: 14 }}
                 >
                   <Text style={{ fontSize: 12, color: colors.textMuted }}>
-                    {showHiddenCategories ? "Ocultar categorías ocultas" : `Mostrar ${hiddenCategoryIds.length} categoría(s) oculta(s)`}
+                    {showHiddenCategories ? t("exercises:hideHiddenCategoriesMobile") : t("exercises:showHiddenCategoriesMobile", { count: hiddenCategoryIds.length })}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -558,7 +560,7 @@ export default function ExercisesScreen() {
             testID="exercises-fab-new-category"
             style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#fff", borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 8, elevation: 4 }}
           >
-            <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>Nueva categoría</Text>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>{t("exercises:fabNewCategory")}</Text>
             <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#6366f1", alignItems: "center", justifyContent: "center" }}>
               <Ionicons name="pricetag-outline" size={18} color="white" />
             </View>
@@ -568,7 +570,7 @@ export default function ExercisesScreen() {
             testID="exercises-fab-new-exercise"
             style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#fff", borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 8, elevation: 4 }}
           >
-            <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>Nuevo ejercicio</Text>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>{t("exercises:fabNewExercise")}</Text>
             <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#6366f1", alignItems: "center", justifyContent: "center" }}>
               <Ionicons name="barbell-outline" size={18} color="white" />
             </View>
@@ -579,7 +581,7 @@ export default function ExercisesScreen() {
         onPress={() => setShowFabMenu((v) => !v)}
         testID="exercises-fab-add"
         style={{ position: "absolute", bottom: 32, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: "#6366f1", alignItems: "center", justifyContent: "center", shadowColor: "#6366f1", shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 }}
-        accessibilityLabel={showFabMenu ? "Cerrar menú" : "Abrir menú"}
+        accessibilityLabel={showFabMenu ? t("exercises:fabMenuClose") : t("exercises:fabMenuOpen")}
       >
         <Ionicons name={showFabMenu ? "close" : "add"} size={28} color="white" />
       </TouchableOpacity>
@@ -594,14 +596,14 @@ export default function ExercisesScreen() {
           <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
             <View style={{ backgroundColor: "#fff", borderRadius: 16, padding: 20, gap: 16 }}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>Nueva categoría</Text>
-                <TouchableOpacity onPress={() => setShowCategoryOnlyModal(false)} accessibilityLabel="Cerrar">
+                <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>{t("exercises:newCategoryHeading")}</Text>
+                <TouchableOpacity onPress={() => setShowCategoryOnlyModal(false)} accessibilityLabel={t("exercises:closeModalLabel")}>
                   <Ionicons name="close" size={24} color="#64748b" />
                 </TouchableOpacity>
               </View>
               <TextInput
                 style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 }}
-                placeholder="Nombre de la categoría"
+                placeholder={t("exercises:newCategoryNamePlaceholder")}
                 value={newCatName}
                 onChangeText={setNewCatName}
                 autoFocus
@@ -621,7 +623,7 @@ export default function ExercisesScreen() {
                 style={{ backgroundColor: "#6366f1", borderRadius: 10, paddingVertical: 12, alignItems: "center", opacity: catSaving || !newCatName.trim() ? 0.5 : 1 }}
               >
                 <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>
-                  {catSaving ? "Creando…" : "Crear categoría"}
+                  {catSaving ? t("exercises:creatingButton") : t("exercises:createCategoryButton")}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -635,9 +637,9 @@ export default function ExercisesScreen() {
           <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
               <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>
-                {editingExercise ? "Editar ejercicio" : "Nuevo ejercicio"}
+                {editingExercise ? t("exercises:editExerciseHeading") : t("exercises:newExerciseHeading")}
               </Text>
-              <TouchableOpacity onPress={() => setShowModal(false)} accessibilityLabel="Cerrar">
+              <TouchableOpacity onPress={() => setShowModal(false)} accessibilityLabel={t("exercises:closeModalLabel")}>
                 <Ionicons name="close" size={24} color="#64748b" />
               </TouchableOpacity>
             </View>
@@ -645,10 +647,10 @@ export default function ExercisesScreen() {
             <ScrollView contentContainerStyle={{ padding: 20, gap: 20 }} keyboardShouldPersistTaps="handled">
               {/* Name */}
               <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Nombre</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>{t("exercises:nameLabel")}</Text>
                 <TextInput
                   style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 }}
-                  placeholder="ej. Press de banca"
+                  placeholder={t("exercises:namePlaceholderExercise")}
                   value={exName}
                   onChangeText={setExName}
                   autoFocus={!editingExercise}
@@ -657,10 +659,10 @@ export default function ExercisesScreen() {
 
               {/* Notes */}
               <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Notas</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>{t("exercises:notesLabel")}</Text>
                 <TextInput
                   style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, minHeight: 80, textAlignVertical: "top" }}
-                  placeholder="Forma, equipo, ajustes de máquina…"
+                  placeholder={t("exercises:notesPlaceholderMobile")}
                   value={exNotes}
                   onChangeText={setExNotes}
                   multiline
@@ -670,7 +672,7 @@ export default function ExercisesScreen() {
 
               {/* Category */}
               <View style={{ gap: 8 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Categoría</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>{t("exercises:categoryLabel")}</Text>
                 {modalCategories.length > 0 && (
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                     {modalCategories.map((cat) => (
@@ -691,14 +693,14 @@ export default function ExercisesScreen() {
                 >
                   <Ionicons name={showNewCat ? "close" : "add"} size={16} color="#6366f1" />
                   <Text style={{ fontSize: 13, fontWeight: "500", color: "#6366f1" }}>
-                    {showNewCat ? "Cancelar" : "Nueva categoría"}
+                    {showNewCat ? t("common:cancel") : t("exercises:newCategoryHeading")}
                   </Text>
                 </TouchableOpacity>
                 {showNewCat && (
                   <View style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, padding: 14, gap: 12, backgroundColor: "#f8fafc" }}>
                     <TextInput
                       style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, backgroundColor: "#fff" }}
-                      placeholder="Nombre de la categoría"
+                      placeholder={t("exercises:newCategoryNamePlaceholder")}
                       value={newCatName}
                       onChangeText={setNewCatName}
                     />
@@ -717,7 +719,7 @@ export default function ExercisesScreen() {
                       style={{ backgroundColor: "#6366f1", borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: catSaving || !newCatName.trim() ? 0.5 : 1 }}
                     >
                       <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>
-                        {catSaving ? "Creando…" : "Crear categoría"}
+                        {catSaving ? t("exercises:creatingButton") : t("exercises:createCategoryButton")}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -726,7 +728,7 @@ export default function ExercisesScreen() {
 
               {/* Type */}
               <View style={{ gap: 8 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Tipo</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>{t("exercises:typeLabel")}</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {TYPE_OPTIONS.map(({ value, label }) => (
                     <TouchableOpacity
@@ -743,7 +745,7 @@ export default function ExercisesScreen() {
               {/* Weight unit — only for weight-based types */}
               {WEIGHT_TYPES.includes(exType) && (
                 <View style={{ gap: 8 }}>
-                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Unidad de peso</Text>
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>{t("exercises:weightUnitFieldLabel")}</Text>
                   <View style={{ flexDirection: "row", gap: 8 }}>
                     {(["kg", "lb"] as const).map((unit) => (
                       <TouchableOpacity
@@ -762,7 +764,7 @@ export default function ExercisesScreen() {
               {WEIGHT_TYPES.includes(exType) && (
                 <View style={{ flexDirection: "row", gap: 12 }}>
                   <View style={{ flex: 1, gap: 6 }}>
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Incremento peso</Text>
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>{t("exercises:weightIncrementFieldLabelMobile")}</Text>
                     <View style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, overflow: "hidden" }}>
                       <TextInput
                         style={{ flex: 1, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, textAlign: "center" }}
@@ -775,7 +777,7 @@ export default function ExercisesScreen() {
                     </View>
                   </View>
                   <View style={{ flex: 1, gap: 6 }}>
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Descanso (seg)</Text>
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>{t("exercises:restSecondsFieldLabelMobile")}</Text>
                     <TextInput
                       style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, textAlign: "center" }}
                       keyboardType="number-pad"
@@ -789,9 +791,9 @@ export default function ExercisesScreen() {
 
               {/* Default chart */}
               <View style={{ gap: 8 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Gráfico predeterminado</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>{t("exercises:defaultChartFieldLabelMobile")}</Text>
                 <View style={{ flexDirection: "row", gap: 8 }}>
-                  {([["weight", "Peso máx"], ["volume", "Volumen"], ["reps", "Reps máx"]] as const).map(([key, label]) => (
+                  {([["weight", t("exercises:chartOptionWeightMobile")], ["volume", t("exercises:chartOptionVolumeMobile")], ["reps", t("exercises:chartOptionRepsMobile")]] as ["weight" | "volume" | "reps", string][]).map(([key, label]) => (
                     <TouchableOpacity
                       key={key}
                       onPress={() => setExDefaultChart(key)}
@@ -812,8 +814,8 @@ export default function ExercisesScreen() {
                 >
                   <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>
                     {saving
-                      ? (editingExercise ? "Guardando…" : "Creando…")
-                      : (editingExercise ? "Guardar cambios" : "Crear ejercicio")}
+                      ? (editingExercise ? t("exercises:savingButton") : t("exercises:creatingButton"))
+                      : (editingExercise ? t("exercises:saveChangesButton") : t("exercises:createExerciseButtonMobile"))}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -832,8 +834,8 @@ export default function ExercisesScreen() {
         <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>Categorías</Text>
-            <TouchableOpacity onPress={() => { setShowCatModal(false); cancelEditCat(); }} accessibilityLabel="Cerrar">
+            <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>{t("exercises:categoriesModalTitleMobile")}</Text>
+            <TouchableOpacity onPress={() => { setShowCatModal(false); cancelEditCat(); }} accessibilityLabel={t("exercises:closeModalLabel")}>
               <Ionicons name="close" size={24} color="#64748b" />
             </TouchableOpacity>
           </View>
@@ -845,14 +847,14 @@ export default function ExercisesScreen() {
             contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
             ListEmptyComponent={
               <View style={{ paddingVertical: 40, alignItems: "center" }}>
-                <Text style={{ color: "#94a3b8", fontSize: 14 }}>Sin categorías aún</Text>
+                <Text style={{ color: "#94a3b8", fontSize: 14 }}>{t("exercises:emptyCategoriesTitle")}</Text>
               </View>
             }
             renderItem={({ item: cat, drag, isActive }: RenderItemParams<typeof categories[number]>) => (
               <ScaleDecorator activeScale={1.02}>
                 <View style={{ marginBottom: 8 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: isActive ? "#6366f1" : "#f1f5f9", borderRadius: 12, backgroundColor: isActive ? "#f5f3ff" : "#fff", paddingHorizontal: 14, paddingVertical: 12, gap: 10 }}>
-                    <TouchableOpacity onPressIn={drag} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Reordenar categoría">
+                    <TouchableOpacity onPressIn={drag} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={t("exercises:reorderCategoryLabelMobile")}>
                       <Ionicons name="menu" size={20} color={isActive ? "#6366f1" : "#94a3b8"} />
                     </TouchableOpacity>
                     <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: cat.color }} />
@@ -860,14 +862,14 @@ export default function ExercisesScreen() {
                     <TouchableOpacity
                       onPress={() => editingCatId === cat.id ? cancelEditCat() : startEditCat(cat)}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      accessibilityLabel={editingCatId === cat.id ? "Cancelar edición" : "Editar categoría"}
+                      accessibilityLabel={editingCatId === cat.id ? t("exercises:cancelEditLabelMobile") : t("exercises:editCategoryLabelMobile")}
                     >
                       <Ionicons name={editingCatId === cat.id ? "close-outline" : "pencil-outline"} size={18} color="#94a3b8" />
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={() => handleDeleteCategory(cat.id, cat.name)}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      accessibilityLabel="Eliminar categoría"
+                      accessibilityLabel={t("exercises:deleteCategoryTitleMobile")}
                     >
                       <Ionicons name="trash-outline" size={18} color="#ef4444" />
                     </TouchableOpacity>
@@ -896,7 +898,7 @@ export default function ExercisesScreen() {
                         style={{ backgroundColor: "#6366f1", borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: catEditSaving || !editCatName.trim() ? 0.5 : 1 }}
                       >
                         <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>
-                          {catEditSaving ? "Guardando…" : "Guardar cambios"}
+                          {catEditSaving ? t("exercises:savingButton") : t("exercises:saveChangesButton")}
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -914,6 +916,7 @@ export default function ExercisesScreen() {
 
 /** Tarjeta de categoría (o "Favoritos") con color, nombre y número de ejercicios; navega al listado de esa categoría. */
 const CategoryCard = memo(function CategoryCard({ name, color, count, onPress }: { name: string; color: string; count: number; onPress: () => void }) {
+  const { t } = useTranslation();
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -923,7 +926,7 @@ const CategoryCard = memo(function CategoryCard({ name, color, count, onPress }:
       <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: color }} />
       <View style={{ flex: 1 }}>
         <Text style={{ fontSize: 15, fontWeight: "600", color: "#0f172a" }}>{name}</Text>
-        <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>{count} {count === 1 ? "ejercicio" : "ejercicios"}</Text>
+        <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>{t("exercises:exerciseCount", { count })}</Text>
       </View>
       <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
     </TouchableOpacity>
@@ -948,9 +951,10 @@ const ExerciseRow = memo(function ExerciseRow({
   onDelete: () => void;
   onToggleFavorite: () => void;
 }) {
+  const { t } = useTranslation();
   const category = categories.find((c) => c.id === ex.category_id);
   const statsLine = stats
-    ? `${stats.workout_count} ${stats.workout_count === 1 ? "sesión" : "sesiones"}${stats.last_used ? ` · ${formatLastUsedLabel(stats.last_used)}` : ""}`
+    ? `${t("exercises:usageStats", { count: stats.workout_count })}${stats.last_used ? ` · ${formatLastUsedLabel(stats.last_used)}` : ""}`
     : null;
 
   return (
@@ -967,13 +971,13 @@ const ExerciseRow = memo(function ExerciseRow({
         </View>
       </View>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-        <TouchableOpacity onPress={onToggleFavorite} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={ex.is_favorite ? "Quitar de favoritos" : "Añadir a favoritos"}>
+        <TouchableOpacity onPress={onToggleFavorite} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={ex.is_favorite ? t("exercises:favoriteRemove") : t("exercises:favoriteAdd")}>
           <Ionicons name={ex.is_favorite ? "star" : "star-outline"} size={18} color={ex.is_favorite ? "#6366f1" : "#cbd5e1"} />
         </TouchableOpacity>
-        <TouchableOpacity onPress={onEdit} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Editar ejercicio">
+        <TouchableOpacity onPress={onEdit} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={t("exercises:edit")}>
           <Ionicons name="pencil-outline" size={16} color="#94a3b8" />
         </TouchableOpacity>
-        <TouchableOpacity onPress={onDelete} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Eliminar ejercicio">
+        <TouchableOpacity onPress={onDelete} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={t("exercises:deleteExerciseTitleMobile")}>
           <Ionicons name="trash-outline" size={16} color="#ef4444" />
         </TouchableOpacity>
       </View>
