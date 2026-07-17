@@ -1,4 +1,5 @@
 import "../lib/cryptoPolyfill";
+import i18n from "../lib/i18n";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import type { AppStateStatus } from "react-native";
@@ -48,6 +49,7 @@ const METADATA_PREFERENCE_KEYS = [
   "hidden_category_ids",
   "calendar_show_day_panel",
   "calendar_show_category_dots",
+  "language",
 ] as const satisfies readonly (keyof UserPreferences)[];
 
 /**
@@ -165,6 +167,15 @@ function AppContent() {
   // Store actions for targeted updates after sync
   const loadExercises = useExerciseStore((s) => s.loadExercises);
   const loadRoutines = useRoutineStore((s) => s.loadRoutines);
+
+  // Aplica el idioma persistido (SQLite local, invitado o cuenta real) en cuanto
+  // las preferencias terminan de hidratar — hasta entonces, `lib/i18n.ts` usa el
+  // locale del dispositivo como mejor estimación para evitar parpadeos.
+  const language = usePreferencesStore((s) => s.preferences.language);
+  const preferencesLoaded = usePreferencesStore((s) => s.loaded);
+  useEffect(() => {
+    if (preferencesLoaded) void i18n.changeLanguage(language);
+  }, [preferencesLoaded, language]);
 
   /**
    * Resetea el estado de sync a valores neutros. Tras un wipe (sign-out o

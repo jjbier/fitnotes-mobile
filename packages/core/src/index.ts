@@ -27,5 +27,9 @@ export * from "./utils/defaultCatalogSeed.js";
 // Data
 export * from "./data/defaultExerciseCatalog.js";
 
+// i18n
+export * from "./i18n/locales/es.js";
+export * from "./i18n/locales/en.js";
+
 // Schemas
 export * from "./schemas/index.js";

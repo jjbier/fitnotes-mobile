@@ -33,6 +33,8 @@ export interface UserPreferences {
   calendar_show_day_panel: boolean;
   /** Muestra puntos de color por categoría en los días del calendario que tienen entrenamiento. */
   calendar_show_category_dots: boolean;
+  /** Idioma de la interfaz (i18next). */
+  language: "es" | "en";
 }
 
 /**
@@ -58,4 +60,5 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   hidden_category_ids: [],
   calendar_show_day_panel: true,
   calendar_show_category_dots: true,
+  language: "es",
 };

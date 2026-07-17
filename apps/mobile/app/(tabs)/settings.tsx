@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { useTheme, useThemeModeStore, type ThemeMode } from "../../lib/theme";
 import { usePreferencesStore, computeDefaultCatalogSeedPlan, type UserPreferences, type DefaultCatalogSeedPlan } from "@fitnotes/core";
@@ -68,13 +69,14 @@ function parseCSVRows(csv: string) {
 export default function SettingsScreen() {
   const colors = useTheme();
   const router = useRouter();
+  const { t } = useTranslation();
   const { exerciseRepo, preferencesRepo, isGuest, userId } = useRepositories();
   const { pendingCount } = useSyncStatus();
 
   /** Backup/CSV/recalcular PRs/restaurar/eliminar historial siguen siendo remote-only (fuera de alcance offline) — requieren cuenta real. */
   function requireAccount(): boolean {
     if (isGuest) {
-      Alert.alert("Esta función requiere una cuenta", "Crea una cuenta o inicia sesión para usar backup, restauración o recalcular récords.");
+      Alert.alert(t("settings:requireAccount.title"), t("settings:requireAccount.message"));
       return false;
     }
     return true;
@@ -95,6 +97,7 @@ export default function SettingsScreen() {
     rest_timer_sound_enabled: restTimerSoundEnabled,
     show_set_count_home: showSetCountHome,
     hidden_category_ids: hiddenCategoryIds,
+    language,
   } = preferences;
 
   /**
@@ -188,6 +191,11 @@ export default function SettingsScreen() {
     await persistPreference("weight_unit", unit);
   }
 
+  /** Cambia el idioma de la interfaz; `_layout.tsx` reacciona al cambio de preferencia y llama a `i18n.changeLanguage()`. */
+  async function handleLanguageChange(lang: "es" | "en") {
+    await persistPreference("language", lang);
+  }
+
   async function handleDefaultIncrementChange(val: string) {
     setDefaultWeightIncrement(val);
     const parsed = parseFloat(val);
@@ -245,7 +253,7 @@ export default function SettingsScreen() {
     const repo = createWorkoutRepository(supabase);
     const csv = await repo.exportAllCSV();
     setExportLoading(false);
-    if (!csv) { Alert.alert("Sin datos", "No hay entrenamientos que exportar."); return; }
+    if (!csv) { Alert.alert(t("settings:bodyExport.noData"), t("settings:exportWorkouts.noDataMessage")); return; }
     await Share.share({ message: csv, title: "FitNotes Export" });
   }
 
@@ -253,9 +261,9 @@ export default function SettingsScreen() {
   async function handleImportCSV() {
     if (!requireAccount()) return;
     const rows = parseCSVRows(importCSV);
-    if (rows.length === 0) { Alert.alert("Error", "No se encontraron filas válidas. Asegúrate de pegar un CSV con el formato correcto."); return; }
+    if (rows.length === 0) { Alert.alert("Error", t("settings:importCSVModal.noRowsError")); return; }
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) { Alert.alert("Error", "No hay sesión activa."); return; }
+    if (!session?.user) { Alert.alert("Error", t("settings:importCSVModal.noSessionError")); return; }
     setImportLoading(true);
     const repo = createWorkoutRepository(supabase);
     const { imported, skipped, newExercises } = await repo.importFromCSV(rows, session.user.id);
@@ -263,8 +271,8 @@ export default function SettingsScreen() {
     setShowImportModal(false);
     setImportCSV("");
     Alert.alert(
-      "Importación completada",
-      `${imported} series importadas.\n${skipped > 0 ? `${skipped} series omitidas (fechas ya existentes).\n` : ""}${newExercises > 0 ? `${newExercises} ejercicios nuevos creados.` : ""}`
+      t("settings:importCSVModal.completedTitle"),
+      `${t("settings:importCSVModal.completedMessage", { count: imported })}\n${skipped > 0 ? `${t("settings:importCSVModal.skippedMessage", { count: skipped })}\n` : ""}${newExercises > 0 ? t("settings:importCSVModal.newExercisesMessage", { count: newExercises }) : ""}`
     );
   }
 
@@ -328,7 +336,7 @@ export default function SettingsScreen() {
       setShowRestoreModal(false);
       setRestorePaste("");
       setRestoreParsed(null);
-      Alert.alert("Restauración completada", "Todos los datos se han restaurado correctamente.");
+      Alert.alert(t("settings:restoreModal.completedTitleMobile"), t("settings:restoreModal.completedMessageMobile"));
     } catch (err) {
       Alert.alert("Error", err instanceof Error ? err.message : "Error desconocido durante la restauración.");
     } finally {
@@ -343,7 +351,7 @@ export default function SettingsScreen() {
     try {
       const repo = createBodyTrackerRepository(supabase);
       const csv = await repo.exportAllCSV();
-      if (!csv) { Alert.alert("Sin datos", "No hay medidas corporales que exportar."); return; }
+      if (!csv) { Alert.alert(t("settings:bodyExport.noData"), t("settings:bodyExport.noDataMessage")); return; }
       await Share.share({ message: csv, title: "FitNotes Body Tracker Export" });
     } finally {
       setBodyExportLoading(false);
@@ -363,19 +371,19 @@ export default function SettingsScreen() {
       const [{ data: cats }, { data: exs }] = await Promise.all([exerciseRepo.getCategories(), exerciseRepo.getExercises()]);
       const plan = computeDefaultCatalogSeedPlan(cats, exs);
       if (plan.categoriesToCreateCount === 0 && plan.exercisesToCreateCount === 0) {
-        Alert.alert("Ya tienes todo el catálogo", "Todas las categorías y ejercicios por defecto ya existen.");
+        Alert.alert(t("settings:catalogImport.alreadyDoneTitle"), t("settings:catalogImport.alreadyDoneMessage"));
         return;
       }
       const skippedNote =
         plan.categoriesSkippedCount > 0 || plan.exercisesSkippedCount > 0
-          ? `\n${plan.categoriesSkippedCount} categoría(s) y ${plan.exercisesSkippedCount} ejercicio(s) ya existen y se omitirán.`
+          ? `\n${t("settings:catalogImport.skippedNote", { categories: plan.categoriesSkippedCount, exercises: plan.exercisesSkippedCount })}`
           : "";
       Alert.alert(
-        "Importar catálogo por defecto",
-        `Se crearán ${plan.categoriesToCreateCount} categoría(s) y ${plan.exercisesToCreateCount} ejercicio(s) nuevo(s).${skippedNote}`,
+        t("settings:catalogImport.confirmTitle"),
+        `${t("settings:catalogImport.confirmMessageMobile", { categories: plan.categoriesToCreateCount, exercises: plan.exercisesToCreateCount })}${skippedNote}`,
         [
-          { text: "Cancelar", style: "cancel" },
-          { text: "Importar", onPress: () => executeCatalogImport(plan) },
+          { text: t("common:cancel"), style: "cancel" },
+          { text: t("settings:catalogImport.import"), onPress: () => executeCatalogImport(plan) },
         ]
       );
     } finally {
@@ -417,7 +425,7 @@ export default function SettingsScreen() {
 
       const { data: refreshedCats } = await exerciseRepo.getCategories();
       setCategoryOptions(refreshedCats);
-      Alert.alert("Importación completada", `${createdCategories} categoría(s) y ${createdExercises} ejercicio(s) creados.`);
+      Alert.alert(t("settings:catalogImport.completedTitle"), t("settings:catalogImport.completedMessage", { categories: createdCategories, exercises: createdExercises }));
     } catch (err) {
       Alert.alert("Error", err instanceof Error ? err.message : "Error desconocido durante la importación.");
     } finally {
@@ -442,7 +450,7 @@ export default function SettingsScreen() {
       setDeleteHistoryFrom("");
       setDeleteHistoryTo("");
       setDeleteHistoryExerciseId(null);
-      Alert.alert("Historial eliminado", `${count} elemento(s) eliminado(s).`);
+      Alert.alert(t("settings:dangerZone.deleteHistoryCompletedTitleMobile"), t("settings:dangerZone.deleteHistoryCompletedMessageMobile", { count }));
     } finally {
       setDeleteHistoryLoading(false);
     }
@@ -465,12 +473,12 @@ export default function SettingsScreen() {
   async function handleSignOut() {
     const message =
       pendingCount > 0
-        ? `Tienes ${pendingCount} cambio(s) sin sincronizar. Se perderán al cerrar sesión — ¿seguro que quieres continuar?`
-        : "¿Estás seguro de que quieres cerrar sesión?";
-    Alert.alert("Cerrar sesión", message, [
-      { text: "Cancelar", style: "cancel" },
+        ? t("settings:signOutAlert.messagePending", { count: pendingCount })
+        : t("settings:signOutAlert.message");
+    Alert.alert(t("settings:signOutAlert.title"), message, [
+      { text: t("common:cancel"), style: "cancel" },
       {
-        text: "Cerrar sesión",
+        text: t("settings:account.signOut"),
         style: "destructive",
         onPress: async () => {
           setSignOutLoading(true);
@@ -487,37 +495,37 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Configuración</Text>
+        <Text style={styles.title}>{t("settings:title")}</Text>
 
         {/* Profile */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Perfil</Text>
+          <Text style={styles.sectionTitle}>{t("settings:sections.profile")}</Text>
           {isGuest ? (
             <>
-              <Text style={styles.emailText}>Sin cuenta — tus datos están solo en este dispositivo.</Text>
+              <Text style={styles.emailText}>{t("settings:profile.guestNotice")}</Text>
               <TouchableOpacity
                 onPress={() => router.push("/(auth)/register")}
                 style={[styles.btn, styles.btnOutline]}
               >
                 <Ionicons name="person-add-outline" size={16} color={colors.textSecondary} />
-                <Text style={styles.btnOutlineText}>Crear cuenta</Text>
+                <Text style={styles.btnOutlineText}>{t("settings:profile.createAccount")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => router.push("/(auth)/login")}
                 style={[styles.btn, styles.btnOutline]}
               >
                 <Ionicons name="log-in-outline" size={16} color={colors.textSecondary} />
-                <Text style={styles.btnOutlineText}>Iniciar sesión para sincronizar</Text>
+                <Text style={styles.btnOutlineText}>{t("settings:profile.signInToSync")}</Text>
               </TouchableOpacity>
             </>
           ) : (
             <>
               {email ? <Text style={styles.emailText}>{email}</Text> : null}
-              <Text style={styles.label}>Nombre visible</Text>
+              <Text style={styles.label}>{t("settings:profile.displayNameLabelMobile")}</Text>
               <TextInput
                 value={displayName}
                 onChangeText={setDisplayName}
-                placeholder="Tu nombre"
+                placeholder={t("settings:profile.displayNamePlaceholder")}
                 placeholderTextColor="#94a3b8"
                 style={styles.input}
               />
@@ -527,7 +535,7 @@ export default function SettingsScreen() {
                 style={[styles.btn, styles.btnPrimary]}
               >
                 <Text style={styles.btnPrimaryText}>
-                  {saveStatus === "saving" ? "Guardando…" : saveStatus === "saved" ? "¡Guardado!" : saveStatus === "error" ? "Error — intentar de nuevo" : "Guardar cambios"}
+                  {saveStatus === "saving" ? t("settings:profile.saving") : saveStatus === "saved" ? t("settings:profile.saved") : saveStatus === "error" ? t("settings:profile.saveError") : t("settings:profile.saveButton")}
                 </Text>
               </TouchableOpacity>
             </>
@@ -536,11 +544,11 @@ export default function SettingsScreen() {
 
         {/* Preferences */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Preferencias</Text>
+          <Text style={styles.sectionTitle}>{t("settings:sections.preferences")}</Text>
           <View style={styles.prefRow}>
             <View>
-              <Text style={styles.prefLabel}>Unidad de peso por defecto</Text>
-              <Text style={styles.prefSub}>Usada en toda la app</Text>
+              <Text style={styles.prefLabel}>{t("settings:weightUnit.label")}</Text>
+              <Text style={styles.prefSub}>{t("settings:weightUnit.descriptionMobile")}</Text>
             </View>
             <View style={styles.unitToggle}>
               <TouchableOpacity
@@ -550,7 +558,7 @@ export default function SettingsScreen() {
                 accessibilityState={{ selected: weightUnit === "kg" }}
                 style={[styles.unitBtn, weightUnit === "kg" && styles.unitBtnActive]}
               >
-                <Text style={[styles.unitBtnText, weightUnit === "kg" && styles.unitBtnTextActive]}>kg</Text>
+                <Text style={[styles.unitBtnText, weightUnit === "kg" && styles.unitBtnTextActive]}>{t("common:kg")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => handleWeightUnitChange("lb")}
@@ -559,14 +567,14 @@ export default function SettingsScreen() {
                 accessibilityState={{ selected: weightUnit === "lb" }}
                 style={[styles.unitBtn, weightUnit === "lb" && styles.unitBtnActive]}
               >
-                <Text style={[styles.unitBtnText, weightUnit === "lb" && styles.unitBtnTextActive]}>lb</Text>
+                <Text style={[styles.unitBtnText, weightUnit === "lb" && styles.unitBtnTextActive]}>{t("common:lb")}</Text>
               </TouchableOpacity>
             </View>
           </View>
           <View style={styles.prefRow}>
             <View style={{ flex: 1, marginRight: 12 }}>
-              <Text style={styles.prefLabel}>Incremento de peso global</Text>
-              <Text style={styles.prefSub}>Para ejercicios sin incremento propio</Text>
+              <Text style={styles.prefLabel}>{t("settings:defaultWeightIncrement.labelMobile")}</Text>
+              <Text style={styles.prefSub}>{t("settings:defaultWeightIncrement.descriptionMobile")}</Text>
             </View>
             <TextInput
               style={[styles.input, { width: 70, textAlign: "center", marginBottom: 0 }]}
@@ -579,8 +587,8 @@ export default function SettingsScreen() {
           </View>
           <View style={styles.prefRow}>
             <View>
-              <Text style={styles.prefLabel}>Inicio de semana en calendario</Text>
-              <Text style={styles.prefSub}>Lunes o domingo</Text>
+              <Text style={styles.prefLabel}>{t("settings:weekStart.labelMobile")}</Text>
+              <Text style={styles.prefSub}>{t("settings:weekStart.descriptionMobile")}</Text>
             </View>
             <View style={styles.unitToggle}>
               <TouchableOpacity
@@ -590,7 +598,7 @@ export default function SettingsScreen() {
                 accessibilityState={{ selected: calendarWeekStart === 1 }}
                 style={[styles.unitBtn, calendarWeekStart === 1 && styles.unitBtnActive]}
               >
-                <Text style={[styles.unitBtnText, calendarWeekStart === 1 && styles.unitBtnTextActive]}>Lu</Text>
+                <Text style={[styles.unitBtnText, calendarWeekStart === 1 && styles.unitBtnTextActive]}>{t("settings:weekStart.mondayShortMobile")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => handleCalendarWeekStart(0)}
@@ -599,14 +607,14 @@ export default function SettingsScreen() {
                 accessibilityState={{ selected: calendarWeekStart === 0 }}
                 style={[styles.unitBtn, calendarWeekStart === 0 && styles.unitBtnActive]}
               >
-                <Text style={[styles.unitBtnText, calendarWeekStart === 0 && styles.unitBtnTextActive]}>Do</Text>
+                <Text style={[styles.unitBtnText, calendarWeekStart === 0 && styles.unitBtnTextActive]}>{t("settings:weekStart.sundayShortMobile")}</Text>
               </TouchableOpacity>
             </View>
           </View>
           <View style={styles.prefRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.prefLabel}>Registrar récords personales</Text>
-              <Text style={styles.prefSub}>Muestra el badge PR al igualar o superar un récord</Text>
+              <Text style={styles.prefLabel}>{t("settings:trackPRs.label")}</Text>
+              <Text style={styles.prefSub}>{t("settings:trackPRs.descriptionMobile")}</Text>
             </View>
             <TouchableOpacity
               onPress={() => handleTrackPersonalRecords(!trackPersonalRecords)}
@@ -621,8 +629,8 @@ export default function SettingsScreen() {
           </View>
           <View style={styles.prefRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.prefLabel}>Marcar series como completadas</Text>
-              <Text style={styles.prefSub}>Muestra el checkbox de completado en cada serie</Text>
+              <Text style={styles.prefLabel}>{t("settings:markSetsComplete.label")}</Text>
+              <Text style={styles.prefSub}>{t("settings:markSetsComplete.description")}</Text>
             </View>
             <TouchableOpacity
               onPress={() => handleMarkSetsComplete(!markSetsComplete)}
@@ -636,8 +644,8 @@ export default function SettingsScreen() {
           </View>
           <View style={styles.prefRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.prefLabel}>Auto-pasar a siguiente serie</Text>
-              <Text style={styles.prefSub}>Navegar automáticamente al completar</Text>
+              <Text style={styles.prefLabel}>{t("settings:autoNextSet.labelMobile")}</Text>
+              <Text style={styles.prefSub}>{t("settings:autoNextSet.descriptionMobile")}</Text>
             </View>
             <TouchableOpacity
               onPress={() => handleAutoSelectNextSet(!autoSelectNextSet)}
@@ -651,8 +659,8 @@ export default function SettingsScreen() {
           </View>
           <View style={styles.prefRow}>
             <View style={{ flex: 1, marginRight: 12 }}>
-              <Text style={styles.prefLabel}>Descanso por defecto</Text>
-              <Text style={styles.prefSub}>Segundos entre series (por defecto)</Text>
+              <Text style={styles.prefLabel}>{t("settings:defaultRestSeconds.label")}</Text>
+              <Text style={styles.prefSub}>{t("settings:defaultRestSeconds.description")}</Text>
             </View>
             <TextInput
               style={[styles.input, { width: 70, textAlign: "center", marginBottom: 0 }]}
@@ -665,8 +673,8 @@ export default function SettingsScreen() {
           </View>
           <View style={styles.prefRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.prefLabel}>Sonido del rest timer</Text>
-              <Text style={styles.prefSub}>Reproduce un aviso sonoro al terminar el descanso</Text>
+              <Text style={styles.prefLabel}>{t("settings:restTimerSound.label")}</Text>
+              <Text style={styles.prefSub}>{t("settings:restTimerSound.description")}</Text>
             </View>
             <TouchableOpacity
               onPress={() => handleRestTimerSoundEnabled(!restTimerSoundEnabled)}
@@ -681,8 +689,8 @@ export default function SettingsScreen() {
           {restTimerSoundEnabled && (
             <View style={styles.prefRow}>
               <View style={{ flex: 1, marginRight: 12 }}>
-                <Text style={styles.prefLabel}>Volumen del rest timer</Text>
-                <Text style={styles.prefSub}>0-100</Text>
+                <Text style={styles.prefLabel}>{t("settings:restTimerVolume.label")}</Text>
+                <Text style={styles.prefSub}>{t("settings:restTimerVolume.description")}</Text>
               </View>
               <TextInput
                 style={[styles.input, { width: 70, textAlign: "center", marginBottom: 0 }]}
@@ -696,15 +704,15 @@ export default function SettingsScreen() {
           )}
           <View style={styles.prefRow}>
             <View style={{ flex: 1, marginRight: 12 }}>
-              <Text style={styles.prefLabel}>Límite de reps para récords estimados</Text>
-              <Text style={styles.prefSub}>Excluye series de muchas reps del 1RM estimado (recomendado: 10-12)</Text>
+              <Text style={styles.prefLabel}>{t("settings:estimatedRecordsRepLimit.label")}</Text>
+              <Text style={styles.prefSub}>{t("settings:estimatedRecordsRepLimit.descriptionMobile")}</Text>
             </View>
             <TextInput
               style={[styles.input, { width: 70, textAlign: "center", marginBottom: 0 }]}
               keyboardType="number-pad"
               value={estimatedRecordsRepLimit}
               onChangeText={handleEstimatedRecordsRepLimit}
-              placeholder="Sin límite"
+              placeholder={t("settings:estimatedRecordsRepLimit.placeholder")}
               placeholderTextColor="#94a3b8"
             />
           </View>
@@ -712,11 +720,11 @@ export default function SettingsScreen() {
 
         {/* Appearance */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Apariencia</Text>
+          <Text style={styles.sectionTitle}>{t("settings:sections.appearance")}</Text>
           <View style={styles.prefRow}>
             <View>
-              <Text style={styles.prefLabel}>Tema</Text>
-              <Text style={styles.prefSub}>Claro, oscuro o según el sistema</Text>
+              <Text style={styles.prefLabel}>{t("settings:theme.label")}</Text>
+              <Text style={styles.prefSub}>{t("settings:theme.description")}</Text>
             </View>
             <View style={styles.unitToggle}>
               {(["light", "dark", "system"] as const).map((m) => (
@@ -729,7 +737,28 @@ export default function SettingsScreen() {
                   style={[styles.unitBtn, themeMode === m && styles.unitBtnActive]}
                 >
                   <Text style={[styles.unitBtnText, themeMode === m && styles.unitBtnTextActive]}>
-                    {m === "light" ? "Claro" : m === "dark" ? "Oscuro" : "Sistema"}
+                    {m === "light" ? t("common:light") : m === "dark" ? t("common:dark") : t("common:system")}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+          <View style={styles.prefRow}>
+            <View>
+              <Text style={styles.prefLabel}>{t("settings:language.label")}</Text>
+              <Text style={styles.prefSub}>{t("settings:language.description")}</Text>
+            </View>
+            <View style={styles.unitToggle}>
+              {(["es", "en"] as const).map((lang) => (
+                <TouchableOpacity
+                  key={lang}
+                  onPress={() => handleLanguageChange(lang)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: language === lang }}
+                  style={[styles.unitBtn, language === lang && styles.unitBtnActive]}
+                >
+                  <Text style={[styles.unitBtnText, language === lang && styles.unitBtnTextActive]}>
+                    {t(`settings:language.${lang}`)}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -739,11 +768,11 @@ export default function SettingsScreen() {
 
         {/* Home screen */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Pantalla de inicio</Text>
+          <Text style={styles.sectionTitle}>{t("settings:sections.homeScreen")}</Text>
           <View style={styles.prefRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.prefLabel}>Mostrar contador de series</Text>
-              <Text style={styles.prefSub}>Series completadas/totales en cada ejercicio de Inicio</Text>
+              <Text style={styles.prefLabel}>{t("settings:showSetCount.label")}</Text>
+              <Text style={styles.prefSub}>{t("settings:showSetCount.descriptionMobile")}</Text>
             </View>
             <TouchableOpacity
               onPress={() => handleShowSetCountHome(!showSetCountHome)}
@@ -755,8 +784,8 @@ export default function SettingsScreen() {
               <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: colors.background, alignSelf: showSetCountHome ? "flex-end" : "flex-start", shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 2, elevation: 2 }} />
             </TouchableOpacity>
           </View>
-          <Text style={[styles.prefLabel, { marginTop: 4 }]}>Categorías visibles</Text>
-          <Text style={styles.prefSub}>Las desmarcadas se ocultan al añadir ejercicios desde Inicio</Text>
+          <Text style={[styles.prefLabel, { marginTop: 4 }]}>{t("settings:visibleCategories.label")}</Text>
+          <Text style={styles.prefSub}>{t("settings:visibleCategories.descriptionMobile")}</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
             {categoryOptions.map((cat) => {
               const visible = !hiddenCategoryIds.includes(cat.id);
@@ -778,7 +807,7 @@ export default function SettingsScreen() {
 
         {/* Data / Backup */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Datos</Text>
+          <Text style={styles.sectionTitle}>{t("settings:sections.data")}</Text>
           <TouchableOpacity onPress={handleRecalcPRs} disabled={recalcStatus === "running"} style={[styles.btn, styles.btnOutline]}>
             {recalcStatus === "running" ? (
               <ActivityIndicator size="small" color={colors.primary} />
@@ -786,7 +815,7 @@ export default function SettingsScreen() {
               <>
                 <Ionicons name="trophy-outline" size={16} color={colors.textSecondary} />
                 <Text style={styles.btnOutlineText}>
-                  {recalcStatus === "done" ? "¡PRs recalculados!" : recalcStatus === "error" ? "Error — reintentar" : "Recalcular récords personales"}
+                  {recalcStatus === "done" ? t("settings:recalcPRs.doneMobile") : recalcStatus === "error" ? t("settings:recalcPRs.error") : t("settings:recalcPRs.buttonMobile")}
                 </Text>
               </>
             )}
@@ -797,13 +826,13 @@ export default function SettingsScreen() {
             ) : (
               <>
                 <Ionicons name="save-outline" size={16} color={colors.textSecondary} />
-                <Text style={styles.btnOutlineText}>Copia de seguridad completa (.fitnotes)</Text>
+                <Text style={styles.btnOutlineText}>{t("settings:fullBackup.buttonMobile")}</Text>
               </>
             )}
           </TouchableOpacity>
           <TouchableOpacity onPress={() => { if (!requireAccount()) return; setRestorePaste(""); setRestoreParsed(null); setShowRestoreModal(true); }} style={[styles.btn, styles.btnOutline]}>
             <Ionicons name="cloud-upload-outline" size={16} color={colors.textSecondary} />
-            <Text style={styles.btnOutlineText}>Restaurar copia de seguridad</Text>
+            <Text style={styles.btnOutlineText}>{t("settings:restoreBackup.buttonMobile")}</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={handleExportBodyTrackerCSV} disabled={bodyExportLoading} style={[styles.btn, styles.btnOutline]}>
             {bodyExportLoading ? (
@@ -811,7 +840,7 @@ export default function SettingsScreen() {
             ) : (
               <>
                 <Ionicons name="body-outline" size={16} color={colors.textSecondary} />
-                <Text style={styles.btnOutlineText}>Exportar medidas corporales (CSV)</Text>
+                <Text style={styles.btnOutlineText}>{t("settings:bodyExport.buttonMobile")}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -825,7 +854,7 @@ export default function SettingsScreen() {
             ) : (
               <>
                 <Ionicons name="list-outline" size={16} color={colors.textSecondary} />
-                <Text style={styles.btnOutlineText}>Importar catálogo de ejercicios por defecto</Text>
+                <Text style={styles.btnOutlineText}>{t("settings:catalogImport.buttonMobile")}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -833,13 +862,13 @@ export default function SettingsScreen() {
 
         {/* Tools */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Herramientas</Text>
+          <Text style={styles.sectionTitle}>{t("settings:sections.tools")}</Text>
           <TouchableOpacity
             onPress={() => router.push("/calculators")}
             style={[styles.btn, styles.btnOutline]}
           >
             <Ionicons name="calculator-outline" size={16} color={colors.textSecondary} />
-            <Text style={styles.btnOutlineText}>Calculadoras de entrenamiento</Text>
+            <Text style={styles.btnOutlineText}>{t("settings:tools.calculators")}</Text>
             <View style={{ flex: 1 }} />
             <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
           </TouchableOpacity>
@@ -847,13 +876,13 @@ export default function SettingsScreen() {
 
         {/* Health */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Salud</Text>
+          <Text style={styles.sectionTitle}>{t("settings:sections.health")}</Text>
           <TouchableOpacity
             onPress={() => router.push("/body-tracker")}
             style={[styles.btn, styles.btnOutline]}
           >
             <Ionicons name="body-outline" size={16} color={colors.textSecondary} />
-            <Text style={styles.btnOutlineText}>Medidas corporales</Text>
+            <Text style={styles.btnOutlineText}>{t("settings:health.bodyMeasurements")}</Text>
             <View style={{ flex: 1 }} />
             <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
           </TouchableOpacity>
@@ -861,7 +890,7 @@ export default function SettingsScreen() {
 
         {/* Account */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Cuenta</Text>
+          <Text style={styles.sectionTitle}>{t("settings:sections.account")}</Text>
           <TouchableOpacity
             onPress={handleExportCSV}
             disabled={exportLoading}
@@ -872,7 +901,7 @@ export default function SettingsScreen() {
             ) : (
               <>
                 <Ionicons name="download-outline" size={16} color={colors.textSecondary} />
-                <Text style={styles.btnOutlineText}>Exportar datos (CSV)</Text>
+                <Text style={styles.btnOutlineText}>{t("settings:account.exportCSV")}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -881,7 +910,7 @@ export default function SettingsScreen() {
             style={[styles.btn, styles.btnOutline]}
           >
             <Ionicons name="cloud-upload-outline" size={16} color={colors.textSecondary} />
-            <Text style={styles.btnOutlineText}>Importar datos (CSV)</Text>
+            <Text style={styles.btnOutlineText}>{t("settings:account.importCSV")}</Text>
           </TouchableOpacity>
           {!isGuest && (
             <TouchableOpacity
@@ -894,7 +923,7 @@ export default function SettingsScreen() {
               ) : (
                 <>
                   <Ionicons name="log-out-outline" size={16} color={colors.textSecondary} />
-                  <Text style={styles.btnOutlineText}>Cerrar sesión</Text>
+                  <Text style={styles.btnOutlineText}>{t("settings:account.signOut")}</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -903,23 +932,23 @@ export default function SettingsScreen() {
 
         {/* Danger Zone */}
         <View style={[styles.section, styles.dangerSection]}>
-          <Text style={[styles.sectionTitle, { color: "#ef4444" }]}>Zona de peligro</Text>
+          <Text style={[styles.sectionTitle, { color: "#ef4444" }]}>{t("settings:sections.dangerZone")}</Text>
           <TouchableOpacity
             onPress={() => { if (!requireAccount()) return; setDeleteHistoryFrom(""); setDeleteHistoryTo(""); setDeleteHistoryExerciseId(null); setShowDeleteHistoryModal(true); }}
             style={[styles.btn, styles.btnDanger]}
           >
-            <Text style={styles.btnDangerText}>Eliminar historial de entrenamientos</Text>
+            <Text style={styles.btnDangerText}>{t("settings:dangerZone.deleteHistoryLabel")}</Text>
           </TouchableOpacity>
           {!isGuest && (
             <TouchableOpacity
               onPress={() =>
                 Alert.alert(
-                  "Eliminar cuenta",
-                  "Esto eliminará permanentemente todos tus datos. Esta acción no se puede deshacer.",
+                  t("settings:dangerZone.deleteAccountAlertTitleMobile"),
+                  t("settings:dangerZone.deleteAccountAlertMessageMobile"),
                   [
-                    { text: "Cancelar", style: "cancel" },
+                    { text: t("common:cancel"), style: "cancel" },
                     {
-                      text: "Eliminar",
+                      text: t("common:delete"),
                       style: "destructive",
                       onPress: async () => {
                         const { error } = await supabase.rpc("delete_user");
@@ -934,7 +963,7 @@ export default function SettingsScreen() {
               }
               style={[styles.btn, styles.btnDanger]}
             >
-              <Text style={styles.btnDangerText}>Eliminar cuenta</Text>
+              <Text style={styles.btnDangerText}>{t("settings:dangerZone.deleteAccountButton")}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -944,17 +973,17 @@ export default function SettingsScreen() {
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
           <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
             <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
-              <Text style={{ flex: 1, fontSize: 17, fontWeight: "700", color: "#0f172a" }}>Importar datos CSV</Text>
+              <Text style={{ flex: 1, fontSize: 17, fontWeight: "700", color: "#0f172a" }}>{t("settings:importCSVModal.title")}</Text>
               <TouchableOpacity onPress={() => setShowImportModal(false)} accessibilityLabel="Cerrar modal">
                 <Ionicons name="close" size={22} color="#64748b" />
               </TouchableOpacity>
             </View>
             <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }} keyboardShouldPersistTaps="handled">
               <Text style={{ fontSize: 13, color: "#64748b", lineHeight: 18 }}>
-                Pega el contenido de un CSV exportado previamente desde FitNotes. Las fechas que ya tengan entrenamiento se omitirán para evitar duplicados.
+                {t("settings:importCSVModal.description")}
               </Text>
               <View style={{ backgroundColor: "#f8fafc", borderRadius: 10, padding: 12 }}>
-                <Text style={{ fontSize: 11, fontWeight: "600", color: "#94a3b8", marginBottom: 4 }}>FORMATO ESPERADO</Text>
+                <Text style={{ fontSize: 11, fontWeight: "600", color: "#94a3b8", marginBottom: 4 }}>{t("settings:importCSVModal.formatLabel")}</Text>
                 <Text style={{ fontSize: 11, color: "#64748b", fontFamily: "monospace" }}>
                   Date,Exercise,Weight,Reps,...,Completed,Warmup{"\n"}
                   2025-06-25,Press Banca,100,5,...,1,0
@@ -962,7 +991,7 @@ export default function SettingsScreen() {
               </View>
               <TextInput
                 style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, padding: 14, fontSize: 12, minHeight: 200, textAlignVertical: "top", fontFamily: "monospace", color: "#0f172a" }}
-                placeholder="Pega aquí el contenido del CSV…"
+                placeholder={t("settings:importCSVModal.placeholder")}
                 placeholderTextColor="#cbd5e1"
                 multiline
                 value={importCSV}
@@ -970,7 +999,7 @@ export default function SettingsScreen() {
               />
               {importCSV.length > 0 && (
                 <Text style={{ fontSize: 12, color: "#6366f1" }}>
-                  {parseCSVRows(importCSV).length} filas detectadas
+                  {t("settings:importCSVModal.rowsDetected", { count: parseCSVRows(importCSV).length })}
                 </Text>
               )}
               <TouchableOpacity
@@ -980,7 +1009,7 @@ export default function SettingsScreen() {
               >
                 {importLoading
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>Importar</Text>
+                  : <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>{t("settings:importCSVModal.button")}</Text>
                 }
               </TouchableOpacity>
             </ScrollView>
@@ -992,29 +1021,29 @@ export default function SettingsScreen() {
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
           <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
             <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
-              <Text style={{ flex: 1, fontSize: 17, fontWeight: "700", color: "#0f172a" }}>Restaurar copia de seguridad</Text>
+              <Text style={{ flex: 1, fontSize: 17, fontWeight: "700", color: "#0f172a" }}>{t("settings:restoreModal.title")}</Text>
               <TouchableOpacity onPress={() => setShowRestoreModal(false)} accessibilityLabel="Cerrar modal">
                 <Ionicons name="close" size={22} color="#64748b" />
               </TouchableOpacity>
             </View>
             <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }} keyboardShouldPersistTaps="handled">
               <Text style={{ fontSize: 13, color: "#64748b", lineHeight: 18 }}>
-                Pega el contenido de un archivo .fitnotes exportado previamente. Esto reemplazará TODOS tus datos actuales.
+                {t("settings:restoreModal.pasteDescriptionMobile")}
               </Text>
               <TextInput
                 style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, padding: 14, fontSize: 11, minHeight: 200, textAlignVertical: "top", fontFamily: "monospace", color: "#0f172a" }}
-                placeholder="Pega aquí el contenido del archivo .fitnotes…"
+                placeholder={t("settings:restoreModal.pastePlaceholderMobile")}
                 placeholderTextColor="#cbd5e1"
                 multiline
                 value={restorePaste}
                 onChangeText={handleRestorePasteChange}
               />
               {restorePaste.length > 0 && !restoreParsed && (
-                <Text style={{ fontSize: 12, color: "#ef4444" }}>Archivo inválido o formato no reconocido.</Text>
+                <Text style={{ fontSize: 12, color: "#ef4444" }}>{t("settings:restoreModal.invalidFile")}</Text>
               )}
               {restoreParsed && (
                 <Text style={{ fontSize: 12, color: "#6366f1" }}>
-                  Backup válido — {restoreParsed.workouts.length} entrenamientos, {restoreParsed.sets.length} series, {restoreParsed.exercises.length} ejercicios.
+                  {t("settings:restoreModal.validSummaryMobile", { workouts: restoreParsed.workouts.length, sets: restoreParsed.sets.length, exercises: restoreParsed.exercises.length })}
                 </Text>
               )}
               <TouchableOpacity
@@ -1024,7 +1053,7 @@ export default function SettingsScreen() {
               >
                 {restoreLoading
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>Restaurar y reemplazar datos</Text>
+                  : <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>{t("settings:restoreModal.executeButtonMobile")}</Text>
                 }
               </TouchableOpacity>
             </ScrollView>
@@ -1035,33 +1064,33 @@ export default function SettingsScreen() {
       <Modal visible={showDeleteHistoryModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowDeleteHistoryModal(false)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
           <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
-            <Text style={{ flex: 1, fontSize: 17, fontWeight: "700", color: "#0f172a" }}>Eliminar historial de entrenamientos</Text>
+            <Text style={{ flex: 1, fontSize: 17, fontWeight: "700", color: "#0f172a" }}>{t("settings:dangerZone.deleteHistoryLabel")}</Text>
             <TouchableOpacity onPress={() => setShowDeleteHistoryModal(false)} accessibilityLabel="Cerrar modal">
               <Ionicons name="close" size={22} color="#64748b" />
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
             <Text style={{ fontSize: 13, color: "#64748b", lineHeight: 18 }}>
-              Deja los filtros vacíos para eliminar todo el historial, o acótalo por fecha y/o ejercicio. Esta acción no se puede deshacer.
+              {t("settings:dangerZone.deleteHistoryDescriptionMobile")}
             </Text>
             <View style={{ flexDirection: "row", gap: 10 }}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Desde</Text>
+                <Text style={styles.label}>{t("settings:dangerZone.deleteHistoryFrom")}</Text>
                 <TextInput style={styles.input} value={deleteHistoryFrom} onChangeText={setDeleteHistoryFrom} placeholder="AAAA-MM-DD" placeholderTextColor="#94a3b8" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Hasta</Text>
+                <Text style={styles.label}>{t("settings:dangerZone.deleteHistoryTo")}</Text>
                 <TextInput style={styles.input} value={deleteHistoryTo} onChangeText={setDeleteHistoryTo} placeholder="AAAA-MM-DD" placeholderTextColor="#94a3b8" />
               </View>
             </View>
             <View>
-              <Text style={styles.label}>Ejercicio (opcional)</Text>
+              <Text style={styles.label}>{t("settings:dangerZone.deleteHistoryExerciseOptionalMobile")}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 6 }}>
                 <TouchableOpacity
                   onPress={() => setDeleteHistoryExerciseId(null)}
                   style={[styles.unitBtn, { borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8 }, deleteHistoryExerciseId === null && styles.unitBtnActive]}
                 >
-                  <Text style={[styles.unitBtnText, deleteHistoryExerciseId === null && styles.unitBtnTextActive]}>Todos</Text>
+                  <Text style={[styles.unitBtnText, deleteHistoryExerciseId === null && styles.unitBtnTextActive]}>{t("settings:dangerZone.deleteHistoryAll")}</Text>
                 </TouchableOpacity>
                 {exerciseOptions.map((ex) => (
                   <TouchableOpacity
@@ -1077,11 +1106,11 @@ export default function SettingsScreen() {
             <TouchableOpacity
               onPress={() =>
                 Alert.alert(
-                  "Eliminar historial",
-                  "¿Seguro que quieres eliminar el historial seleccionado? No se puede deshacer.",
+                  t("settings:dangerZone.deleteHistoryConfirmAlertTitle"),
+                  t("settings:dangerZone.deleteHistoryConfirmAlertMessage"),
                   [
-                    { text: "Cancelar", style: "cancel" },
-                    { text: "Eliminar", style: "destructive", onPress: handleDeleteHistory },
+                    { text: t("common:cancel"), style: "cancel" },
+                    { text: t("common:delete"), style: "destructive", onPress: handleDeleteHistory },
                   ]
                 )
               }
@@ -1090,7 +1119,7 @@ export default function SettingsScreen() {
             >
               {deleteHistoryLoading
                 ? <ActivityIndicator color="#fff" />
-                : <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>Eliminar historial</Text>
+                : <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>{t("settings:dangerZone.deleteHistoryButton")}</Text>
               }
             </TouchableOpacity>
           </ScrollView>
