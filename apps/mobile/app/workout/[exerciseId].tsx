@@ -523,6 +523,9 @@ export default function TrainingScreen() {
           <Text style={{ fontSize: 11, color: "#94a3b8" }}>{exerciseType.replace(/_/g, " ").toLowerCase()}</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+          <TouchableOpacity onPress={handleGroupMenu} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Superset">
+            <Ionicons name="link-outline" size={20} color={workoutExercise?.group_id ? "#6366f1" : "#64748b"} />
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => router.push("/calculators" as never)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Calculadoras">
             <Ionicons name="calculator-outline" size={20} color="#64748b" />
           </TouchableOpacity>
