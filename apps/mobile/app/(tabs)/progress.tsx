@@ -3,6 +3,7 @@ import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicat
 import { Ionicons } from "@expo/vector-icons";
 import { useProgressStore, useExerciseStore, calculate1RM, ExerciseType, getWeekRange, todayISO } from "@fitnotes/core";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { useTheme } from "../../lib/theme";
 import { useSyncStatus } from "../../contexts/SyncContext";
 import { useRepositories } from "../../contexts/RepositoryContext";
@@ -18,6 +19,7 @@ import { useRepositories } from "../../contexts/RepositoryContext";
 export default function ProgressScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const { t } = useTranslation();
   const personalRecords = useProgressStore((s) => s.personalRecords);
   const isLoading = useProgressStore((s) => s.isLoading);
   const loadPersonalRecords = useProgressStore((s) => s.loadPersonalRecords);
@@ -124,20 +126,20 @@ export default function ProgressScreen() {
       ) : (
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 80, gap: 12 }}>
           <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
-            <Text style={{ flex: 1, fontSize: 22, fontWeight: "700", color: theme.text }}>Progreso</Text>
+            <Text style={{ flex: 1, fontSize: 22, fontWeight: "700", color: theme.text }}>{t("progress:title")}</Text>
             <TouchableOpacity
               onPress={() => router.push("/goals" as never)}
               style={{ flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6 }}
             >
               <Ionicons name="flag-outline" size={15} color={theme.primary} />
-              <Text style={{ fontSize: 13, fontWeight: "600", color: theme.primary }}>Objetivos</Text>
+              <Text style={{ fontSize: 13, fontWeight: "600", color: theme.primary }}>{t("progress:tabs.goals")}</Text>
             </TouchableOpacity>
           </View>
 
           {/* Weekly muscle group summary */}
           {weeklyByCategory.length > 0 && (
             <View style={{ borderWidth: 1, borderColor: theme.borderLight, borderRadius: 16, padding: 14, gap: 10 }}>
-              <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text, marginBottom: 2 }}>Esta semana</Text>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text, marginBottom: 2 }}>{t("progress:weekSectionTitleMobile")}</Text>
               {weeklyByCategory.map((cat) => {
                 const maxSets = weeklyByCategory[0]?.sets ?? 1;
                 const barWidth = Math.max(cat.sets / maxSets, 0.05);
@@ -148,7 +150,7 @@ export default function ProgressScreen() {
                         <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: cat.color }} />
                         <Text style={{ fontSize: 13, fontWeight: "500", color: theme.text }}>{cat.name}</Text>
                       </View>
-                      <Text style={{ fontSize: 12, color: theme.textSecondary }}>{cat.sets} {cat.sets === 1 ? "serie" : "series"}</Text>
+                      <Text style={{ fontSize: 12, color: theme.textSecondary }}>{t("progress:setsCount", { count: cat.sets })}</Text>
                     </View>
                     <View style={{ height: 4, backgroundColor: theme.surface, borderRadius: 2, overflow: "hidden" }}>
                       <View style={{ height: 4, width: `${barWidth * 100}%`, backgroundColor: cat.color, borderRadius: 2 }} />
@@ -162,9 +164,9 @@ export default function ProgressScreen() {
           {exercisesWithPRs.length === 0 ? (
             <View style={{ borderWidth: 1, borderColor: theme.border, borderStyle: "dashed", borderRadius: 16, padding: 40, alignItems: "center", gap: 10 }}>
               <Ionicons name="trophy-outline" size={36} color={theme.textMuted} />
-              <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>Sin récords aún</Text>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>{t("progress:noRecordsTitleMobile")}</Text>
               <Text style={{ fontSize: 12, color: theme.textMuted, textAlign: "center" }}>
-                Completa series para registrar automáticamente tus marcas personales.
+                {t("progress:noRecordsSubtitleMobile")}
               </Text>
             </View>
           ) : (
@@ -173,7 +175,7 @@ export default function ProgressScreen() {
                 {/* Exercise header */}
                 <TouchableOpacity
                   onPress={() => setExpanded((prev) => prev === exId ? null : exId)}
-                  accessibilityLabel={`${ex?.name ?? "Ejercicio"} — ${expanded === exId ? "contraer" : "expandir"} récords`}
+                  accessibilityLabel={`${ex?.name ?? t("progress:exerciseLabel")} — ${expanded === exId ? t("progress:collapseRecordsMobile") : t("progress:expandRecordsMobile")}`}
                   accessibilityRole="button"
                   accessibilityState={{ expanded: expanded === exId }}
                   style={{ flexDirection: "row", alignItems: "center", padding: 14, gap: 10 }}
@@ -181,7 +183,7 @@ export default function ProgressScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>{ex?.name}</Text>
                     <Text style={{ fontSize: 12, color: theme.textMuted, marginTop: 2 }}>
-                      Mejor: {best.weight} kg × {best.reps} reps · 1RM ≈ {calculate1RM(best.weight, best.reps).toFixed(1)} kg
+                      {t("progress:bestSummaryMobile", { weight: best.weight, reps: best.reps, oneRM: calculate1RM(best.weight, best.reps).toFixed(1) })}
                     </Text>
                   </View>
                   <Ionicons
@@ -195,16 +197,16 @@ export default function ProgressScreen() {
                 {expanded === exId && (
                   <View style={{ borderTopWidth: 1, borderColor: theme.borderLight, padding: 10, gap: 6 }}>
                     <View style={{ flexDirection: "row", paddingHorizontal: 4, marginBottom: 2 }}>
-                      <Text style={{ flex: 1, fontSize: 10, color: theme.textMuted, fontWeight: "600" }}>RM</Text>
-                      <Text style={{ width: 80, fontSize: 10, color: theme.textMuted, fontWeight: "600", textAlign: "right" }}>Peso</Text>
-                      <Text style={{ width: 80, fontSize: 10, color: theme.textMuted, fontWeight: "600", textAlign: "right" }}>1RM Est.</Text>
+                      <Text style={{ flex: 1, fontSize: 10, color: theme.textMuted, fontWeight: "600" }}>{t("progress:rmColumnHeaderMobile")}</Text>
+                      <Text style={{ width: 80, fontSize: 10, color: theme.textMuted, fontWeight: "600", textAlign: "right" }}>{t("progress:weightFieldLabel")}</Text>
+                      <Text style={{ width: 80, fontSize: 10, color: theme.textMuted, fontWeight: "600", textAlign: "right" }}>{t("progress:est1RMColumnHeaderMobile")}</Text>
                     </View>
                     {prs.map((pr) => {
                       const dateStr = pr.achieved_at ? new Date(pr.achieved_at).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "2-digit" }) : null;
                       return (
                       <View key={pr.id} style={{ paddingHorizontal: 4, paddingVertical: 4 }}>
                         <View style={{ flexDirection: "row", alignItems: "center" }}>
-                          <Text style={{ flex: 1, fontSize: 13, color: theme.text }}>{pr.reps} rep máx</Text>
+                          <Text style={{ flex: 1, fontSize: 13, color: theme.text }}>{t("progress:repMaxRowLabelMobile", { reps: pr.reps })}</Text>
                           <Text style={{ width: 80, fontSize: 13, fontWeight: "600", color: theme.text, textAlign: "right" }}>
                             {pr.weight} kg
                           </Text>
