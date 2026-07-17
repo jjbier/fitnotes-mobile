@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useProgressStore, useExerciseStore, calculate1RM, ExerciseType, getWeekRange, todayISO } from "@fitnotes/core";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../../lib/theme";
 import { useSyncStatus } from "../../contexts/SyncContext";
@@ -14,7 +14,10 @@ import { useRepositories } from "../../contexts/RepositoryContext";
  * detalle de cada marca (peso × reps y 1RM estimado con la fórmula de
  * Brzycki vía `calculate1RM`) ordenado por número de repeticiones. Incluye
  * acceso a la pantalla de Objetivos (`/goals`). Recarga (con caché de
- * ejercicios/categorías) al montar y al recibir `refetchSignal` tras un sync.
+ * ejercicios/categorías) cada vez que la tab gana foco — necesario para
+ * reflejar altas/bajas de PRs hechas en otra tab (p.ej. borrar un
+ * entrenamiento en Hoy) sin depender de un reinicio de la app — y también al
+ * recibir `refetchSignal` tras un sync.
  */
 export default function ProgressScreen() {
   const theme = useTheme();
@@ -93,10 +96,12 @@ export default function ProgressScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [progressRepo, exRepo]);
 
-  useEffect(() => {
-    load();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+  );
 
   useEffect(() => {
     if (refetchSignal === 0) return;

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Dimensions, PanResponder, SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator, Modal, TextInput } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { formatWorkoutDate, useExerciseStore, usePreferencesStore, ExerciseType } from "@fitnotes/core";
 import { supabase } from "../../lib/supabase";
@@ -151,6 +151,18 @@ export default function CalendarScreen() {
     loadMonth(year, month);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, month]);
+
+  // Recarga al ganar foco (p.ej. tras borrar/mover un entrenamiento en la tab Hoy) — sin esto,
+  // el mes ya cargado quedaba obsoleto hasta cambiar de mes o reiniciar la app.
+  useFocusEffect(
+    useCallback(() => {
+      loadMonth(year, month);
+      if (listView) {
+        repo.getWorkoutHistoryDetailed(50).then((data) => setHistory(data));
+      }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [year, month, listView])
+  );
 
   useEffect(() => {
     if (refetchSignal === 0) return;
