@@ -733,6 +733,24 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
       }
       return result;
     },
+
+    /**
+     * Reparación de un solo uso (ver `app_migrations`/`RepositoryContext`):
+     * recalcula el ledger de TODOS los ejercicios que tengan alguna fila en
+     * `personal_records`, incluidos los que ya quedaron huérfanos antes de
+     * que `deleteWorkout`/`removeExercise`/`deleteSet` empezaran a llamar a
+     * `resyncPersonalRecordsForExercise`. Un PR ya correcto se recalcula
+     * igual (no hay forma barata de saber cuáles están rotos sin hacerlo).
+     */
+    async repairOrphanedPersonalRecords(userId: string): Promise<void> {
+      const exercises = await db.getAllAsync<{ exercise_id: string }>(
+        `SELECT DISTINCT exercise_id FROM personal_records WHERE user_id = ? AND _deleted = 0`,
+        [userId]
+      );
+      for (const { exercise_id } of exercises) {
+        await resyncPersonalRecordsForExercise(db, exercise_id, userId);
+      }
+    },
   };
 }
 

@@ -264,6 +264,32 @@ describe("localWorkoutRepository", () => {
       expect(prs).toEqual([expect.objectContaining({ reps: 8, weight: 80 })]);
     });
 
+    it("repairOrphanedPersonalRecords cleans up a PR whose source workout was deleted before the fix existed", async () => {
+      // Simulates the pre-fix bug: a PR row with no live set behind it, inserted directly (bypassing deleteWorkout).
+      await db.runAsync(
+        `INSERT INTO personal_records (id, user_id, exercise_id, weight, reps, achieved_at, created_at, updated_at, _dirty, _deleted)
+         VALUES ('orphan-1', ?, 'ex-orphan', 20, 12, '2026-07-17T00:00:00Z', '2026-07-17T00:00:00Z', '2026-07-17T00:00:00Z', 1, 0)`,
+        [USER_ID]
+      );
+      expect(await personalRecordsFor("ex-orphan")).toHaveLength(1);
+
+      await repo.repairOrphanedPersonalRecords(USER_ID);
+
+      expect(await personalRecordsFor("ex-orphan")).toEqual([]);
+    });
+
+    it("repairOrphanedPersonalRecords leaves a PR backed by a live set untouched in value", async () => {
+      const { data: workout } = await repo.createWorkout({ date: "2026-07-30" }, USER_ID);
+      const { data: we } = await repo.addExercise({ workout_id: workout!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+      const { data: set } = await repo.createSet({ workout_exercise_id: we!.id, order_index: 0 }, USER_ID);
+      await repo.updateSet(set!.id, { is_complete: true, weight: 80, reps: 8 });
+
+      await repo.repairOrphanedPersonalRecords(USER_ID);
+
+      const prs = await personalRecordsFor("ex-1");
+      expect(prs).toEqual([expect.objectContaining({ reps: 8, weight: 80 })]);
+    });
+
     it("removeExercise recalculates PRs for the removed exercise", async () => {
       const { data: workout } = await repo.createWorkout({ date: "2026-07-29" }, USER_ID);
       const { data: we } = await repo.addExercise({ workout_id: workout!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);

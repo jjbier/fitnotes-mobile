@@ -206,6 +206,25 @@ function RepositoryProviderReady({
     });
   }, [preferencesRepo]);
 
+  // Reparación de un solo uso: recalcula los `personal_records` que quedaron
+  // huérfanos antes de que `deleteWorkout`/`removeExercise`/`deleteSet`
+  // empezaran a llamar a `resyncPersonalRecordsForExercise` (ver
+  // `app_migrations`). Marca la reparación como aplicada para no repetirla.
+  useEffect(() => {
+    if (!identity) return;
+    db.getFirstAsync<{ id: string }>(`SELECT id FROM app_migrations WHERE id = ?`, ["pr_orphan_repair_v1"]).then(
+      async (row) => {
+        if (row) return;
+        await workoutRepo.repairOrphanedPersonalRecords(identity.userId);
+        await db.runAsync(`INSERT INTO app_migrations (id, applied_at) VALUES (?, ?)`, [
+          "pr_orphan_repair_v1",
+          new Date().toISOString(),
+        ]);
+      }
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [db, identity?.userId]);
+
   if (!identity) {
     return (
       <View style={styles.loading}>

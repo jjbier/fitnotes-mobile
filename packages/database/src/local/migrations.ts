@@ -9,6 +9,7 @@ import { PENDING_OPS_SCHEMA_STATEMENTS } from "./pendingOpsSchema.js";
 import { WATERMARKS_SCHEMA_STATEMENTS } from "./watermarksSchema.js";
 import { LOCAL_IDENTITY_SCHEMA_STATEMENTS } from "./localIdentitySchema.js";
 import { LOCAL_PREFERENCES_SCHEMA_STATEMENTS } from "./localPreferencesSchema.js";
+import { APP_MIGRATIONS_SCHEMA_STATEMENTS } from "./appMigrationsSchema.js";
 
 interface LocalMigration {
   version: number;
@@ -37,6 +38,10 @@ const MIGRATIONS: LocalMigration[] = [
   {
     version: 3,
     statements: [...LOCAL_PREFERENCES_SCHEMA_STATEMENTS],
+  },
+  {
+    version: 4,
+    statements: [...APP_MIGRATIONS_SCHEMA_STATEMENTS],
   },
 ];
 

@@ -18,6 +18,7 @@ describe("runLocalMigrations", () => {
     }
     expect(tableNames).toContain("pending_ops");
     expect(tableNames).toContain("sync_watermarks");
+    expect(tableNames).toContain("app_migrations");
   });
 
   it("every syncable table has _dirty, _deleted, user_id and updated_at columns", async () => {
