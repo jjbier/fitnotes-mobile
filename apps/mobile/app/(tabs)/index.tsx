@@ -229,6 +229,21 @@ export default function HomeScreen() {
     setStartModalLoading(false);
   }
 
+  /** Inicia un entrenamiento vacío en la fecha actual, sin pasar por ninguna rutina (paridad con "Iniciar entrenamiento" en web). */
+  async function handleStartBlankWorkout() {
+    setLoggingRoutineId("blank");
+    const { data: workout, error } = await repo.createWorkout({ date: currentDate }, userId);
+    if (error || !workout) {
+      Alert.alert("Error", error?.message ?? "No se pudo crear el entrenamiento");
+      setLoggingRoutineId(null);
+      return;
+    }
+    loadWorkout({ id: workout.id, date: workout.date }, [], {});
+    loadWorkouts([{ id: workout.id, date: workout.date }]);
+    setLoggingRoutineId(null);
+    setShowStartModal(false);
+  }
+
   /**
    * Registra un entrenamiento a partir de una rutina: crea el `workout` en la
    * fecha actual, añade todos los ejercicios únicos de todos los días de la
@@ -823,13 +838,22 @@ export default function HomeScreen() {
               <Ionicons name="clipboard-outline" size={48} color="#cbd5e1" />
               <Text style={{ fontSize: 16, fontWeight: "600", color: "#64748b", textAlign: "center" }}>Sin rutinas</Text>
               <Text style={{ fontSize: 14, color: "#94a3b8", textAlign: "center" }}>
-                Crea una rutina en el tab Rutinas para poder iniciar un entrenamiento.
+                Crea una rutina en el tab Rutinas para registrarla, o empieza un entrenamiento en blanco.
               </Text>
               <TouchableOpacity
-                onPress={() => { setShowStartModal(false); router.push("/tools"); }}
-                style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}
+                onPress={handleStartBlankWorkout}
+                disabled={!!loggingRoutineId}
+                style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12, flexDirection: "row", alignItems: "center", gap: 8 }}
               >
-                <Text style={{ fontSize: 14, fontWeight: "600", color: "#fff" }}>Ir a Rutinas</Text>
+                {loggingRoutineId === "blank"
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Text style={{ fontSize: 14, fontWeight: "600", color: "#fff" }}>Entrenamiento en blanco</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { setShowStartModal(false); router.push("/tools"); }}
+                style={{ paddingHorizontal: 24, paddingVertical: 8 }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: "600", color: "#6366f1" }}>Ir a Rutinas</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -837,6 +861,20 @@ export default function HomeScreen() {
               data={startRoutines}
               keyExtractor={(r) => r.id}
               contentContainerStyle={{ padding: 16, gap: 10 }}
+              ListHeaderComponent={
+                <TouchableOpacity
+                  onPress={handleStartBlankWorkout}
+                  disabled={!!loggingRoutineId}
+                  style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderStyle: "dashed", borderRadius: 16, paddingHorizontal: 16, paddingVertical: 16, gap: 14, backgroundColor: "#fff", marginBottom: 10, opacity: loggingRoutineId && loggingRoutineId !== "blank" ? 0.4 : 1 }}
+                >
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#6366f115", alignItems: "center", justifyContent: "center" }}>
+                    {loggingRoutineId === "blank"
+                      ? <ActivityIndicator size="small" color="#6366f1" />
+                      : <Ionicons name="add-outline" size={22} color="#6366f1" />}
+                  </View>
+                  <Text style={{ flex: 1, fontSize: 15, fontWeight: "600", color: "#0f172a" }}>Entrenamiento en blanco</Text>
+                </TouchableOpacity>
+              }
               renderItem={({ item: r }) => (
                 <TouchableOpacity
                   onPress={() => handleLogRoutine(r.id)}
