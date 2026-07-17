@@ -18,11 +18,11 @@ function lastDayOfMonth(year: number, month: number): string {
 export function createLocalCalendarRepository(db: SqlExecutor) {
   return {
     /** Entrenamientos del mes (solo id/fecha/comentario) para pintar el calendario. */
-    async getWorkoutsForMonth(year: number, month: number): Promise<{ data: { id: string; date: string; comment: string | null }[]; error: RepoError | null }> {
+    async getWorkoutsForMonth(year: number, month: number): Promise<{ data: { id: string; date: string; comment: string | null; start_time: string | null }[]; error: RepoError | null }> {
       const start = `${year}-${String(month).padStart(2, "0")}-01`;
       const end = lastDayOfMonth(year, month);
-      const rows = await db.getAllAsync<{ id: string; date: string; comment: string | null }>(
-        `SELECT id, date, comment FROM workouts WHERE _deleted = 0 AND date >= ? AND date <= ? ORDER BY date ASC`,
+      const rows = await db.getAllAsync<{ id: string; date: string; comment: string | null; start_time: string | null }>(
+        `SELECT id, date, comment, start_time FROM workouts WHERE _deleted = 0 AND date >= ? AND date <= ? ORDER BY date ASC`,
         [start, end]
       );
       return { data: rows, error: null };

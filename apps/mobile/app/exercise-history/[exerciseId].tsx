@@ -15,6 +15,7 @@ import { supabase } from "../../lib/supabase";
 import LineChart, { type ChartDataPoint } from "../../components/LineChart";
 import DateInput from "../../components/DateInput";
 import { useRepositories } from "../../contexts/RepositoryContext";
+import { useWorkoutForDate } from "../../hooks/useWorkoutForDate";
 
 type SetRow = {
   id: string;
@@ -83,6 +84,7 @@ export default function ExerciseHistoryScreen() {
   const storeExercise = useExerciseStore((s) => s.exercises.find((e) => e.id === exerciseId));
   const updateExerciseStore = useExerciseStore((s) => s.updateExercise);
   const { exerciseRepo, workoutRepo, userId } = useRepositories();
+  const { resolveWorkoutForDate, pickerModal } = useWorkoutForDate(workoutRepo);
   const remoteExerciseRepo = useMemo(() => createExerciseRepository(supabase), []);
   const progressRepo = useMemo(() => createProgressRepository(supabase), []);
 
@@ -146,18 +148,18 @@ export default function ExerciseHistoryScreen() {
   const unit = weightUnit ?? "kg";
 
   /**
-   * Copia una serie del historial al entrenamiento de hoy: reutiliza (o crea) el
-   * workout y el `workout_exercise` de hoy para este ejercicio, y crea una serie nueva
-   * con los mismos valores (peso/reps/distancia/tiempo) al final de la lista.
+   * Copia una serie del historial al entrenamiento de hoy (resuelto vía
+   * `useWorkoutForDate` — pregunta a cuál si ya hay varios hoy): reutiliza o crea el
+   * `workout_exercise` de este ejercicio y crea una serie nueva con los mismos valores
+   * (peso/reps/distancia/tiempo) al final de la lista.
    */
   async function handleCopyToToday(set: SetRow) {
     setCopyingSetId(set.id);
     try {
       const today = todayISO();
-      let todayWorkout = (await workoutRepo.getWorkoutByDate(today)).data;
-      if (!todayWorkout) {
-        todayWorkout = (await workoutRepo.createWorkout({ date: today }, userId)).data;
-      }
+      const todayWorkoutId = await resolveWorkoutForDate(today, userId);
+      if (!todayWorkoutId) return;
+      const todayWorkout = (await workoutRepo.getWorkout(todayWorkoutId)).data;
       if (!todayWorkout) return;
 
       const todayWEs = (await workoutRepo.getWorkoutExercises(todayWorkout.id)).data ?? [];
@@ -901,6 +903,8 @@ export default function ExerciseHistoryScreen() {
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      {pickerModal}
     </SafeAreaView>
   );
 }

@@ -20,13 +20,13 @@ function lastDayOfMonth(year: number, month: number): string {
 
 export function createCalendarRepository(client: Client) {
   return {
-    /** Entrenamientos del mes (solo id/fecha/comentario) para pintar el calendario. */
+    /** Entrenamientos del mes (id/fecha/comentario/hora — puede haber varios por fecha) para pintar el calendario. */
     getWorkoutsForMonth(year: number, month: number) {
       const start = `${year}-${String(month).padStart(2, "0")}-01`;
       const end = lastDayOfMonth(year, month);
       return client
         .from("workouts")
-        .select("id, date, comment")
+        .select("id, date, comment, start_time")
         .gte("date", start)
         .lte("date", end)
         .order("date", { ascending: true });

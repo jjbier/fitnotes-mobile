@@ -11,6 +11,8 @@ import { useSyncStatus } from "../../contexts/SyncContext";
 import { useRepositories } from "../../contexts/RepositoryContext";
 import DateInput from "../../components/DateInput";
 import { useTheme } from "../../lib/theme";
+import { useWorkoutForDate } from "../../hooks/useWorkoutForDate";
+import WorkoutPickerModal, { type PickableWorkout } from "../../components/workout/WorkoutPickerModal";
 
 /**
  * Tab Hoy ("Home"): entrenamiento activo del día seleccionado, con
@@ -80,19 +82,22 @@ export default function HomeScreen() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedWEIds, setSelectedWEIds] = useState<Set<string>>(new Set());
   const { status: syncStatus, pendingCount, refetchSignal } = useSyncStatus();
+  // Todos los entrenamientos de `currentDate` (puede haber más de uno, ver
+  // docs/implementation-plan-multi-workout-per-day.md) y si el picker de vista está abierto.
+  const [dayWorkouts, setDayWorkouts] = useState<PickableWorkout[]>([]);
+  const [showViewPicker, setShowViewPicker] = useState(false);
+  const [creatingViewWorkout, setCreatingViewWorkout] = useState(false);
 
   const { workoutRepo: repo, exerciseRepo: exRepo, routineRepo, userId } = useRepositories();
+  const { resolveWorkoutForDate, pickerModal } = useWorkoutForDate(repo);
   const showSetCountHome = usePreferencesStore((s) => s.preferences.show_set_count_home);
   // shareWorkout sigue requiriendo red (fuera de alcance offline) — usa el repo remoto directamente.
   const remoteWorkoutRepo = useMemo(() => createWorkoutRepository(supabase), []);
 
-  /** Carga (o inicializa vacío) el entrenamiento de `date` junto con sus ejercicios y series, y los vuelca al store. */
-  const loadWorkoutForDate = useCallback(async (date: string) => {
-    const { data: workout } = await repo.getWorkoutByDate(date);
-    if (!workout) {
-      loadWorkout({ id: "", date }, [], {});
-      return;
-    }
+  /** Carga en el store un entrenamiento ya resuelto por id, junto con sus ejercicios y series. */
+  const loadWorkoutById = useCallback(async (workoutId: string) => {
+    const { data: workout } = await repo.getWorkout(workoutId);
+    if (!workout) return;
     const { data: wExercises } = await repo.getWorkoutExercises(workout.id);
     const setsMap: Record<string, Parameters<typeof loadWorkout>[2][string]> = {};
     for (const we of wExercises ?? []) {
@@ -111,6 +116,50 @@ export default function HomeScreen() {
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * Resuelve y carga el entrenamiento de `date`: si no hay ninguno, deja el
+   * store vacío (aparece la opción de iniciar uno); si hay exactamente uno,
+   * lo carga directo (sin cambio de UX); si hay varios (Fase 4 de
+   * docs/implementation-plan-multi-workout-per-day.md), muestra el picker de
+   * vista — al elegir o cancelar carga el elegido o, si cancela, el primero.
+   */
+  const loadWorkoutForDate = useCallback(async (date: string) => {
+    const { data } = await repo.getWorkoutsByDate(date);
+    const workouts = data ?? [];
+    setDayWorkouts(workouts);
+    if (workouts.length === 0) {
+      loadWorkout({ id: "", date }, [], {});
+      return;
+    }
+    if (workouts.length === 1) {
+      await loadWorkoutById(workouts[0]!.id);
+      return;
+    }
+    setShowViewPicker(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadWorkoutById]);
+
+  async function handleChooseViewWorkout(workoutId: string) {
+    setShowViewPicker(false);
+    await loadWorkoutById(workoutId);
+  }
+
+  async function handleCreateNewFromViewPicker() {
+    setCreatingViewWorkout(true);
+    const { data, error } = await repo.createWorkout({ date: currentDate, start_time: new Date().toISOString() }, userId);
+    setCreatingViewWorkout(false);
+    if (error || !data) return;
+    setDayWorkouts((prev) => [...prev, { id: data.id, start_time: data.start_time ?? null, comment: data.comment ?? null }]);
+    setShowViewPicker(false);
+    await loadWorkoutById(data.id);
+  }
+
+  /** Al cancelar el picker de vista sin elegir, se mantiene el comportamiento de siempre: cargar el primero. */
+  async function handleCloseViewPickerWithoutChoosing() {
+    setShowViewPicker(false);
+    if (dayWorkouts[0]) await loadWorkoutById(dayWorkouts[0].id);
+  }
 
   /** Carga los últimos 60 entrenamientos (para racha/franja semanal/copiar) y sus resúmenes (nº ejercicios, volumen) para "Actividad reciente". */
   const loadRecentWorkouts = useCallback(async () => {
@@ -239,27 +288,26 @@ export default function HomeScreen() {
     setStartModalLoading(false);
   }
 
-  /** Inicia un entrenamiento vacío en la fecha actual, sin pasar por ninguna rutina (paridad con "Iniciar entrenamiento" en web). Reutiliza el entrenamiento existente en vez de duplicarlo si ya hay uno para la fecha. */
+  /**
+   * Inicia un entrenamiento vacío en la fecha actual, sin pasar por ninguna rutina
+   * (paridad con "Iniciar entrenamiento" en web). Reutiliza el entrenamiento existente
+   * en vez de duplicarlo si ya hay exactamente uno para la fecha; si hay varios,
+   * pregunta a cuál añadirlo o si crear uno nuevo (`useWorkoutForDate`, Fase 4).
+   */
   async function handleStartBlankWorkout() {
     setLoggingRoutineId("blank");
-    const { data: existing } = await repo.getWorkoutByDate(currentDate);
-    if (!existing) {
-      const { data: workout, error } = await repo.createWorkout({ date: currentDate }, userId);
-      if (error || !workout) {
-        Alert.alert("Error", error?.message ?? "No se pudo crear el entrenamiento");
-        setLoggingRoutineId(null);
-        return;
-      }
-      loadWorkouts([{ id: workout.id, date: workout.date }]);
-    }
-    await loadWorkoutForDate(currentDate);
+    const workoutId = await resolveWorkoutForDate(currentDate, userId);
+    if (!workoutId) { setLoggingRoutineId(null); return; }
+    loadWorkouts([{ id: workoutId, date: currentDate }]);
+    await loadWorkoutById(workoutId);
     setLoggingRoutineId(null);
     setShowStartModal(false);
   }
 
   /**
-   * Registra un entrenamiento a partir de una rutina: crea el `workout` en la
-   * fecha actual, añade todos los ejercicios únicos de todos los días de la
+   * Registra una rutina en el entrenamiento de la fecha actual (resuelto vía
+   * `useWorkoutForDate` — crea uno si no hay, pregunta a cuál si hay varios,
+   * Fase 4): añade todos los ejercicios únicos de todos los días de la
    * rutina (deduplicados por `exercise_id`) y sus series predefinidas, y
    * vuelca el resultado al store como entrenamiento activo.
    */
@@ -280,23 +328,14 @@ export default function HomeScreen() {
       setLoggingRoutineId(null);
       return;
     }
-    const { data: existingWorkout } = await repo.getWorkoutByDate(currentDate);
-    let workout = existingWorkout;
-    if (!workout) {
-      const { data: created, error: wError } = await repo.createWorkout({ date: currentDate }, userId);
-      if (wError || !created) {
-        Alert.alert("Error", wError?.message ?? "No se pudo crear el entrenamiento");
-        setLoggingRoutineId(null);
-        return;
-      }
-      workout = created;
-    }
-    const { data: existingWEs } = await repo.getWorkoutExercises(workout.id);
+    const workoutId = await resolveWorkoutForDate(currentDate, userId);
+    if (!workoutId) { setLoggingRoutineId(null); return; }
+    const { data: existingWEs } = await repo.getWorkoutExercises(workoutId);
     const orderBase = existingWEs?.length ?? 0;
     for (let i = 0; i < allDayExercises.length; i++) {
       const rde = allDayExercises[i]!;
       const { data: we } = await repo.addExercise(
-        { workout_id: workout.id, exercise_id: rde.exercise_id, order_index: orderBase + i, group_id: rde.group_id, group_name: rde.group_name }, userId
+        { workout_id: workoutId, exercise_id: rde.exercise_id, order_index: orderBase + i, group_id: rde.group_id, group_name: rde.group_name }, userId
       );
       if (!we) continue;
       const { data: pSets } = await routineRepo.getPredefinedSets(rde.id);
@@ -309,8 +348,8 @@ export default function HomeScreen() {
         }, userId);
       }
     }
-    await loadWorkoutForDate(currentDate);
-    loadWorkouts([{ id: workout.id, date: workout.date }]);
+    await loadWorkoutById(workoutId);
+    loadWorkouts([{ id: workoutId, date: currentDate }]);
     setLoggingRoutineId(null);
     setShowStartModal(false);
   }
@@ -529,6 +568,16 @@ export default function HomeScreen() {
         <TouchableOpacity onPress={() => handleNavigateDate(1)} disabled={currentDate >= today} style={{ padding: 6, opacity: currentDate >= today ? 0.4 : 1 }} accessibilityLabel="Día siguiente">
           <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
+        {dayWorkouts.length > 1 && (
+          <TouchableOpacity
+            onPress={() => setShowViewPicker(true)}
+            style={{ flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 5 }}
+            accessibilityLabel="Este día tiene varios entrenamientos"
+          >
+            <Ionicons name="layers-outline" size={14} color={colors.primary} />
+            <Text style={{ fontSize: 12, fontWeight: "600", color: colors.primary }}>{dayWorkouts.length}</Text>
+          </TouchableOpacity>
+        )}
         {syncStatus === "syncing" ? (
           <ActivityIndicator size="small" color={colors.primary} style={{ marginLeft: 4 }} />
         ) : syncStatus === "error" ? (
@@ -995,6 +1044,16 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
+
+      <WorkoutPickerModal
+        visible={showViewPicker}
+        workouts={dayWorkouts}
+        creating={creatingViewWorkout}
+        onChoose={handleChooseViewWorkout}
+        onCreateNew={handleCreateNewFromViewPicker}
+        onClose={handleCloseViewPickerWithoutChoosing}
+      />
+      {pickerModal}
     </SafeAreaView>
   );
 }
