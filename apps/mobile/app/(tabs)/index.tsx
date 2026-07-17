@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator, Alert, TextInput, Share, Modal, FlatList } from "react-native";
+import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator, Alert, TextInput, Modal, FlatList } from "react-native";
 import { NestableScrollContainer, NestableDraggableFlatList, ScaleDecorator, type RenderItemParams } from "react-native-draggable-flatlist";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useWorkoutStore, useExerciseStore, usePreferencesStore, formatWorkoutDate, todayISO, ExerciseType, formatClockDuration } from "@fitnotes/core";
 import type { WorkoutExercise } from "@fitnotes/core";
-import { createWorkoutRepository } from "@fitnotes/database";
-import { supabase } from "../../lib/supabase";
 import { useSyncStatus } from "../../contexts/SyncContext";
 import { useRepositories } from "../../contexts/RepositoryContext";
 import DateInput from "../../components/DateInput";
@@ -29,8 +27,8 @@ import WorkoutPickerModal, { type PickableWorkout } from "../../components/worko
  *   `start_time`/`end_time`/`duration_minutes` al finalizar.
  * - Resumen final (duración, ejercicios, series, volumen) al finalizar el
  *   entrenamiento.
- * - Compartir el entrenamiento como texto (única operación que sigue usando
- *   el repo remoto directamente, fuera de alcance offline).
+ * - "+ Nuevo" para añadir un entrenamiento adicional el mismo día, visible
+ *   solo cuando el activo ya ha finalizado.
  * - Recarga automática cuando `refetchSignal` indica que un sync trajo
  *   entrenamientos nuevos (p.ej. historial de una cuenta recién vinculada).
  */
@@ -91,8 +89,6 @@ export default function HomeScreen() {
   const { workoutRepo: repo, exerciseRepo: exRepo, routineRepo, userId } = useRepositories();
   const { resolveWorkoutForDate, pickerModal } = useWorkoutForDate(repo);
   const showSetCountHome = usePreferencesStore((s) => s.preferences.show_set_count_home);
-  // shareWorkout sigue requiriendo red (fuera de alcance offline) — usa el repo remoto directamente.
-  const remoteWorkoutRepo = useMemo(() => createWorkoutRepository(supabase), []);
 
   /** Carga en el store un entrenamiento ya resuelto por id, junto con sus ejercicios y series. */
   const loadWorkoutById = useCallback(async (workoutId: string) => {
@@ -523,13 +519,6 @@ export default function HomeScreen() {
     await loadWorkoutForDate(moveDate);
   }
 
-  /** Genera un texto compartible del entrenamiento activo vía el repo remoto (`shareWorkout`, requiere red) y abre el share sheet nativo. */
-  async function handleShareWorkout() {
-    if (!activeWorkout?.id) return;
-    const text = await remoteWorkoutRepo.shareWorkout(activeWorkout.id);
-    if (text) await Share.share({ message: text });
-  }
-
   /**
    * Copia los ejercicios (sin series) de `sourceWorkoutId` al entrenamiento
    * del día actual, creándolo primero si no existe todavía; omite los
@@ -701,8 +690,8 @@ export default function HomeScreen() {
             /* Active workout */
             <View style={{ gap: 8 }}>
               {/* Workout header: timer + share */}
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#f8fafc", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, flex: 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#f8fafc", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, flex: 1, minWidth: 120 }}>
                   {!activeWorkout.end_time && (
                     <TouchableOpacity
                       onPress={timerState === "running" ? handlePauseTimer : handleStartTimer}
@@ -717,11 +706,11 @@ export default function HomeScreen() {
                     </TouchableOpacity>
                   )}
                   {activeWorkout.end_time && <Ionicons name="time-outline" size={14} color="#6366f1" />}
-                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#6366f1" }}>{formatClockDuration(timerDisplay)}</Text>
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#6366f1" }} numberOfLines={1}>{formatClockDuration(timerDisplay)}</Text>
                   {timerState === "paused" && timerDisplay > 0 && (
-                    <Text style={{ fontSize: 11, color: "#94a3b8" }}>pausado</Text>
+                    <Text style={{ fontSize: 11, color: "#94a3b8" }} numberOfLines={1}>pausado</Text>
                   )}
-                  {activeWorkout.end_time && <Text style={{ fontSize: 11, color: "#94a3b8" }}>finalizado</Text>}
+                  {activeWorkout.end_time && <Text style={{ fontSize: 11, color: "#94a3b8" }} numberOfLines={1}>finalizado</Text>}
                 </View>
                 <TouchableOpacity
                   onPress={() => { setMoveDate(activeWorkout.date); setShowMoveModal(true); }}
@@ -730,18 +719,17 @@ export default function HomeScreen() {
                   <Ionicons name="calendar-outline" size={16} color="#64748b" />
                   <Text style={{ fontSize: 13, color: "#64748b" }}>Mover</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={handleShareWorkout} style={{ flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
-                  <Ionicons name="share-outline" size={16} color="#64748b" />
-                  <Text style={{ fontSize: 13, color: "#64748b" }}>Compartir</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={openStartModal}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}
-                  accessibilityLabel="Añadir otro entrenamiento este día"
-                >
-                  <Ionicons name="add-circle-outline" size={16} color="#64748b" />
-                  <Text style={{ fontSize: 13, color: "#64748b" }}>Nuevo</Text>
-                </TouchableOpacity>
+                {/* Solo tiene sentido añadir un entrenamiento nuevo cuando el activo ya ha finalizado. */}
+                {activeWorkout.end_time && (
+                  <TouchableOpacity
+                    onPress={openStartModal}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}
+                    accessibilityLabel="Añadir otro entrenamiento este día"
+                  >
+                    <Ionicons name="add-circle-outline" size={16} color="#64748b" />
+                    <Text style={{ fontSize: 13, color: "#64748b" }}>Nuevo</Text>
+                  </TouchableOpacity>
+                )}
                 {workoutExercises.length > 0 && (
                   <TouchableOpacity
                     onPress={toggleSelectMode}
