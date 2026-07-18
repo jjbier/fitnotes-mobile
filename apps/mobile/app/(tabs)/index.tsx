@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator, Alert, TextInput, Modal, FlatList } from "react-native";
 import { NestableScrollContainer, NestableDraggableFlatList, ScaleDecorator, type RenderItemParams } from "react-native-draggable-flatlist";
-import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useWorkoutStore, useExerciseStore, usePreferencesStore, formatWorkoutDate, todayISO, ExerciseType, formatClockDuration } from "@fitnotes/core";
 import type { WorkoutExercise } from "@fitnotes/core";
@@ -9,8 +9,6 @@ import { useSyncStatus } from "../../contexts/SyncContext";
 import { useRepositories } from "../../contexts/RepositoryContext";
 import DateInput from "../../components/DateInput";
 import { useTheme } from "../../lib/theme";
-import { useWorkoutForDate } from "../../hooks/useWorkoutForDate";
-import WorkoutPickerModal, { type PickableWorkout } from "../../components/workout/WorkoutPickerModal";
 
 /**
  * Tab Hoy ("Home"): entrenamiento activo del día seleccionado, con
@@ -81,14 +79,8 @@ export default function HomeScreen() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedWEIds, setSelectedWEIds] = useState<Set<string>>(new Set());
   const { status: syncStatus, pendingCount, refetchSignal } = useSyncStatus();
-  // Todos los entrenamientos de `currentDate` (puede haber más de uno, ver
-  // docs/implementation-plan-multi-workout-per-day.md) y si el picker de vista está abierto.
-  const [dayWorkouts, setDayWorkouts] = useState<PickableWorkout[]>([]);
-  const [showViewPicker, setShowViewPicker] = useState(false);
-  const [creatingViewWorkout, setCreatingViewWorkout] = useState(false);
 
   const { workoutRepo: repo, exerciseRepo: exRepo, routineRepo, userId } = useRepositories();
-  const { resolveWorkoutForDate, pickerModal } = useWorkoutForDate(repo);
   const showSetCountHome = usePreferencesStore((s) => s.preferences.show_set_count_home);
 
   /** Carga en el store un entrenamiento ya resuelto por id, junto con sus ejercicios y series. */
@@ -115,60 +107,22 @@ export default function HomeScreen() {
   }, []);
 
   /**
-   * Vuelve a leer `dayWorkouts` de `date` sin tocar el store — usado tras crear un
-   * entrenamiento adicional desde `handleStartBlankWorkout`/`handleLogRoutine` (que
-   * cargan directo el resuelto vía `loadWorkoutById`, sin pasar por `loadWorkoutForDate`):
-   * sin esto, el chip "Cambiar" no aparecería hasta salir y volver a esta fecha.
-   */
-  const refreshDayWorkouts = useCallback(async (date: string) => {
-    const { data } = await repo.getWorkoutsByDate(date);
-    setDayWorkouts(data ?? []);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  /**
-   * Resuelve y carga el entrenamiento de `date`: si no hay ninguno, deja el
-   * store vacío (aparece la opción de iniciar uno); si hay exactamente uno,
-   * lo carga directo (sin cambio de UX); si hay varios (Fase 4 de
-   * docs/implementation-plan-multi-workout-per-day.md), muestra el picker de
-   * vista — al elegir o cancelar carga el elegido o, si cancela, el primero.
+   * Carga el entrenamiento de `date` sin preguntar nunca: si no hay ninguno,
+   * deja el store vacío (aparece la opción de iniciar uno); si hay alguno, carga
+   * el primero (por hora) directo — ver un día con varios entrenamientos se
+   * hace desde el Calendario (lista cada uno con su hora y navega directo por
+   * id), no desde esta pantalla.
    */
   const loadWorkoutForDate = useCallback(async (date: string) => {
     const { data } = await repo.getWorkoutsByDate(date);
     const workouts = data ?? [];
-    setDayWorkouts(workouts);
     if (workouts.length === 0) {
       loadWorkout({ id: "", date }, [], {});
       return;
     }
-    if (workouts.length === 1) {
-      await loadWorkoutById(workouts[0]!.id);
-      return;
-    }
-    setShowViewPicker(true);
+    await loadWorkoutById(workouts[0]!.id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadWorkoutById]);
-
-  async function handleChooseViewWorkout(workoutId: string) {
-    setShowViewPicker(false);
-    await loadWorkoutById(workoutId);
-  }
-
-  async function handleCreateNewFromViewPicker() {
-    setCreatingViewWorkout(true);
-    const { data, error } = await repo.createWorkout({ date: currentDate, start_time: new Date().toISOString() }, userId);
-    setCreatingViewWorkout(false);
-    if (error || !data) return;
-    setDayWorkouts((prev) => [...prev, { id: data.id, start_time: data.start_time ?? null, comment: data.comment ?? null }]);
-    setShowViewPicker(false);
-    await loadWorkoutById(data.id);
-  }
-
-  /** Al cancelar el picker de vista sin elegir, se mantiene el comportamiento de siempre: cargar el primero. */
-  async function handleCloseViewPickerWithoutChoosing() {
-    setShowViewPicker(false);
-    if (dayWorkouts[0]) await loadWorkoutById(dayWorkouts[0].id);
-  }
 
   /** Carga los últimos 60 entrenamientos (para racha/franja semanal/copiar) y sus resúmenes (nº ejercicios, volumen) para "Actividad reciente". */
   const loadRecentWorkouts = useCallback(async () => {
@@ -238,17 +192,6 @@ export default function HomeScreen() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.date, params.workoutId]);
-
-  // Refresca el conteo de `dayWorkouts` (chip "Cambiar") al recuperar el foco — p.ej.
-  // volviendo desde el editor de una rutina, que registra un día directo en el store sin
-  // pasar por esta tab. No recarga el store (solo el conteo), para no reabrir el picker
-  // de vista en cada refoco.
-  useFocusEffect(
-    useCallback(() => {
-      refreshDayWorkouts(currentDate);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentDate])
-  );
 
   // Sync local comment with store
   useEffect(() => {
@@ -322,29 +265,26 @@ export default function HomeScreen() {
 
   /**
    * Inicia un entrenamiento vacío en la fecha actual, sin pasar por ninguna rutina
-   * (paridad con "Iniciar entrenamiento" en web). Si ya hay algún entrenamiento esa
-   * fecha, siempre pregunta a cuál añadirlo o si crear uno nuevo (`useWorkoutForDate`
-   * con `forceAskIfAny`, Fase 5) — evita que "+ Nuevo" reutilice en silencio el que ya
-   * se estaba viendo.
+   * (paridad con "Iniciar entrenamiento" en web). Siempre crea uno nuevo, sin
+   * preguntar ni reutilizar: se llega aquí desde el estado vacío (nada que
+   * reutilizar) o desde "+ Nuevo" (que ya significa explícitamente "quiero otro").
    */
   async function handleStartBlankWorkout() {
     setLoggingRoutineId("blank");
-    const workoutId = await resolveWorkoutForDate(currentDate, userId, { forceAskIfAny: true });
-    if (!workoutId) { setLoggingRoutineId(null); return; }
-    addWorkoutToHistory({ id: workoutId, date: currentDate });
-    await loadWorkoutById(workoutId);
-    await refreshDayWorkouts(currentDate);
+    const { data, error } = await repo.createWorkout({ date: currentDate, start_time: new Date().toISOString() }, userId);
+    if (error || !data) { setLoggingRoutineId(null); return; }
+    addWorkoutToHistory({ id: data.id, date: currentDate });
+    await loadWorkoutById(data.id);
     setLoggingRoutineId(null);
     setShowStartModal(false);
   }
 
   /**
-   * Registra una rutina en el entrenamiento de la fecha actual (resuelto vía
-   * `useWorkoutForDate` con `forceAskIfAny` — crea uno si no hay, y si ya hay
-   * alguno (aunque sea solo uno) pregunta si añadir a ese o crear uno nuevo,
-   * Fase 5): añade todos los ejercicios únicos de todos los días de la
-   * rutina (deduplicados por `exercise_id`) y sus series predefinidas, y
-   * vuelca el resultado al store como entrenamiento activo.
+   * Registra una rutina como un entrenamiento nuevo de la fecha actual (siempre
+   * crea uno, sin preguntar ni reutilizar — "Registrar" es una acción explícita
+   * de "empezar esto ahora"): añade todos los ejercicios únicos de todos los
+   * días de la rutina (deduplicados por `exercise_id`) y sus series
+   * predefinidas, y vuelca el resultado al store como entrenamiento activo.
    */
   async function handleLogRoutine(routineId: string) {
     setLoggingRoutineId(routineId);
@@ -363,14 +303,12 @@ export default function HomeScreen() {
       setLoggingRoutineId(null);
       return;
     }
-    const workoutId = await resolveWorkoutForDate(currentDate, userId, { forceAskIfAny: true });
-    if (!workoutId) { setLoggingRoutineId(null); return; }
-    const { data: existingWEs } = await repo.getWorkoutExercises(workoutId);
-    const orderBase = existingWEs?.length ?? 0;
+    const { data: workout, error } = await repo.createWorkout({ date: currentDate, start_time: new Date().toISOString() }, userId);
+    if (error || !workout) { setLoggingRoutineId(null); return; }
     for (let i = 0; i < allDayExercises.length; i++) {
       const rde = allDayExercises[i]!;
       const { data: we } = await repo.addExercise(
-        { workout_id: workoutId, exercise_id: rde.exercise_id, order_index: orderBase + i, group_id: rde.group_id, group_name: rde.group_name }, userId
+        { workout_id: workout.id, exercise_id: rde.exercise_id, order_index: i, group_id: rde.group_id, group_name: rde.group_name }, userId
       );
       if (!we) continue;
       const { data: pSets } = await routineRepo.getPredefinedSets(rde.id);
@@ -383,9 +321,8 @@ export default function HomeScreen() {
         }, userId);
       }
     }
-    await loadWorkoutById(workoutId);
-    addWorkoutToHistory({ id: workoutId, date: currentDate });
-    await refreshDayWorkouts(currentDate);
+    await loadWorkoutById(workout.id);
+    addWorkoutToHistory({ id: workout.id, date: currentDate });
     setLoggingRoutineId(null);
     setShowStartModal(false);
   }
@@ -482,11 +419,9 @@ export default function HomeScreen() {
 
   /**
    * Pide confirmación y elimina permanentemente un entrenamiento completo de "Actividad
-   * reciente". Si es de `currentDate`: si era el activo, recarga la vista con
-   * `loadWorkoutForDate` (resuelve el que quede, o el estado vacío si no queda ninguno —
-   * sin esto, borrar el que se estaba viendo dejaba "Sin entrenamiento aún" aunque el día
-   * todavía tuviera otro); si no era el activo, solo refresca `dayWorkouts` para que el
-   * chip "Cambiar" no siga contando uno ya borrado.
+   * reciente". Si era el que se estaba viendo, recarga la vista con `loadWorkoutForDate`
+   * (resuelve el que quede, o el estado vacío si no queda ninguno — sin esto, borrar el
+   * que se estaba viendo dejaba "Sin entrenamiento aún" aunque el día todavía tuviera otro).
    */
   async function handleDeleteWorkout(workoutId: string, date: string) {
     Alert.alert(`¿Eliminar entrenamiento del ${formatWorkoutDate(date)}?`, "Se eliminará permanentemente.", [
@@ -494,12 +429,8 @@ export default function HomeScreen() {
       { text: "Eliminar", style: "destructive", onPress: async () => {
         removeWorkoutFromHistory(workoutId);
         await repo.deleteWorkout(workoutId);
-        if (date === currentDate) {
-          if (workoutId === activeWorkout?.id) {
-            await loadWorkoutForDate(currentDate);
-          } else {
-            await refreshDayWorkouts(currentDate);
-          }
+        if (date === currentDate && workoutId === activeWorkout?.id) {
+          await loadWorkoutForDate(currentDate);
         }
       }},
     ]);
@@ -611,16 +542,6 @@ export default function HomeScreen() {
         <TouchableOpacity onPress={() => handleNavigateDate(1)} disabled={currentDate >= today} style={{ padding: 6, opacity: currentDate >= today ? 0.4 : 1 }} accessibilityLabel="Día siguiente">
           <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
-        {dayWorkouts.length > 1 && (
-          <TouchableOpacity
-            onPress={() => setShowViewPicker(true)}
-            style={{ flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 5 }}
-            accessibilityLabel="Este día tiene varios entrenamientos"
-          >
-            <Ionicons name="layers-outline" size={14} color={colors.primary} />
-            <Text style={{ fontSize: 12, fontWeight: "600", color: colors.primary }}>{dayWorkouts.length}</Text>
-          </TouchableOpacity>
-        )}
         {syncStatus === "syncing" ? (
           <ActivityIndicator size="small" color={colors.primary} style={{ marginLeft: 4 }} />
         ) : syncStatus === "error" ? (
@@ -1094,16 +1015,6 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
-
-      <WorkoutPickerModal
-        visible={showViewPicker}
-        workouts={dayWorkouts}
-        creating={creatingViewWorkout}
-        onChoose={handleChooseViewWorkout}
-        onCreateNew={handleCreateNewFromViewPicker}
-        onClose={handleCloseViewPickerWithoutChoosing}
-      />
-      {pickerModal}
     </SafeAreaView>
   );
 }

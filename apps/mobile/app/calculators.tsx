@@ -23,7 +23,6 @@ import {
 import { useTheme } from "../lib/theme";
 import type { LocalWorkoutRepository } from "@fitnotes/database";
 import { useRepositories } from "../contexts/RepositoryContext";
-import { useWorkoutForDate } from "../hooks/useWorkoutForDate";
 
 /**
  * Carga perezosamente (una sola vez, vía `ensureLoaded`) la lista de ejercicios del
@@ -45,20 +44,25 @@ function useExerciseOptions() {
 }
 
 /**
- * Añade una serie con el peso/reps calculados al entrenamiento `workoutId` ya resuelto
- * (ver `useWorkoutForDate` — decide a cuál de los entrenamientos de hoy, si hay varios):
- * reutiliza el `workout_exercise` del ejercicio si ya está en la sesión (si no, lo añade)
- * y crea la serie al final.
+ * Añade una serie con el peso/reps calculados a la sesión de hoy: reutiliza en
+ * silencio el entrenamiento del día si ya existe (el primero, sin preguntar —
+ * ver un día con varios entrenamientos se hace desde el Calendario), o lo crea
+ * si no hay ninguno; reutiliza el `workout_exercise` del ejercicio si ya está
+ * en la sesión (si no, lo añade) y crea la serie al final.
  */
-async function addSetToWorkout(
+async function addSetToTodayWorkout(
   workoutRepo: LocalWorkoutRepository,
   userId: string,
-  workoutId: string,
   exerciseId: string,
   weight: number,
   reps: number | undefined
 ): Promise<boolean> {
-  const { data: workout } = await workoutRepo.getWorkout(workoutId);
+  const today = new Date().toISOString().split("T")[0]!;
+  let workout = (await workoutRepo.getWorkoutByDate(today)).data;
+  if (!workout) {
+    const { data } = await workoutRepo.createWorkout({ date: today, start_time: new Date().toISOString() }, userId);
+    workout = data ?? null;
+  }
   if (!workout) return false;
 
   const { data: wes } = await workoutRepo.getWorkoutExercises(workout.id);
@@ -201,7 +205,6 @@ const INCREMENTS = [0.5, 1, 1.25, 2.5, 5];
  */
 function SetCalculator() {
   const { workoutRepo, progressRepo, userId } = useRepositories();
-  const { resolveWorkoutForDate, pickerModal } = useWorkoutForDate(workoutRepo);
   const [baseWeight, setBaseWeight] = useState("");
   const [incrementIdx, setIncrementIdx] = useState(3); // 2.5
   const [showMaxPicker, setShowMaxPicker] = useState(false);
@@ -228,18 +231,11 @@ function SetCalculator() {
     setShowMaxPicker(false);
   }
 
-  /**
-   * Añade el peso calculado para un porcentaje como serie del entrenamiento de hoy
-   * (o al que elija el usuario si hay varios, ver `useWorkoutForDate`) y muestra una
-   * confirmación temporal.
-   */
+  /** Añade el peso calculado para un porcentaje como serie del entrenamiento de hoy y muestra una confirmación temporal. */
   async function handleAdd(pct: number, weight: number) {
     if (!addExerciseId) return;
-    const today = new Date().toISOString().split("T")[0]!;
-    const workoutId = await resolveWorkoutForDate(today, userId);
-    if (!workoutId) return;
     const reps = parseInt(addReps, 10) || undefined;
-    const ok = await addSetToWorkout(workoutRepo, userId, workoutId, addExerciseId, weight, reps);
+    const ok = await addSetToTodayWorkout(workoutRepo, userId, addExerciseId, weight, reps);
     if (ok) {
       setAddedPct(pct);
       setTimeout(() => setAddedPct((p) => (p === pct ? null : p)), 1500);
@@ -369,8 +365,6 @@ function SetCalculator() {
           </View>
         </View>
       </Modal>
-
-      {pickerModal}
     </View>
   );
 }
