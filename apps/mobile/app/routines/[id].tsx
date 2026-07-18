@@ -50,7 +50,7 @@ export default function RoutineDetailScreen() {
   const loadExercises = useExerciseStore((s) => s.loadExercises);
 
   const loadWorkout = useWorkoutStore((s) => s.loadWorkout);
-  const loadWorkouts = useWorkoutStore((s) => s.loadWorkouts);
+  const addWorkoutToHistory = useWorkoutStore((s) => s.addWorkoutToHistory);
 
   const [editMode, setEditMode] = useState(false);
   const [newDayName, setNewDayName] = useState("");
@@ -440,7 +440,7 @@ export default function RoutineDetailScreen() {
       })),
       fullSetsMap
     );
-    loadWorkouts([{ id: workout.id, date: workout.date }]);
+    addWorkoutToHistory({ id: workout.id, date: workout.date });
 
     setLoggingDayId(null);
     Alert.alert("¡Listo!", "Entrenamiento registrado desde la rutina.", [

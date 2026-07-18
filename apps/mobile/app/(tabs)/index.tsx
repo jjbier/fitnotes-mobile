@@ -45,6 +45,7 @@ export default function HomeScreen() {
   const isLoading = useWorkoutStore((s) => s.isLoading);
   const loadWorkout = useWorkoutStore((s) => s.loadWorkout);
   const loadWorkouts = useWorkoutStore((s) => s.loadWorkouts);
+  const addWorkoutToHistory = useWorkoutStore((s) => s.addWorkoutToHistory);
   const startWorkout = useWorkoutStore((s) => s.startWorkout);
   const removeExerciseFromWorkout = useWorkoutStore((s) => s.removeExerciseFromWorkout);
   const reorderExercises = useWorkoutStore((s) => s.reorderExercises);
@@ -330,7 +331,7 @@ export default function HomeScreen() {
     setLoggingRoutineId("blank");
     const workoutId = await resolveWorkoutForDate(currentDate, userId, { forceAskIfAny: true });
     if (!workoutId) { setLoggingRoutineId(null); return; }
-    loadWorkouts([{ id: workoutId, date: currentDate }]);
+    addWorkoutToHistory({ id: workoutId, date: currentDate });
     await loadWorkoutById(workoutId);
     await refreshDayWorkouts(currentDate);
     setLoggingRoutineId(null);
@@ -383,7 +384,7 @@ export default function HomeScreen() {
       }
     }
     await loadWorkoutById(workoutId);
-    loadWorkouts([{ id: workoutId, date: currentDate }]);
+    addWorkoutToHistory({ id: workoutId, date: currentDate });
     await refreshDayWorkouts(currentDate);
     setLoggingRoutineId(null);
     setShowStartModal(false);
