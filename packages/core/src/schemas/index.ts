@@ -38,6 +38,7 @@ export const exerciseSchema = z.object({
   notes: z.string().max(1000).optional(),
   is_favorite: z.boolean(),
   created_at: z.string().datetime(),
+  demo_url: z.string().url().max(2000).optional(),
 });
 
 /** Valida un `Workout` completo; a diferencia de los timestamps, `date` es solo YYYY-MM-DD (sin hora). */

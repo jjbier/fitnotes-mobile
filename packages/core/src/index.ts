@@ -23,6 +23,7 @@ export * from "./utils/filterUtils.js";
 export * from "./utils/uuid.js";
 export * from "./utils/personalRecords.js";
 export * from "./utils/defaultCatalogSeed.js";
+export * from "./utils/mediaUrl.js";
 
 // Data
 export * from "./data/defaultExerciseCatalog.js";

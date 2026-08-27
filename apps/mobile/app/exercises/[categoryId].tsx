@@ -67,6 +67,7 @@ export default function ExerciseCategoryScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newName, setNewName] = useState("");
   const [newNotes, setNewNotes] = useState("");
+  const [newDemoUrl, setNewDemoUrl] = useState("");
   const [newType, setNewType] = useState<ExerciseType>(ExerciseType.WEIGHT_REPS);
   const [newWeightUnit, setNewWeightUnit] = useState<"kg" | "lb">("kg");
   const [addSaving, setAddSaving] = useState(false);
@@ -75,6 +76,7 @@ export default function ExerciseCategoryScreen() {
   const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
   const [exName, setExName] = useState("");
   const [exNotes, setExNotes] = useState("");
+  const [exDemoUrl, setExDemoUrl] = useState("");
   const [exType, setExType] = useState<ExerciseType>(ExerciseType.WEIGHT_REPS);
   const [exWeightUnit, setExWeightUnit] = useState<"kg" | "lb">("kg");
   const [editSaving, setEditSaving] = useState(false);
@@ -115,6 +117,7 @@ export default function ExerciseCategoryScreen() {
             notes: ex.notes ?? undefined,
             is_favorite: ex.is_favorite,
             created_at: ex.created_at,
+            demo_url: ex.demo_url ?? undefined,
           }))
         );
       }
@@ -135,9 +138,19 @@ export default function ExerciseCategoryScreen() {
     ...filtered.filter((e) => !e.is_favorite),
   ];
 
+  function isValidUrl(url: string): boolean {
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   function openAddModal() {
     setNewName("");
     setNewNotes("");
+    setNewDemoUrl("");
     setNewType(ExerciseType.WEIGHT_REPS);
     setNewWeightUnit("kg");
     setShowAddModal(true);
@@ -147,10 +160,11 @@ export default function ExerciseCategoryScreen() {
     if (!newName.trim()) { Alert.alert("Error", t("exercises:nameRequired")); return; }
     const targetCategoryId = isFavorites ? (categories[0]?.id ?? "") : categoryId;
     if (!targetCategoryId) { Alert.alert("Error", t("exercises:categoryRequiredMobile")); return; }
+    if (newDemoUrl.trim() && !isValidUrl(newDemoUrl.trim())) { Alert.alert("Error", t("exercises:demoUrlInvalid")); return; }
     const weightUnit = WEIGHT_TYPES.includes(newType) ? newWeightUnit : "kg";
     setAddSaving(true);
     const { data, error } = await repo.createExercise(
-      { name: newName.trim(), notes: newNotes.trim() || null, category_id: targetCategoryId, type: newType, weight_unit: weightUnit },
+      { name: newName.trim(), notes: newNotes.trim() || null, demo_url: newDemoUrl.trim() || null, category_id: targetCategoryId, type: newType, weight_unit: weightUnit },
       userId
     );
     if (error || !data) { Alert.alert("Error", error?.message ?? t("exercises:genericError")); setAddSaving(false); return; }
@@ -163,6 +177,7 @@ export default function ExerciseCategoryScreen() {
       notes: data.notes ?? undefined,
       is_favorite: data.is_favorite,
       created_at: data.created_at,
+      demo_url: data.demo_url ?? undefined,
     });
     setAddSaving(false);
     setShowAddModal(false);
@@ -172,6 +187,7 @@ export default function ExerciseCategoryScreen() {
     setEditingExercise(ex);
     setExName(ex.name);
     setExNotes(ex.notes ?? "");
+    setExDemoUrl(ex.demo_url ?? "");
     setExType(ex.type);
     setExWeightUnit(ex.weight_unit ?? "kg");
   }
@@ -188,6 +204,7 @@ export default function ExerciseCategoryScreen() {
     const { data, error } = await repo.updateExercise(editingExercise.id, {
       name: exName.trim(),
       notes: exNotes.trim() || null,
+      demo_url: exDemoUrl.trim() || null,
       type: exType,
       weight_unit: weightUnit,
     });
@@ -195,6 +212,7 @@ export default function ExerciseCategoryScreen() {
     updateExercise(editingExercise.id, {
       name: data.name,
       notes: data.notes ?? undefined,
+      demo_url: data.demo_url ?? undefined,
       category_id: data.category_id ?? "",
       type: data.type as ExerciseType,
       weight_unit: data.weight_unit as "kg" | "lb",
@@ -213,6 +231,7 @@ export default function ExerciseCategoryScreen() {
    * elegir entre "solo etiqueta" o "convertir" los valores históricos (factor kg↔lb).
    */
   function handleEdit(ex: Exercise) {
+    if (exDemoUrl.trim() && !isValidUrl(exDemoUrl.trim())) { Alert.alert("Error", t("exercises:demoUrlInvalid")); return; }
     const typeChanged = exType !== ex.type;
     const isWeightType = WEIGHT_TYPES.includes(exType);
     const unitChanged = isWeightType && exWeightUnit !== (ex.weight_unit ?? "kg");
@@ -400,6 +419,21 @@ export default function ExerciseCategoryScreen() {
                   numberOfLines={3}
                 />
               </View>
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textLabel }}>
+                  {t("exercises:demoUrlLabel")} <Text style={{ fontWeight: "400", color: theme.textMuted }}>{t("exercises:demoUrlOptionalSuffix")}</Text>
+                </Text>
+                <TextInput
+                  style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: theme.text }}
+                  placeholder={t("exercises:demoUrlPlaceholder")}
+                  placeholderTextColor={theme.textMuted}
+                  value={newDemoUrl}
+                  onChangeText={setNewDemoUrl}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
+              </View>
               <View style={{ gap: 8 }}>
                 <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textLabel }}>{t("exercises:typeLabel")}</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
@@ -475,6 +509,21 @@ export default function ExerciseCategoryScreen() {
                   onChangeText={setExNotes}
                   multiline
                   numberOfLines={3}
+                />
+              </View>
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textLabel }}>
+                  {t("exercises:demoUrlLabel")} <Text style={{ fontWeight: "400", color: theme.textMuted }}>{t("exercises:demoUrlOptionalSuffix")}</Text>
+                </Text>
+                <TextInput
+                  style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: theme.text }}
+                  placeholder={t("exercises:demoUrlPlaceholder")}
+                  placeholderTextColor={theme.textMuted}
+                  value={exDemoUrl}
+                  onChangeText={setExDemoUrl}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
                 />
               </View>
               <View style={{ gap: 8 }}>

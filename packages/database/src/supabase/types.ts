@@ -180,6 +180,7 @@ export type Database = {
           created_at: string
           default_chart: string | null
           default_rest_seconds: number | null
+          demo_url: string | null
           id: string
           is_favorite: boolean
           name: string
@@ -195,6 +196,7 @@ export type Database = {
           created_at?: string
           default_chart?: string | null
           default_rest_seconds?: number | null
+          demo_url?: string | null
           id?: string
           is_favorite?: boolean
           name: string
@@ -210,6 +212,7 @@ export type Database = {
           created_at?: string
           default_chart?: string | null
           default_rest_seconds?: number | null
+          demo_url?: string | null
           id?: string
           is_favorite?: boolean
           name?: string

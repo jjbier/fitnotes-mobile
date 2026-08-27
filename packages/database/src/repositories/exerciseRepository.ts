@@ -31,6 +31,8 @@ export interface ExerciseDomain {
   notes?: string;
   is_favorite: boolean;
   created_at: string;
+  /** URL de una imagen o vídeo que muestra cómo se realiza el ejercicio. */
+  demo_url?: string;
 }
 
 export function createExerciseRepository(client: Client) {

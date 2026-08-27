@@ -3,13 +3,14 @@ import { useTheme } from "../../lib/theme";
 import {
   SafeAreaView, Text, View, TouchableOpacity,
   ActivityIndicator, FlatList, useWindowDimensions, ScrollView,
-  Modal, TextInput, Alert,
+  Modal, TextInput, Alert, Image, Linking,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import ViewShot from "react-native-view-shot";
 import * as Sharing from "expo-sharing";
-import { ExerciseType, useExerciseStore, usePreferencesStore, calculate1RM, estimateRepMax, todayISO, formatFullDate, formatSetDisplay } from "@fitnotes/core";
+import { ExerciseType, useExerciseStore, usePreferencesStore, calculate1RM, estimateRepMax, todayISO, formatFullDate, formatSetDisplay, isImageUrl } from "@fitnotes/core";
 import { createExerciseRepository, createProgressRepository, type ChartPoint } from "@fitnotes/database";
 import { supabase } from "../../lib/supabase";
 import LineChart, { type ChartDataPoint } from "../../components/LineChart";
@@ -75,6 +76,7 @@ const ALL_METRICS: { key: Metric; label: string; types: ExerciseType[] | "all" }
 export default function ExerciseHistoryScreen() {
   const colors = useTheme();
   const router = useRouter();
+  const { t } = useTranslation();
   const { width } = useWindowDimensions();
   const { exerciseId, name, type, weightUnit } = useLocalSearchParams<{
     exerciseId: string; name: string; type: string; weightUnit: string;
@@ -390,6 +392,25 @@ export default function ExerciseHistoryScreen() {
           </Text>
         </View>
       </View>
+
+      {/* Demo image/video */}
+      {storeExercise?.demo_url && (
+        <View style={{ backgroundColor: colors.background, borderBottomWidth: 1, borderColor: colors.borderLight, padding: 16, gap: 8 }}>
+          <Text style={{ fontSize: 13, fontWeight: "600", color: colors.text }}>{t("exercises:demoUrlSectionHeading")}</Text>
+          {isImageUrl(storeExercise.demo_url) ? (
+            <Image
+              source={{ uri: storeExercise.demo_url }}
+              style={{ width: "100%", height: 180, borderRadius: 12, backgroundColor: colors.borderLight }}
+              resizeMode="cover"
+              accessibilityLabel={t("exercises:demoUrlImageAlt", { name: storeExercise.name })}
+            />
+          ) : (
+            <TouchableOpacity onPress={() => Linking.openURL(storeExercise.demo_url!)}>
+              <Text style={{ fontSize: 13, color: "#6366f1", fontWeight: "600" }}>{t("exercises:demoUrlOpenLink")}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       {/* Tabs */}
       <View style={{ backgroundColor: "#fff", borderBottomWidth: 1, borderColor: "#f1f5f9" }}>

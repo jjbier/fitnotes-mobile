@@ -10,6 +10,7 @@ import { WATERMARKS_SCHEMA_STATEMENTS } from "./watermarksSchema.js";
 import { LOCAL_IDENTITY_SCHEMA_STATEMENTS } from "./localIdentitySchema.js";
 import { LOCAL_PREFERENCES_SCHEMA_STATEMENTS } from "./localPreferencesSchema.js";
 import { APP_MIGRATIONS_SCHEMA_STATEMENTS } from "./appMigrationsSchema.js";
+import { EXERCISE_DEMO_URL_SCHEMA_STATEMENTS } from "./exerciseDemoUrlSchema.js";
 
 interface LocalMigration {
   version: number;
@@ -42,6 +43,10 @@ const MIGRATIONS: LocalMigration[] = [
   {
     version: 4,
     statements: [...APP_MIGRATIONS_SCHEMA_STATEMENTS],
+  },
+  {
+    version: 5,
+    statements: [...EXERCISE_DEMO_URL_SCHEMA_STATEMENTS],
   },
 ];
 

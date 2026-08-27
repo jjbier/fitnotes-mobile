@@ -32,6 +32,7 @@ function mapExerciseRow(row: RawRow): ExerciseRow {
     weight_increment: (row.weight_increment as number | null) ?? null,
     default_rest_seconds: (row.default_rest_seconds as number | null) ?? null,
     default_chart: (row.default_chart as string | null) ?? null,
+    demo_url: (row.demo_url as string | null) ?? null,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
   };
@@ -179,6 +180,7 @@ export function createLocalExerciseRepository(db: SqlExecutor) {
         weight_increment?: number | null;
         default_rest_seconds?: number | null;
         default_chart?: string | null;
+        demo_url?: string | null;
       },
       userId: string
     ): Promise<{ data: ExerciseRow | null; error: RepoError | null }> {
@@ -196,16 +198,17 @@ export function createLocalExerciseRepository(db: SqlExecutor) {
         weight_increment: data.weight_increment ?? null,
         default_rest_seconds: data.default_rest_seconds ?? null,
         default_chart: data.default_chart ?? null,
+        demo_url: data.demo_url ?? null,
         created_at: ts,
         updated_at: ts,
       };
       await db.withTransactionAsync(async () => {
         await db.runAsync(
-          `INSERT INTO exercises (id, user_id, category_id, name, notes, type, weight_unit, is_favorite, weight_increment, default_rest_seconds, default_chart, created_at, updated_at, _dirty, _deleted)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)`,
+          `INSERT INTO exercises (id, user_id, category_id, name, notes, type, weight_unit, is_favorite, weight_increment, default_rest_seconds, default_chart, demo_url, created_at, updated_at, _dirty, _deleted)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)`,
           [
             row.id, row.user_id, row.category_id, row.name, row.notes, row.type, row.weight_unit,
-            fromBool(row.is_favorite), row.weight_increment, row.default_rest_seconds, row.default_chart,
+            fromBool(row.is_favorite), row.weight_increment, row.default_rest_seconds, row.default_chart, row.demo_url,
             row.created_at, row.updated_at,
           ]
         );
@@ -227,6 +230,7 @@ export function createLocalExerciseRepository(db: SqlExecutor) {
         weight_increment?: number | null;
         default_rest_seconds?: number | null;
         default_chart?: string | null;
+        demo_url?: string | null;
       }
     ): Promise<{ data: ExerciseRow | null; error: RepoError | null }> {
       const ts = nowIso();

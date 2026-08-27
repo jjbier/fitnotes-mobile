@@ -61,6 +61,8 @@ export interface Exercise {
   default_rest_seconds?: number;
   /** Métrica que se muestra por defecto al abrir el gráfico de progreso de este ejercicio. */
   default_chart?: "weight" | "volume" | "reps";
+  /** URL de una imagen o vídeo que muestra cómo se realiza el ejercicio. */
+  demo_url?: string;
 }
 
 /** Un entrenamiento (sesión) en una fecha concreta. */
