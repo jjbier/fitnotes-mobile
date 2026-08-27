@@ -10,6 +10,7 @@ out/
 expo-cache/
 .expo/
 *.tsbuildinfo
+coverage/
 
 # Environment
 .env

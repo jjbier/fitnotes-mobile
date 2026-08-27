@@ -116,3 +116,63 @@ jobs:
 
       - name: Lint
         run: pnpm run lint
+
+  # ── Coverage: sube a Codecov + badge de nº de tests ───────────────────────────
+  # No es un status check requerido — no bloquea merges si falla.
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test con cobertura (core + database)
+        run: |
+          pnpm --filter @fitnotes/core run test:coverage -- --reporter=json --outputFile=../../.coverage-core.json
+          pnpm --filter @fitnotes/database run test:coverage -- --reporter=json --outputFile=../../.coverage-database.json
+
+      - name: Sube cobertura a Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: packages/core/coverage/lcov.info,packages/database/coverage/lcov.info
+          fail_ci_if_error: false
+
+      - name: Genera badge de nº de tests
+        run: |
+          python3 -c "
+          import json, os
+          core = json.load(open('.coverage-core.json'))
+          db = json.load(open('.coverage-database.json'))
+          passed = core['numPassedTests'] + db['numPassedTests']
+          total = core['numTotalTests'] + db['numTotalTests']
+          color = 'brightgreen' if passed == total else 'red'
+          badge = {'schemaVersion': 1, 'label': 'tests', 'message': f'{passed} passed', 'color': color}
+          os.makedirs('.github/badges', exist_ok=True)
+          json.dump(badge, open('.github/badges/tests.json', 'w'))
+          "
+          rm -f .coverage-core.json .coverage-database.json
+
+      - name: Comitea el badge actualizado
+        if: github.event_name == 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/badges/tests.json
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: actualiza badge de tests [skip ci]"
+            git push
+          else
+            echo "Sin cambios en el badge, nada que comitear"
+          fi
