@@ -18,8 +18,8 @@
   },
   "dependencies": {
     "@fitnotes/core": "workspace:*",
-    "@supabase/ssr": "^0.12.0",
-    "@supabase/supabase-js": "^2.108.2"
+    "@supabase/ssr": "^0.12.4",
+    "@supabase/supabase-js": "^2.112.3"
   },
   "peerDependencies": {
     "expo-sqlite": "*"
