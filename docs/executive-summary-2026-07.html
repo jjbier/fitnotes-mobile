@@ -1,0 +1,497 @@
+<title>FitNotes App — Resumen ejecutivo técnico</title>
+<style>
+  :root {
+    --bg: #f2f0e8;
+    --surface: #e7e2d3;
+    --surface-2: #dcd6c4;
+    --line: #c9c2ab;
+    --text: #24261e;
+    --muted: #6d6c5c;
+    --accent: #2c5f7f;
+    --accent-strong: #1f4661;
+    --accent-soft: #d9e4e7;
+    --flag: #8a6a2f;
+    --flag-soft: #ece1c8;
+    --radius: 3px;
+    color-scheme: light;
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #14171a;
+    --surface: #1b1f23;
+    --surface-2: #22262b;
+    --line: #34393e;
+    --text: #e7e4da;
+    --muted: #9a988c;
+    --accent: #74b0cf;
+    --accent-strong: #9ecbe4;
+    --accent-soft: #1f3540;
+    --flag: #d3ac5f;
+    --flag-soft: #2c2717;
+    color-scheme: dark;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14171a;
+      --surface: #1b1f23;
+      --surface-2: #22262b;
+      --line: #34393e;
+      --text: #e7e4da;
+      --muted: #9a988c;
+      --accent: #74b0cf;
+      --accent-strong: #9ecbe4;
+      --accent-soft: #1f3540;
+      --flag: #d3ac5f;
+      --flag-soft: #2c2717;
+      color-scheme: dark;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3 {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    font-weight: 600;
+    text-wrap: balance;
+    color: var(--text);
+  }
+
+  code, .mono, .tree, table, .step-chain, .meta-row, .tag {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+
+  a { color: var(--accent-strong); }
+
+  .doc {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 clamp(1.25rem, 4vw, 3rem) 5rem;
+  }
+
+  /* ---------- Title block ---------- */
+  .titleblock {
+    border-bottom: 2px solid var(--text);
+    padding: clamp(1.75rem, 4vw, 2.75rem) 0 1.25rem;
+    margin-bottom: 2.5rem;
+  }
+  .eyebrow {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.6rem;
+  }
+  .titleblock h1 {
+    font-size: clamp(2rem, 5vw, 2.7rem);
+    margin: 0 0 0.4rem;
+    letter-spacing: -0.01em;
+  }
+  .titleblock .subtitle {
+    font-size: 1.1rem;
+    color: var(--muted);
+    margin: 0 0 1.25rem;
+    max-width: 46ch;
+  }
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.6rem;
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+  .meta-row span b {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  /* ---------- Layout: rail + content ---------- */
+  .layout {
+    display: grid;
+    grid-template-columns: 190px minmax(0, 1fr);
+    gap: clamp(1.5rem, 4vw, 3.5rem);
+    align-items: start;
+  }
+  @media (max-width: 800px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+
+  nav.toc {
+    position: sticky;
+    top: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding-top: 0.3rem;
+  }
+  @media (max-width: 800px) {
+    nav.toc {
+      position: static;
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 0.5rem 0.9rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 0.5rem;
+    }
+  }
+  nav.toc a {
+    font-size: 0.82rem;
+    color: var(--muted);
+    text-decoration: none;
+    border-left: 2px solid transparent;
+    padding-left: 0.65rem;
+  }
+  @media (max-width: 800px) {
+    nav.toc a { border-left: none; padding-left: 0; }
+  }
+  nav.toc a:hover { color: var(--accent-strong); border-left-color: var(--accent); }
+
+  main { min-width: 0; }
+
+  section { margin-bottom: 3.2rem; scroll-margin-top: 1.5rem; }
+  section h2 {
+    font-size: 1.5rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin: 0 0 1.1rem;
+  }
+  section h2 .num {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+    color: var(--accent);
+    font-weight: 500;
+  }
+  section h3 {
+    font-size: 1.05rem;
+    margin: 1.6rem 0 0.6rem;
+  }
+  p { max-width: 68ch; margin: 0 0 1rem; }
+  p.lead { font-size: 1.05rem; }
+
+  /* ---------- Stack table ---------- */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    margin: 0.5rem 0 1.5rem;
+  }
+  table caption { text-align: left; margin-bottom: 0.4rem; }
+  th, td {
+    text-align: left;
+    padding: 0.55rem 0.9rem 0.55rem 0;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  th {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+    border-bottom: 1px solid var(--text);
+  }
+  .table-wrap { overflow-x: auto; }
+
+  /* ---------- Tree / schematic box ---------- */
+  .tree {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 1.1rem 1.3rem;
+    font-size: 0.83rem;
+    line-height: 1.7;
+    overflow-x: auto;
+    white-space: pre;
+    color: var(--text);
+  }
+  .tree .dim { color: var(--muted); }
+
+  /* ---------- Decision list ---------- */
+  .modules {
+    display: grid;
+    gap: 0.9rem;
+  }
+  .module {
+    display: grid;
+    grid-template-columns: 190px minmax(0,1fr);
+    gap: 0.3rem 1.1rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+  @media (max-width: 620px) {
+    .module { grid-template-columns: 1fr; }
+  }
+  .module dt {
+    font-weight: 600;
+    font-size: 0.92rem;
+  }
+  .module dd { margin: 0; color: var(--text); }
+
+  /* ---------- Flow cards ---------- */
+  .flows { display: grid; gap: 1rem; }
+  .flow {
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius);
+    background: var(--surface);
+    padding: 1rem 1.3rem 1.15rem;
+  }
+  .flow h3 { margin: 0 0 0.55rem; font-size: 1rem; }
+  .step-chain {
+    font-size: 0.78rem;
+    color: var(--muted);
+    line-height: 1.9;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .step-chain b { color: var(--accent-strong); font-weight: 600; }
+
+  /* ---------- Integration cards ---------- */
+  .integrations {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 0.9rem;
+  }
+  .integration {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0.95rem 1.1rem;
+    background: var(--surface);
+  }
+  .integration .name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+  }
+  .integration p { font-size: 0.85rem; color: var(--muted); margin: 0; max-width: none; }
+
+  .tag {
+    font-size: 0.65rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 0.15rem 0.5rem;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .tag.active { background: var(--accent-soft); color: var(--accent-strong); }
+  .tag.pending { background: var(--flag-soft); color: var(--flag); }
+
+  /* ---------- Status / annex ---------- */
+  .annex {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 1.1rem 1.3rem;
+    background: var(--surface);
+  }
+  .annex h3 { margin-top: 0; }
+  .annex ul { margin: 0.4rem 0 0; padding-left: 1.15rem; }
+  .annex li { margin-bottom: 0.55rem; font-size: 0.92rem; }
+  .annex li b { color: var(--text); }
+
+  footer.doc-footer {
+    margin-top: 3rem;
+    padding-top: 1.1rem;
+    border-top: 1px solid var(--line);
+    font-size: 0.75rem;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  ::selection { background: var(--accent-soft); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    section { animation: rise 0.4s ease-out both; }
+    section:nth-of-type(2) { animation-delay: 0.03s; }
+    section:nth-of-type(3) { animation-delay: 0.06s; }
+    section:nth-of-type(4) { animation-delay: 0.09s; }
+    section:nth-of-type(5) { animation-delay: 0.12s; }
+    section:nth-of-type(6) { animation-delay: 0.15s; }
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  }
+
+  a:focus-visible, button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+</style>
+
+<div class="doc">
+
+  <div class="titleblock">
+    <div class="eyebrow">Documento técnico · generado a partir del código fuente</div>
+    <h1>FitNotes App</h1>
+    <p class="subtitle">Resumen ejecutivo técnico — qué es, cómo está construido y cómo se mueven los datos entre sus dos clientes.</p>
+    <div class="meta-row">
+      <span>Última actividad registrada: <b>2026-07-03</b></span>
+      <span>Monorepo: <b>Turborepo + pnpm</b></span>
+      <span>Clientes: <b>web (Next.js)</b> · <b>mobile (Expo)</b></span>
+      <span>Backend: <b>Supabase</b></span>
+    </div>
+  </div>
+
+  <div class="layout">
+    <nav class="toc">
+      <a href="#proposito">Propósito</a>
+      <a href="#stack">Stack tecnológico</a>
+      <a href="#arquitectura">Arquitectura</a>
+      <a href="#flujos">Flujos de datos</a>
+      <a href="#integraciones">Integraciones</a>
+      <a href="#estado">Estado actual</a>
+    </nav>
+
+    <main>
+
+      <section id="proposito">
+        <h2><span class="num">01</span> Propósito del sistema</h2>
+        <p class="lead"><strong>FitNotes App</strong> es una aplicación de seguimiento de entrenamiento de fuerza y fitness (workout logging), construida como réplica funcional y visual completa de la app de referencia FitNotes, con dos clientes propios — <strong>web</strong> y <strong>mobile</strong> — que comparten la misma lógica de negocio.</p>
+        <p>Resuelve el problema de registrar entrenamientos (ejercicios, series, repeticiones, peso, distancia o tiempo según el tipo de ejercicio), ver progreso histórico (récords personales, 1RM estimado, gráficas), planificar rutinas reutilizables, hacer seguimiento corporal y fijar objetivos — con los cálculos deportivos estándar del dominio (fórmula de Brzycki para 1RM, cálculo de discos de barra, ritmo y velocidad en cardio).</p>
+        <p>Su rasgo más distintivo: el cliente mobile funciona <strong>por completo sin cuenta</strong> desde el primer arranque (modo invitado local). Crear o vincular una cuenta activa la sincronización en la nube, pero nunca es una barrera de entrada.</p>
+      </section>
+
+      <section id="stack">
+        <h2><span class="num">02</span> Stack tecnológico</h2>
+        <p>Monorepo con <span class="mono">Turborepo 2</span> + <span class="mono">pnpm</span> workspaces, TypeScript estricto (<span class="mono">strict</span> + <span class="mono">verbatimModuleSyntax</span>).</p>
+        <div class="table-wrap">
+        <table>
+          <thead><tr><th>Capa</th><th>Tecnología</th></tr></thead>
+          <tbody>
+            <tr><td>Web</td><td>Next.js 15 (App Router) · React 19 · Tailwind CSS v4 · Recharts · Radix UI · lucide-react · @tanstack/react-virtual</td></tr>
+            <tr><td>Mobile</td><td>Expo SDK 52 · React Native 0.76 · Expo Router v4 · react-native-reanimated / gesture-handler · nativewind (solo transformer Metro) · expo-sqlite · expo-crypto · expo-av · netinfo</td></tr>
+            <tr><td>Lógica compartida</td><td>packages/core — TypeScript puro, sin dependencias de plataforma · Zustand 5 + Immer · Zod</td></tr>
+            <tr><td>Backend / datos</td><td>Supabase (Postgres + Auth + RLS + RPC) · @supabase/supabase-js + @supabase/ssr (versiones fijadas)</td></tr>
+            <tr><td>Testing</td><td>Vitest (306 tests: 219 core + 87 database) · Playwright (13 specs / 66 tests, web) · Detox (mobile, dispositivo físico)</td></tr>
+            <tr><td>CI/CD</td><td>GitHub Actions + Dependabot · despliegue web en Vercel</td></tr>
+          </tbody>
+        </table>
+        </div>
+      </section>
+
+      <section id="arquitectura">
+        <h2><span class="num">03</span> Arquitectura y módulos principales</h2>
+        <div class="tree">apps/web            <span class="dim">Next.js — cliente que SIEMPRE requiere cuenta (Supabase remoto)</span>
+apps/mobile         <span class="dim">Expo — cliente offline-first con cuenta opcional</span>
+packages/core       <span class="dim">Lógica de negocio pura (tipos, stores Zustand, cálculos, utils)</span>
+packages/database   <span class="dim">Repos remotos (Supabase) + repos locales (SQLite) + motor de sync</span>
+packages/ui         <span class="dim">Vacío (sin implementar)</span></div>
+
+        <h3>Patrón central: repositorio espejado</h3>
+        <p>Cada entidad (workouts, exercises, routines, body-tracker, goals, progress) tiene un repositorio remoto (<span class="mono">createXxxRepository(supabaseClient)</span>) y, en mobile, un repositorio local SQLite con <strong>el mismo nombre de método y la misma forma de respuesta</strong> (<span class="mono">{data, error}</span>). La UI de mobile habla siempre con SQLite local, sin saber si hay red o cuenta.</p>
+
+        <h3>Módulos funcionales — 6 secciones equivalentes en ambos clientes</h3>
+        <dl class="modules">
+          <div class="module"><dt>Hoy / Dashboard</dt><dd>Entrenamiento del día, franja semanal + racha, cronómetro pausable, resumen al finalizar.</dd></div>
+          <div class="module"><dt>Ejercicios</dt><dd>Catálogo por categorías, historial, favoritos, 10 tipos de ejercicio (peso+reps, solo reps, distancia+tiempo, etc.).</dd></div>
+          <div class="module"><dt>Progreso</dt><dd>Récords personales, 1RM estimado, gráficas de evolución, estadísticas por periodo.</dd></div>
+          <div class="module"><dt>Calendario</dt><dd>Vista mensual con entrenamientos por categoría y filtros.</dd></div>
+          <div class="module"><dt>Rutinas</dt><dd>Plantillas reutilizables: días, ejercicios, series predefinidas y supersets.</dd></div>
+          <div class="module"><dt>Configuración</dt><dd>Perfil, unidades, backup/restore, CSV, Google Drive, gestión de cuenta.</dd></div>
+        </dl>
+
+        <h3>Capa offline de mobile</h3>
+        <p>La pieza arquitectónica más compleja del proyecto:</p>
+        <dl class="modules">
+          <div class="module"><dt>SQLite local</dt><dd>Espeja 13 tablas remotas. UUIDs reales generados en cliente (nunca IDs temporales), tombstones para deletes (evita "resucitar" filas borradas en un pull concurrente), cascadas de FK replicadas a mano.</dd></div>
+          <div class="module"><dt>SyncEngine</dt><dd>Cola de operaciones pendientes durable en SQLite, resolución de conflictos (gana lo local si está "sucio", si no gana el más reciente por <span class="mono">updated_at</span>), disparadores al volver a primer plano o reconectar red.</dd></div>
+          <div class="module"><dt>Identidad invitado</dt><dd><span class="mono">local_identity</span> resuelve siempre un <span class="mono">userId</span> de escritura, con o sin cuenta. Al vincular cuenta real, un "claim" reescribe ese <span class="mono">user_id</span> en las 13 tablas y en las operaciones ya encoladas, en una sola transacción.</dd></div>
+          <div class="module"><dt>PRs offline</dt><dd>Los récords personales se calculan en JavaScript replicando el trigger SQL remoto, para que el modo invitado también genere trofeos sin depender de red.</dd></div>
+        </dl>
+      </section>
+
+      <section id="flujos">
+        <h2><span class="num">04</span> Flujos de datos más importantes</h2>
+        <div class="flows">
+          <div class="flow">
+            <h3>Registrar un set (mobile, offline)</h3>
+            <div class="step-chain"><b>UI</b> → repo local SQLite (insert, UUID real, transacción) → cola de operación pendiente → cálculo de PR en la misma transacción → push al reconectar (orden respetando FKs)</div>
+          </div>
+          <div class="flow">
+            <h3>Sincronización cross-device</h3>
+            <div class="step-chain"><b>Foreground / reconexión</b> → pull paginado por marca de agua (updated_at) → aplica filas remotas (reglas de conflicto) → notifica tablas cambiadas → pantallas releen desde SQLite</div>
+          </div>
+          <div class="flow">
+            <h3>Registrar un set (web)</h3>
+            <div class="step-chain"><b>UI</b> → Supabase directo (RLS por auth.uid()) → trigger SQL recalcula el récord personal</div>
+          </div>
+          <div class="flow">
+            <h3>Vincular cuenta desde modo invitado</h3>
+            <div class="step-chain"><b>Login/registro</b> → detecta user_id de sesión ≠ invitado local → reescribe user_id en tablas + pendientes → sync() normal = bootstrap completo (watermarks vacíos ⇒ pull total)</div>
+          </div>
+          <div class="flow">
+            <h3>Backup y CSV</h3>
+            <div class="step-chain"><b>Configuración</b> → backupRepository (exportar / restaurar) → solo disponible con cuenta real, no en modo invitado</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="integraciones">
+        <h2><span class="num">05</span> Integraciones con sistemas externos</h2>
+        <div class="integrations">
+          <div class="integration">
+            <div class="name">Supabase <span class="tag active">activo</span></div>
+            <p>Postgres con Row Level Security por usuario, Auth (email/password), funciones RPC (<span class="mono">delete_user()</span>), triggers SQL para récords personales.</p>
+          </div>
+          <div class="integration">
+            <div class="name">Google Drive API <span class="tag active">activo</span></div>
+            <p>Backup automático desde web (auth / callback / backup / disconnect). Rotación automática, conserva las 5 copias más recientes.</p>
+          </div>
+          <div class="integration">
+            <div class="name">Vercel <span class="tag active">activo</span></div>
+            <p>Hosting y despliegue del cliente web, con headers de seguridad (CSP) duplicados en <span class="mono">vercel.json</span>.</p>
+          </div>
+          <div class="integration">
+            <div class="name">Expo EAS <span class="tag pending">pendiente</span></div>
+            <p><span class="mono">projectId</span> aún es un placeholder en <span class="mono">app.json</span> — requiere <span class="mono">eas init</span> con cuenta Expo real.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="estado">
+        <h2><span class="num">06</span> Estado actual</h2>
+        <p>Ambos clientes tienen paridad funcional y visual completa frente a la app de referencia. El plan de arquitectura offline-first en mobile (6 fases) está terminado y verificado en dispositivo físico.</p>
+        <div class="annex">
+          <h3>Limitaciones aceptadas (no bloqueantes)</h3>
+          <ul>
+            <li><b>PRs duplicados tras claim+sync</b> — un récord generado offline y el mismo regenerado por el trigger SQL remoto al pushear pueden convivir como dos filas distintas.</li>
+            <li><b>Sesión no sobrevive a force-stop (Android)</b> — pese a persistencia configurada, forzar el cierre del proceso deja el sync detenido en silencio hasta iniciar sesión de nuevo manualmente.</li>
+            <li><b>Multi-dispositivo en modo invitado</b> — el mismo usuario como invitado en dos dispositivos antes de crear cuenta genera filas duplicadas al vincularse a la misma cuenta.</li>
+          </ul>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer class="doc-footer">
+    <span>FitNotes App — resumen generado por análisis directo del código fuente y la documentación de arquitectura del repositorio.</span>
+    <span>packages/ui sin implementar · sin gaps funcionales conocidos vs. app de referencia</span>
+  </footer>
+
+</div>
