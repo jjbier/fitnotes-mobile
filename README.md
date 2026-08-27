@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/jjbier/fitnotes-mobile/actions/workflows/ci.yml/badge.svg)](https://github.com/jjbier/fitnotes-mobile/actions/workflows/ci.yml)
 [![EAS Build](https://github.com/jjbier/fitnotes-mobile/actions/workflows/eas-build.yml/badge.svg)](https://github.com/jjbier/fitnotes-mobile/actions/workflows/eas-build.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 App de seguimiento de fitness con registro de entrenamientos, PRs, rutinas, body tracker y calculadoras. Expo SDK 52 + Expo Router v4, con lógica de negocio propia en `@fitnotes/core`. Todo el producto está en español.
 
