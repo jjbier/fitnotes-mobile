@@ -1,31 +1,29 @@
-# Architecture — FitNotes App
+# Architecture — FitNotes Mobile
 
 _Last updated: 2026-07-03_
 
-## Monorepo layout
+## Repo layout
 
 ```
-fitnotes-app/
+fitnotes-mobile/
 ├── .npmrc                  public-hoist-pattern para Babel (requerido para Android build)
 ├── apps/
-│   ├── web/                Next.js 15 App Router — puerto 3000
 │   └── mobile/             Expo SDK 52 — Metro bundler
 └── packages/
     ├── core/               Lógica pura. SIN react/next/expo.
     ├── database/           Cliente Supabase + tipos generados + repositorios
     ├── ui/                 Vacío
-    └── tsconfig/           base.json / nextjs.json / expo.json
+    └── tsconfig/           base.json / expo.json
 ```
 
 ## Decisiones clave
 
 | Decisión | Razón |
 |---|---|
-| `packages/core` sin deps de plataforma | Mismo store en web y mobile |
+| `packages/core` sin deps de plataforma | Reutilizable fuera de React Native si hiciera falta |
 | Repository pattern `createXxxRepository(client)` | Desacopla queries del cliente Supabase |
-| `@supabase/ssr@0.12.0` + `@supabase/supabase-js@2.108.2` pinned | Mezclar versiones rompe genéricos de SupabaseClient |
+| `@supabase/supabase-js@2.108.2` pinned | Mezclar versiones rompe genéricos de SupabaseClient |
 | `ExerciseType` cast `as ExerciseType` | Supabase devuelve string, core usa enum |
-| `apps/web/.env.local` (no raíz) | Next.js solo lee env de su propio directorio |
 | Trigger SQL para PRs | Consistencia garantizada desde cualquier cliente |
 | StyleSheet en mobile (no NativeWind en componentes) | NativeWind v4 solo como transformer Metro |
 | `verbatimModuleSyntax` → imports con `.js` | Compatibilidad con bundlers ESM |
@@ -42,14 +40,12 @@ fitnotes-app/
 | `useTheme()` desde `lib/theme.ts` | Dark mode via useColorScheme — NO hardcodear colores hex |
 | Tab bar usa `useColorScheme()` directo | Layouts no pueden llamar hooks de la misma forma que componentes |
 | `useThemeModeStore` (zustand, fuera de core) en `lib/theme.ts` | Override manual light/dark/system sobre `useColorScheme()`; se hidrata desde `usePreferencesStore`/tabla local (o `user_metadata` si hay cuenta) — ver "Preferencias offline" en `offline-sync.md` |
-| Home Screen Settings sin migración DB | Categorías ocultas = lista de IDs client-side (localStorage web / `usePreferencesStore` mobile) — evita tocar RLS/schema para un ajuste puramente visual |
-| Backup/restore mobile sin document-picker nativo | Reutiliza patrón ya usado por import CSV: export vía `Share.share`, restore vía modal de pegado de texto — evita instalar `expo-document-picker` |
+| Home Screen Settings sin migración DB | Categorías ocultas = lista de IDs en `usePreferencesStore` — evita tocar RLS/schema para un ajuste puramente visual |
+| Backup/restore sin document-picker nativo | Reutiliza patrón ya usado por import CSV: export vía `Share.share`, restore vía modal de pegado de texto — evita instalar `expo-document-picker` |
 | Rest timer sound vía `expo-av` (no `expo-audio`) | SDK 52: `expo-audio` aún beta/inestable en esa versión; `expo-av` es la opción estable para playback simple |
-| `@theme inline` en `apps/web/app/globals.css` (2026-07-02) | Tailwind v4 no genera utilidades para colores custom (`bg-primary`, etc.) sin registrarlos en `@theme` — bug presente desde el scaffold, pasó desapercibido porque los tests E2E comprueban DOM/roles, no CSS computado |
-| `formatWorkoutDate` con arrays hardcodeados (no `Intl.DateTimeFormat`) | Hermes (RN/mobile) puede tener soporte ICU incompleto — arrays evitan depender de `Intl` en un util compartido con mobile |
-| `ConfirmDialog` (React) en vez de `window.confirm()` en web | Paridad visual con mobile (Alert.alert estilizado); rompe cualquier test E2E que use `page.once("dialog", ...)` — hay que clicar el botón del `alertdialog` |
-| `Modal` propio en vez de `Alert.alert` para menús >3 opciones (mobile) | Android limita `Alert.alert` a 3 botones nativos; un 4º se descarta en silencio sin error |
-| Mobile offline-first: repos locales SQLite espejan 1:1 los repos remotos | UI agnóstica de backend; escritura instantánea sin red — ver `offline-sync.md` |
+| `formatWorkoutDate` con arrays hardcodeados (no `Intl.DateTimeFormat`) | Hermes (RN) puede tener soporte ICU incompleto — arrays evitan depender de `Intl` en un util de dominio |
+| `Modal` propio en vez de `Alert.alert` para menús >3 opciones | Android limita `Alert.alert` a 3 botones nativos; un 4º se descarta en silencio sin error |
+| Offline-first: repos locales SQLite espejan 1:1 los repos remotos | UI agnóstica de backend; escritura instantánea sin red — ver `offline-sync.md` |
 | `SqlExecutor` como interfaz inyectada (no `expo-sqlite` directo en los repos) | Permite testear con Vitest + `better-sqlite3` sin dispositivo/emulador |
 | UUIDs reales (`generateUUID()`) en vez de IDs temporales | Un insert offline ya tiene su ID definitivo — elimina el patrón "crear con ID temporal → reemplazar tras respuesta del servidor" |
 | Tombstones (`_deleted=1`) en vez de borrado físico local | Un pull concurrente no puede "resucitar" una fila que el usuario borró offline antes de que el delete se pushee |
