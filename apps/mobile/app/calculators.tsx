@@ -44,11 +44,10 @@ function useExerciseOptions() {
 }
 
 /**
- * Añade una serie con el peso/reps calculados a la sesión de hoy: reutiliza en
- * silencio el entrenamiento del día si ya existe (el primero, sin preguntar —
- * ver un día con varios entrenamientos se hace desde el Calendario), o lo crea
- * si no hay ninguno; reutiliza el `workout_exercise` del ejercicio si ya está
- * en la sesión (si no, lo añade) y crea la serie al final.
+ * Añade una serie con el peso/reps calculados a un entrenamiento NUEVO de hoy:
+ * cada llamada crea su propio entrenamiento, nunca reutiliza uno existente
+ * (pulsar "+ Añadir" varias veces seguidas crea un entrenamiento distinto por
+ * cada una).
  */
 async function addSetToTodayWorkout(
   workoutRepo: LocalWorkoutRepository,
@@ -58,27 +57,17 @@ async function addSetToTodayWorkout(
   reps: number | undefined
 ): Promise<boolean> {
   const today = new Date().toISOString().split("T")[0]!;
-  let workout = (await workoutRepo.getWorkoutByDate(today)).data;
-  if (!workout) {
-    const { data } = await workoutRepo.createWorkout({ date: today, start_time: new Date().toISOString() }, userId);
-    workout = data ?? null;
-  }
+  const { data: workout } = await workoutRepo.createWorkout({ date: today, start_time: new Date().toISOString() }, userId);
   if (!workout) return false;
 
-  const { data: wes } = await workoutRepo.getWorkoutExercises(workout.id);
-  let we = wes?.find((w) => w.exercise_id === exerciseId);
-  if (!we) {
-    const { data } = await workoutRepo.addExercise(
-      { workout_id: workout.id, exercise_id: exerciseId, order_index: wes?.length ?? 0 },
-      userId
-    );
-    we = data ?? undefined;
-  }
+  const { data: we } = await workoutRepo.addExercise(
+    { workout_id: workout.id, exercise_id: exerciseId, order_index: 0 },
+    userId
+  );
   if (!we) return false;
 
-  const { data: existingSets } = await workoutRepo.getSets(we.id);
   const { error } = await workoutRepo.createSet(
-    { workout_exercise_id: we.id, weight, reps, order_index: existingSets?.length ?? 0 },
+    { workout_exercise_id: we.id, weight, reps, order_index: 0 },
     userId
   );
   return !error;

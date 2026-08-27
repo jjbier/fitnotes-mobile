@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator, Alert, TextInput, Modal, FlatList } from "react-native";
 import { NestableScrollContainer, NestableDraggableFlatList, ScaleDecorator, type RenderItemParams } from "react-native-draggable-flatlist";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useWorkoutStore, useExerciseStore, usePreferencesStore, formatWorkoutDate, todayISO, ExerciseType, formatClockDuration } from "@fitnotes/core";
 import type { WorkoutExercise } from "@fitnotes/core";
@@ -192,6 +192,17 @@ export default function HomeScreen() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.date, params.workoutId]);
+
+  // Recarga al recuperar el foco (p.ej. volviendo de Herramientas/Rutinas tras crear
+  // un entrenamiento desde ahí) — sin esto, esta tab se queda mostrando lo que había
+  // al montarse hasta el próximo reinicio de la app, aunque los datos ya cambiaron.
+  useFocusEffect(
+    useCallback(() => {
+      loadWorkoutForDate(currentDate);
+      void loadRecentWorkouts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentDate])
+  );
 
   // Sync local comment with store
   useEffect(() => {
@@ -677,6 +688,11 @@ export default function HomeScreen() {
               )}
 
               <NestableDraggableFlatList
+                // fuerza remount al cambiar de entrenamiento activo (p.ej. desde "Actividad
+                // reciente"): sin esto, el layout cacheado de la lista anterior deja la
+                // tarjeta del ejercicio colapsada a altura casi cero (mismo índice 0, distinto
+                // contenido) hasta que la pantalla se remonta por completo.
+                key={activeWorkout.id}
                 data={workoutExercises}
                 keyExtractor={(we) => we.id}
                 scrollEnabled={false}
@@ -797,16 +813,16 @@ export default function HomeScreen() {
             </View>
           )}
 
-          {/* Recent workouts */}
-          {workouts.length > 0 && (
+          {/* Recent workouts — solo los del día que se está viendo */}
+          {workouts.filter((w) => w.date === currentDate).length > 0 && (
             <View style={{ gap: 8 }}>
               <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>Actividad reciente</Text>
-              {workouts.slice(0, 5).map((w) => {
+              {workouts.filter((w) => w.date === currentDate).map((w) => {
                 const s = recentSummaries[w.id];
                 return (
                   <View key={w.id} style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 14, paddingRight: 8 }}>
                     <TouchableOpacity
-                      onPress={() => { setCurrentDate(w.date); void loadWorkoutForDate(w.date); }}
+                      onPress={() => loadWorkoutById(w.id)}
                       style={{ flex: 1, paddingHorizontal: 16, paddingVertical: 12 }}
                     >
                       <Text style={{ fontSize: 13, fontWeight: "500", color: "#0f172a" }}>{formatWorkoutDate(w.date)}</Text>

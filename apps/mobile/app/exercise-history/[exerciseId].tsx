@@ -146,31 +146,21 @@ export default function ExerciseHistoryScreen() {
   const unit = weightUnit ?? "kg";
 
   /**
-   * Copia una serie del historial al entrenamiento de hoy: reutiliza en silencio el
-   * entrenamiento del día si ya existe (el primero, sin preguntar — ver un día con
-   * varios entrenamientos se hace desde el Calendario), o lo crea si no hay ninguno;
-   * reutiliza o crea el `workout_exercise` de este ejercicio y crea una serie nueva con
-   * los mismos valores (peso/reps/distancia/tiempo) al final de la lista.
+   * Copia una serie del historial a un entrenamiento NUEVO de hoy: cada copia crea su
+   * propio entrenamiento, nunca reutiliza uno existente.
    */
   async function handleCopyToToday(set: SetRow) {
     setCopyingSetId(set.id);
     try {
       const today = todayISO();
-      let todayWorkout = (await workoutRepo.getWorkoutByDate(today)).data;
-      if (!todayWorkout) {
-        todayWorkout = (await workoutRepo.createWorkout({ date: today, start_time: new Date().toISOString() }, userId)).data;
-      }
+      const todayWorkout = (await workoutRepo.createWorkout({ date: today, start_time: new Date().toISOString() }, userId)).data;
       if (!todayWorkout) return;
 
-      const todayWEs = (await workoutRepo.getWorkoutExercises(todayWorkout.id)).data ?? [];
-      let targetWE = todayWEs.find((w) => w.exercise_id === exerciseId);
-      if (!targetWE) {
-        targetWE = (await workoutRepo.addExercise({
-          workout_id: todayWorkout.id,
-          exercise_id: exerciseId,
-          order_index: todayWEs.length,
-        }, userId)).data ?? undefined;
-      }
+      const targetWE = (await workoutRepo.addExercise({
+        workout_id: todayWorkout.id,
+        exercise_id: exerciseId,
+        order_index: 0,
+      }, userId)).data ?? undefined;
       if (!targetWE) return;
 
       await workoutRepo.createSet({
