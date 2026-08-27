@@ -107,7 +107,6 @@ export default function BodyTrackerScreen() {
     setIsLoading(false);
   }, [repo, userId]);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadData(); }, [loadData]);
 
   /** Carga todas las entradas de todas las medidas del usuario para la pestaña Historial. */
