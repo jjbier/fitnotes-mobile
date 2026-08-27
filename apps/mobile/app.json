@@ -7,10 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "fitnotes",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "resizeMode": "contain",
-      "backgroundColor": "#6366f1"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.fitnotes.app"
@@ -45,7 +41,15 @@
         }
       ],
       "expo-sqlite",
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#6366f1"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
