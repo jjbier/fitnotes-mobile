@@ -140,8 +140,8 @@ jobs:
 
       - name: Test con cobertura (core + database)
         run: |
-          pnpm --filter @fitnotes/core run test:coverage -- --reporter=json --outputFile=../../.coverage-core.json
-          pnpm --filter @fitnotes/database run test:coverage -- --reporter=json --outputFile=../../.coverage-database.json
+          pnpm --filter @fitnotes/core exec vitest run --coverage --reporter=json --outputFile=../../.coverage-core.json
+          pnpm --filter @fitnotes/database exec vitest run --coverage --reporter=json --outputFile=../../.coverage-database.json
 
       - name: Sube cobertura a Codecov
         uses: codecov/codecov-action@v4
