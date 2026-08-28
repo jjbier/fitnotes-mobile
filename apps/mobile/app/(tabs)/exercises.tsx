@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState, useCallback, memo } from "react";
 import {
   SafeAreaView, ScrollView, Text, View, TouchableOpacity,
-  TextInput, ActivityIndicator, Modal, KeyboardAvoidingView,
-  Platform, Alert,
+  TextInput, ActivityIndicator, Modal, Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -17,6 +16,7 @@ import type { Category, Exercise } from "@fitnotes/core";
 import { useTheme } from "../../lib/theme";
 import { useSyncStatus } from "../../contexts/SyncContext";
 import { useRepositories } from "../../contexts/RepositoryContext";
+import ExerciseFormModal, { type ExerciseFormPatch } from "../../components/ExerciseFormModal";
 
 /** Paleta de colores predefinidos seleccionable al crear/editar una categoría. */
 const PRESET_COLORS = [
@@ -24,9 +24,6 @@ const PRESET_COLORS = [
   "#f97316", "#eab308", "#22c55e", "#14b8a6",
   "#3b82f6", "#64748b",
 ];
-
-/** Tipos de ejercicio que registran peso (muestran selector de unidad kg/lb e incremento de peso en el formulario). */
-const WEIGHT_TYPES = [ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHT_ONLY, ExerciseType.WEIGHT_DISTANCE, ExerciseType.WEIGHT_TIME];
 
 /**
  * Tab Ejercicios: catálogo de ejercicios agrupado por categoría muscular
@@ -71,19 +68,8 @@ export default function ExercisesScreen() {
   // Exercise create/edit modal
   const [showModal, setShowModal] = useState(false);
   const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
-  const [exName, setExName] = useState("");
-  const [exNotes, setExNotes] = useState("");
-  const [exCategoryId, setExCategoryId] = useState("");
-  const [exType, setExType] = useState<ExerciseType>(ExerciseType.WEIGHT_REPS);
-  const [exWeightUnit, setExWeightUnit] = useState<"kg" | "lb">("kg");
-  const [exWeightIncrement, setExWeightIncrement] = useState("2.5");
-  const [exDefaultRest, setExDefaultRest] = useState("90");
-  const [exDefaultChart, setExDefaultChart] = useState<"weight" | "volume" | "reps">("weight");
-  const [saving, setSaving] = useState(false);
-  const [modalCategories, setModalCategories] = useState<Category[]>([]);
 
-  // Inline new category inside exercise modal
-  const [showNewCat, setShowNewCat] = useState(false);
+  // Standalone "Nueva categoría" modal state, reused for its `newCatName`/`newCatColor`
   const [newCatName, setNewCatName] = useState("");
   const [newCatColor, setNewCatColor] = useState(PRESET_COLORS[0]!);
   const [catSaving, setCatSaving] = useState(false);
@@ -106,19 +92,6 @@ export default function ExercisesScreen() {
   const { refetchSignal } = useSyncStatus();
 
   /** Opciones de tipo de ejercicio mostradas en el modal de creación/edición, con su etiqueta traducida. */
-  const TYPE_OPTIONS: { value: ExerciseType; label: string }[] = useMemo(() => [
-    { value: ExerciseType.WEIGHT_REPS, label: t("exercises:types.WEIGHT_REPS") },
-    { value: ExerciseType.REPS_ONLY, label: t("exercises:types.REPS_ONLY") },
-    { value: ExerciseType.WEIGHT_ONLY, label: t("exercises:types.WEIGHT_ONLY") },
-    { value: ExerciseType.DISTANCE_TIME, label: t("exercises:types.DISTANCE_TIME") },
-    { value: ExerciseType.TIME_ONLY, label: t("exercises:types.TIME_ONLY") },
-    { value: ExerciseType.WEIGHT_DISTANCE, label: t("exercises:types.WEIGHT_DISTANCE") },
-    { value: ExerciseType.WEIGHT_TIME, label: t("exercises:types.WEIGHT_TIME") },
-    { value: ExerciseType.REPS_DISTANCE, label: t("exercises:types.REPS_DISTANCE") },
-    { value: ExerciseType.REPS_TIME, label: t("exercises:types.REPS_TIME") },
-    { value: ExerciseType.DISTANCE_ONLY, label: t("exercises:types.DISTANCE_ONLY") },
-  ], [t]);
-
   /** Carga categorías, ejercicios (repo local) y estadísticas de uso (repo remoto de estadísticas) y los vuelca al store. */
   const load = useCallback(async () => {
     setLoading(true);
@@ -142,6 +115,7 @@ export default function ExercisesScreen() {
           weight_increment: ex.weight_increment ?? undefined,
           default_rest_seconds: ex.default_rest_seconds ?? undefined,
           default_chart: (ex.default_chart ?? "weight") as "weight" | "volume" | "reps",
+          demo_url: ex.demo_url ?? undefined,
         }))
       );
     }
@@ -161,104 +135,52 @@ export default function ExercisesScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refetchSignal]);
 
-  /** Resetea el formulario del modal a valores por defecto y lo abre en modo "crear ejercicio". */
+  /** Abre `ExerciseFormModal` en modo creación (sin ejercicio precargado). */
   function openCreateModal() {
-    const cats = useExerciseStore.getState().categories;
-    setModalCategories(cats);
     setEditingExercise(null);
-    setExName("");
-    setExNotes("");
-    setExCategoryId(cats[0]?.id ?? "");
-    setExType(ExerciseType.WEIGHT_REPS);
-    setExWeightUnit("kg");
-    setExWeightIncrement("2.5");
-    setExDefaultRest("90");
-    setExDefaultChart("weight");
-    setShowNewCat(false);
-    setNewCatName("");
-    setNewCatColor(PRESET_COLORS[0]!);
     setShowModal(true);
   }
 
-  /** Precarga el formulario del modal con los datos de `ex` y lo abre en modo "editar ejercicio". */
+  /** Abre `ExerciseFormModal` en modo edición, precargado con `ex`. */
   function openEditModal(ex: Exercise) {
-    const cats = useExerciseStore.getState().categories;
-    setModalCategories(cats);
     setEditingExercise(ex);
-    setExName(ex.name);
-    setExNotes(ex.notes ?? "");
-    setExCategoryId(ex.category_id);
-    setExType(ex.type);
-    setExWeightUnit(ex.weight_unit ?? "kg");
-    setExWeightIncrement(String(ex.weight_increment ?? 2.5));
-    setExDefaultRest(String(ex.default_rest_seconds ?? 90));
-    setExDefaultChart((ex.default_chart ?? "weight") as "weight" | "volume" | "reps");
-    setShowNewCat(false);
-    setNewCatName("");
-    setNewCatColor(PRESET_COLORS[0]!);
     setShowModal(true);
   }
 
-  /** Crea una categoría nueva desde el formulario inline dentro del modal de ejercicio y la deja seleccionada. */
-  async function handleCreateCategory() {
-    if (!newCatName.trim()) return;
-    setCatSaving(true);
-    const { data, error } = await repo.createCategory({ name: newCatName.trim(), color: newCatColor }, userId);
-    if (error || !data) { Alert.alert("Error", error?.message ?? t("exercises:genericError")); setCatSaving(false); return; }
+  /** Crea una categoría nueva en el repo y el store; usada tanto por el modal independiente "Nueva categoría" como por el selector inline del formulario de ejercicio. */
+  async function createCategory(name: string, color: string): Promise<Category | null> {
+    const { data, error } = await repo.createCategory({ name, color }, userId);
+    if (error || !data) { Alert.alert("Error", error?.message ?? t("exercises:genericError")); return null; }
     const cat: Category = { id: data.id, name: data.name, color: data.color, order_index: data.order_index };
     addCategory(cat);
-    setModalCategories((prev) => [...prev, cat]);
-    setExCategoryId(cat.id);
-    setShowNewCat(false);
-    setNewCatName("");
-    setNewCatColor(PRESET_COLORS[0]!);
-    setCatSaving(false);
+    return cat;
   }
 
   /** Crea una categoría nueva desde el modal independiente "Nueva categoría" accesible desde el FAB (sin pasar por el formulario de ejercicio). */
   async function handleCreateCategoryStandalone() {
     if (!newCatName.trim()) return;
     setCatSaving(true);
-    const { data, error } = await repo.createCategory({ name: newCatName.trim(), color: newCatColor }, userId);
-    if (error || !data) { Alert.alert("Error", error?.message ?? t("exercises:genericError")); setCatSaving(false); return; }
-    const cat: Category = { id: data.id, name: data.name, color: data.color, order_index: data.order_index };
-    addCategory(cat);
+    const cat = await createCategory(newCatName.trim(), newCatColor);
+    setCatSaving(false);
+    if (!cat) return;
     setNewCatName("");
     setNewCatColor(PRESET_COLORS[0]!);
-    setCatSaving(false);
     setShowCategoryOnlyModal(false);
   }
 
   /**
-   * Valida y persiste el formulario (crea o actualiza el ejercicio según
-   * `editingExercise`). Si se pasa `convertFactor`, además convierte los
+   * Persiste el formulario de `ExerciseFormModal` (crea o actualiza el ejercicio
+   * según `editingExercise`). Si se pasa `convertFactor`, además convierte los
    * pesos históricos del ejercicio tras guardar (cambio de unidad kg↔lb).
    */
-  async function doSave(convertFactor?: number) {
-    if (!exName.trim()) { Alert.alert("Error", t("exercises:nameRequired")); return; }
-    if (!exCategoryId) { Alert.alert("Error", t("exercises:categoryRequired")); return; }
-
-    const weightUnit = WEIGHT_TYPES.includes(exType) ? exWeightUnit : "kg";
-    setSaving(true);
-
-    const weightIncrement = parseFloat(exWeightIncrement) || 2.5;
-    const defaultRest = parseInt(exDefaultRest) || 90;
-
+  async function handleExerciseSubmit(patch: ExerciseFormPatch, opts: { convertFactor?: number }): Promise<string | void> {
     if (editingExercise) {
-      const { data, error } = await repo.updateExercise(editingExercise.id, {
-        name: exName.trim(),
-        notes: exNotes.trim() || null,
-        category_id: exCategoryId,
-        type: exType,
-        weight_unit: weightUnit,
-        weight_increment: weightIncrement,
-        default_rest_seconds: defaultRest,
-        default_chart: exDefaultChart,
-      });
-      if (error || !data) { Alert.alert("Error", error?.message ?? t("exercises:genericError")); setSaving(false); return; }
+      const { data, error } = await repo.updateExercise(editingExercise.id, patch);
+      if (error || !data) return error?.message ?? t("exercises:genericError");
       updateExercise(editingExercise.id, {
         name: data.name,
         notes: data.notes ?? undefined,
+        demo_url: data.demo_url ?? undefined,
         category_id: data.category_id ?? "",
         type: data.type as ExerciseType,
         weight_unit: data.weight_unit as "kg" | "lb",
@@ -266,17 +188,12 @@ export default function ExercisesScreen() {
         default_rest_seconds: data.default_rest_seconds ?? undefined,
         default_chart: (data.default_chart ?? "weight") as "weight" | "volume" | "reps",
       });
-      if (convertFactor) {
-        await remoteExerciseRepo.convertExerciseWeights(editingExercise.id, convertFactor);
+      if (opts.convertFactor) {
+        await remoteExerciseRepo.convertExerciseWeights(editingExercise.id, opts.convertFactor);
       }
-      setSaving(false);
-      setShowModal(false);
     } else {
-      const { data, error } = await repo.createExercise(
-        { name: exName.trim(), notes: exNotes.trim() || null, category_id: exCategoryId, type: exType, weight_unit: weightUnit, weight_increment: weightIncrement, default_rest_seconds: defaultRest, default_chart: exDefaultChart },
-        userId
-      );
-      if (error || !data) { Alert.alert("Error", error?.message ?? t("exercises:genericError")); setSaving(false); return; }
+      const { data, error } = await repo.createExercise(patch, userId);
+      if (error || !data) return error?.message ?? t("exercises:genericError");
       addExercise({
         id: data.id,
         name: data.name,
@@ -284,70 +201,14 @@ export default function ExercisesScreen() {
         type: data.type as ExerciseType,
         weight_unit: data.weight_unit as "kg" | "lb",
         notes: data.notes ?? undefined,
+        demo_url: data.demo_url ?? undefined,
         is_favorite: data.is_favorite,
         created_at: data.created_at,
         weight_increment: data.weight_increment ?? undefined,
         default_rest_seconds: data.default_rest_seconds ?? undefined,
         default_chart: (data.default_chart ?? "weight") as "weight" | "volume" | "reps",
       });
-      setSaving(false);
-      setShowModal(false);
     }
-  }
-
-  /**
-   * Punto de entrada al guardar desde el modal: si el tipo o la unidad de
-   * peso cambiaron respecto al ejercicio original, muestra alertas de
-   * confirmación (el cambio de tipo puede eliminar campos del historial; el
-   * cambio de unidad ofrece elegir entre solo re-etiquetar o convertir los
-   * valores históricos) antes de llamar a `doSave`.
-   */
-  function handleSave() {
-    const typeChanged = editingExercise && exType !== editingExercise.type;
-    const isWeightType = WEIGHT_TYPES.includes(exType);
-    const unitChanged = editingExercise && isWeightType && exWeightUnit !== (editingExercise.weight_unit ?? "kg");
-    const convFactor = editingExercise
-      ? ((editingExercise.weight_unit ?? "kg") === "kg" ? 2.20462 : 0.453592)
-      : undefined;
-
-    function showUnitAlert(onConfirm: () => void, onConfirmConvert: () => void) {
-      Alert.alert(
-        t("exercises:changeWeightUnitTitleMobile"),
-        t("exercises:changeWeightUnitMessageMobile", { unit: exWeightUnit }),
-        [
-          { text: t("common:cancel"), style: "cancel" },
-          { text: t("exercises:changeWeightUnitLabelOnlyMobile"), onPress: onConfirm },
-          { text: t("exercises:changeWeightUnitConvertMobile"), onPress: onConfirmConvert },
-        ]
-      );
-    }
-
-    if (typeChanged) {
-      Alert.alert(
-        t("exercises:changeTypeTitleMobile"),
-        t("exercises:changeTypeMessageMobile"),
-        [
-          { text: t("common:cancel"), style: "cancel" },
-          {
-            text: t("exercises:changeTypeConfirmMobile"), style: "destructive", onPress: () => {
-              if (unitChanged) {
-                showUnitAlert(() => doSave(), () => doSave(convFactor));
-              } else {
-                doSave();
-              }
-            },
-          },
-        ]
-      );
-      return;
-    }
-
-    if (unitChanged) {
-      showUnitAlert(() => doSave(), () => doSave(convFactor));
-      return;
-    }
-
-    doSave();
   }
 
   /** Invierte el estado de favorito de un ejercicio, persistiendo en el repo y actualizando el store. */
@@ -632,197 +493,14 @@ export default function ExercisesScreen() {
       </Modal>
 
       {/* Create / Edit Exercise Modal */}
-      <Modal visible={showModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowModal(false)}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
-              <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>
-                {editingExercise ? t("exercises:editExerciseHeading") : t("exercises:newExerciseHeading")}
-              </Text>
-              <TouchableOpacity onPress={() => setShowModal(false)} accessibilityLabel={t("exercises:closeModalLabel")}>
-                <Ionicons name="close" size={24} color="#64748b" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView contentContainerStyle={{ padding: 20, gap: 20 }} keyboardShouldPersistTaps="handled">
-              {/* Name */}
-              <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>{t("exercises:nameLabel")}</Text>
-                <TextInput
-                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 }}
-                  placeholder={t("exercises:namePlaceholderExercise")}
-                  value={exName}
-                  onChangeText={setExName}
-                  autoFocus={!editingExercise}
-                />
-              </View>
-
-              {/* Notes */}
-              <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>{t("exercises:notesLabel")}</Text>
-                <TextInput
-                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, minHeight: 80, textAlignVertical: "top" }}
-                  placeholder={t("exercises:notesPlaceholderMobile")}
-                  value={exNotes}
-                  onChangeText={setExNotes}
-                  multiline
-                  numberOfLines={3}
-                />
-              </View>
-
-              {/* Category */}
-              <View style={{ gap: 8 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>{t("exercises:categoryLabel")}</Text>
-                {modalCategories.length > 0 && (
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                    {modalCategories.map((cat) => (
-                      <TouchableOpacity
-                        key={cat.id}
-                        onPress={() => { setExCategoryId(cat.id); setShowNewCat(false); }}
-                        style={{ flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 20, borderWidth: 2, borderColor: exCategoryId === cat.id ? cat.color : "#e2e8f0", backgroundColor: exCategoryId === cat.id ? cat.color + "18" : "transparent", paddingHorizontal: 14, paddingVertical: 7 }}
-                      >
-                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: cat.color }} />
-                        <Text style={{ fontSize: 13, fontWeight: "500", color: "#0f172a" }}>{cat.name}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-                <TouchableOpacity
-                  onPress={() => setShowNewCat((v) => !v)}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 }}
-                >
-                  <Ionicons name={showNewCat ? "close" : "add"} size={16} color="#6366f1" />
-                  <Text style={{ fontSize: 13, fontWeight: "500", color: "#6366f1" }}>
-                    {showNewCat ? t("common:cancel") : t("exercises:newCategoryHeading")}
-                  </Text>
-                </TouchableOpacity>
-                {showNewCat && (
-                  <View style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, padding: 14, gap: 12, backgroundColor: "#f8fafc" }}>
-                    <TextInput
-                      style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, backgroundColor: "#fff" }}
-                      placeholder={t("exercises:newCategoryNamePlaceholder")}
-                      value={newCatName}
-                      onChangeText={setNewCatName}
-                    />
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                      {PRESET_COLORS.map((c) => (
-                        <TouchableOpacity
-                          key={c}
-                          onPress={() => setNewCatColor(c)}
-                          style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: c, borderWidth: 2.5, borderColor: newCatColor === c ? "#0f172a" : "transparent" }}
-                        />
-                      ))}
-                    </View>
-                    <TouchableOpacity
-                      onPress={handleCreateCategory}
-                      disabled={catSaving || !newCatName.trim()}
-                      style={{ backgroundColor: "#6366f1", borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: catSaving || !newCatName.trim() ? 0.5 : 1 }}
-                    >
-                      <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>
-                        {catSaving ? t("exercises:creatingButton") : t("exercises:createCategoryButton")}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-
-              {/* Type */}
-              <View style={{ gap: 8 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>{t("exercises:typeLabel")}</Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {TYPE_OPTIONS.map(({ value, label }) => (
-                    <TouchableOpacity
-                      key={value}
-                      onPress={() => setExType(value)}
-                      style={{ borderRadius: 10, borderWidth: 1.5, borderColor: exType === value ? "#6366f1" : "#e2e8f0", backgroundColor: exType === value ? "#6366f1" : "transparent", paddingHorizontal: 14, paddingVertical: 8 }}
-                    >
-                      <Text style={{ fontSize: 13, fontWeight: "500", color: exType === value ? "#fff" : "#374151" }}>{label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Weight unit — only for weight-based types */}
-              {WEIGHT_TYPES.includes(exType) && (
-                <View style={{ gap: 8 }}>
-                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>{t("exercises:weightUnitFieldLabel")}</Text>
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    {(["kg", "lb"] as const).map((unit) => (
-                      <TouchableOpacity
-                        key={unit}
-                        onPress={() => setExWeightUnit(unit)}
-                        style={{ flex: 1, borderRadius: 10, borderWidth: 1.5, borderColor: exWeightUnit === unit ? "#6366f1" : "#e2e8f0", backgroundColor: exWeightUnit === unit ? "#6366f1" : "transparent", paddingVertical: 10, alignItems: "center" }}
-                      >
-                        <Text style={{ fontSize: 14, fontWeight: "600", color: exWeightUnit === unit ? "#fff" : "#374151" }}>{unit}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Weight increment + Rest — only for weight-based types */}
-              {WEIGHT_TYPES.includes(exType) && (
-                <View style={{ flexDirection: "row", gap: 12 }}>
-                  <View style={{ flex: 1, gap: 6 }}>
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>{t("exercises:weightIncrementFieldLabelMobile")}</Text>
-                    <View style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, overflow: "hidden" }}>
-                      <TextInput
-                        style={{ flex: 1, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, textAlign: "center" }}
-                        keyboardType="decimal-pad"
-                        value={exWeightIncrement}
-                        onChangeText={setExWeightIncrement}
-                        placeholder="2.5"
-                      />
-                      <Text style={{ paddingRight: 10, fontSize: 13, color: "#94a3b8" }}>{exWeightUnit}</Text>
-                    </View>
-                  </View>
-                  <View style={{ flex: 1, gap: 6 }}>
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>{t("exercises:restSecondsFieldLabelMobile")}</Text>
-                    <TextInput
-                      style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, textAlign: "center" }}
-                      keyboardType="number-pad"
-                      value={exDefaultRest}
-                      onChangeText={setExDefaultRest}
-                      placeholder="90"
-                    />
-                  </View>
-                </View>
-              )}
-
-              {/* Default chart */}
-              <View style={{ gap: 8 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>{t("exercises:defaultChartFieldLabelMobile")}</Text>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  {([["weight", t("exercises:chartOptionWeightMobile")], ["volume", t("exercises:chartOptionVolumeMobile")], ["reps", t("exercises:chartOptionRepsMobile")]] as ["weight" | "volume" | "reps", string][]).map(([key, label]) => (
-                    <TouchableOpacity
-                      key={key}
-                      onPress={() => setExDefaultChart(key)}
-                      style={{ flex: 1, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, borderColor: exDefaultChart === key ? "#6366f1" : "#e2e8f0", backgroundColor: exDefaultChart === key ? "#6366f1" : "transparent", alignItems: "center" }}
-                    >
-                      <Text style={{ fontSize: 11, fontWeight: "600", color: exDefaultChart === key ? "#fff" : "#64748b" }}>{label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Actions */}
-              <View style={{ marginTop: 4, gap: 8 }}>
-                <TouchableOpacity
-                  onPress={() => handleSave()}
-                  disabled={saving}
-                  style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: saving ? 0.6 : 1 }}
-                >
-                  <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>
-                    {saving
-                      ? (editingExercise ? t("exercises:savingButton") : t("exercises:creatingButton"))
-                      : (editingExercise ? t("exercises:saveChangesButton") : t("exercises:createExerciseButtonMobile"))}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </SafeAreaView>
-        </KeyboardAvoidingView>
-      </Modal>
+      <ExerciseFormModal
+        visible={showModal}
+        editingExercise={editingExercise}
+        categories={categories}
+        onClose={() => setShowModal(false)}
+        onCreateCategory={createCategory}
+        onSubmit={handleExerciseSubmit}
+      />
 
       {/* Category Management Modal */}
       <Modal
@@ -966,7 +644,7 @@ const ExerciseRow = memo(function ExerciseRow({
         {category && <View style={{ width: 4, height: statsLine ? 44 : 36, borderRadius: 2, backgroundColor: category.color }} />}
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 14, fontWeight: "500", color: "#0f172a" }}>{ex.name}</Text>
-          <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>{ex.type.replace(/_/g, " ").toLowerCase()}</Text>
+          <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>{t(`exercises:types.${ex.type}`)}</Text>
           {statsLine && <Text style={{ fontSize: 11, color: "#cbd5e1", marginTop: 2 }}>{statsLine}</Text>}
         </View>
       </View>
