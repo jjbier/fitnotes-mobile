@@ -102,6 +102,7 @@ export default function RoutineDetailScreen() {
           notes: ex.notes ?? undefined,
           is_favorite: ex.is_favorite,
           created_at: ex.created_at,
+          demo_url: ex.demo_url ?? undefined,
         })));
       }
 

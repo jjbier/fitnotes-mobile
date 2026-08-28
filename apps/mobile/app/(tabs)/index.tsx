@@ -152,6 +152,7 @@ export default function HomeScreen() {
           id: ex.id, name: ex.name, category_id: ex.category_id ?? "",
           type: ex.type as ExerciseType, weight_unit: ex.weight_unit as "kg" | "lb",
           notes: ex.notes ?? undefined, is_favorite: ex.is_favorite, created_at: ex.created_at,
+          demo_url: ex.demo_url ?? undefined,
         })));
       }
       await loadRecentWorkouts();

@@ -237,6 +237,7 @@ function AppContent() {
               weight_increment: ex.weight_increment ?? undefined,
               default_rest_seconds: ex.default_rest_seconds ?? undefined,
               default_chart: (ex.default_chart ?? "weight") as "weight" | "volume" | "reps",
+              demo_url: ex.demo_url ?? undefined,
             }))
           );
         }

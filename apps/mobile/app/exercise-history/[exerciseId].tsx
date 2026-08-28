@@ -101,6 +101,8 @@ export default function ExerciseHistoryScreen() {
   const estRepLimit = estimatedRecordsRepLimit && estimatedRecordsRepLimit > 0 ? estimatedRecordsRepLimit : undefined;
   const [exportingImage, setExportingImage] = useState(false);
   const chartShotRef = useRef<ViewShot>(null);
+  /** `true` si `Image` no pudo decodificar `demo_url` (p.ej. formatos como AVIF sin soporte fiable en Android) — cae a un enlace "abrir" en vez de un recuadro vacío. */
+  const [demoImageFailed, setDemoImageFailed] = useState(false);
 
   /** Captura el `ViewShot` que envuelve el gráfico como PNG y lo comparte con el share sheet nativo, si está disponible. */
   async function handleExportImage() {
@@ -179,6 +181,11 @@ export default function ExerciseHistoryScreen() {
       setCopyingSetId(null);
     }
   }
+
+  // Reintenta la imagen si cambia la URL (p.ej. al navegar a otro ejercicio o tras editarla).
+  useEffect(() => {
+    setDemoImageFailed(false);
+  }, [storeExercise?.demo_url]);
 
   useEffect(() => {
     async function load() {
@@ -381,28 +388,37 @@ export default function ExerciseHistoryScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.backgroundAlt }}>
       {/* Header */}
-      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, backgroundColor: colors.background, borderBottomWidth: 1, borderColor: colors.borderLight }}>
+      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 36, paddingBottom: 20, backgroundColor: colors.background, borderBottomWidth: 1, borderColor: colors.borderLight }}>
         <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={28} color={colors.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 20, fontWeight: "700", color: colors.text }} numberOfLines={1}>{name ?? "Historial"}</Text>
+          <Text style={{ fontSize: 24, fontWeight: "700", color: colors.text }} numberOfLines={1}>{name ?? "Historial"}</Text>
           <Text style={{ fontSize: 12, color: colors.textMuted }}>
             {loading ? "Cargando…" : `${sessions.length} ${sessions.length === 1 ? "sesión" : "sesiones"}`}
           </Text>
         </View>
       </View>
 
+      {/* Notes */}
+      {storeExercise?.notes && (
+        <View style={{ backgroundColor: colors.background, borderBottomWidth: 1, borderColor: colors.borderLight, padding: 16, gap: 8 }}>
+          <Text style={{ fontSize: 13, fontWeight: "600", color: colors.text }}>{t("exercises:notesLabel")}</Text>
+          <Text style={{ fontSize: 14, color: colors.textSecondary, lineHeight: 20 }}>{storeExercise.notes}</Text>
+        </View>
+      )}
+
       {/* Demo image/video */}
       {storeExercise?.demo_url && (
         <View style={{ backgroundColor: colors.background, borderBottomWidth: 1, borderColor: colors.borderLight, padding: 16, gap: 8 }}>
           <Text style={{ fontSize: 13, fontWeight: "600", color: colors.text }}>{t("exercises:demoUrlSectionHeading")}</Text>
-          {isImageUrl(storeExercise.demo_url) ? (
+          {isImageUrl(storeExercise.demo_url) && !demoImageFailed ? (
             <Image
               source={{ uri: storeExercise.demo_url }}
               style={{ width: "100%", height: 180, borderRadius: 12, backgroundColor: colors.borderLight }}
               resizeMode="cover"
               accessibilityLabel={t("exercises:demoUrlImageAlt", { name: storeExercise.name })}
+              onError={() => setDemoImageFailed(true)}
             />
           ) : (
             <TouchableOpacity onPress={() => Linking.openURL(storeExercise.demo_url!)}>
