@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import { SafeAreaView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, FlatList, ScrollView, Vibration, useWindowDimensions } from "react-native";
 import * as FileSystem from "expo-file-system";
 import { Audio } from "expo-av";
+import { useTranslation } from "react-i18next";
 import { useTheme } from "../../lib/theme";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -64,6 +65,7 @@ const GROUP_COLORS = ["#6366f1", "#ec4899", "#f59e0b", "#10b981"];
 export default function TrainingScreen() {
   const { exerciseId } = useLocalSearchParams<{ exerciseId: string }>();
   const router = useRouter();
+  const { t } = useTranslation();
 
   const exercises = useExerciseStore((s) => s.exercises);
   const exercise = exercises.find((e) => e.id === exerciseId);
@@ -520,7 +522,7 @@ export default function TrainingScreen() {
         </TouchableOpacity>
         <View style={{ alignItems: "center" }}>
           <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>{exercise?.name ?? "Ejercicio"}</Text>
-          <Text style={{ fontSize: 11, color: "#94a3b8" }}>{exerciseType.replace(/_/g, " ").toLowerCase()}</Text>
+          <Text style={{ fontSize: 11, color: "#94a3b8" }}>{t(`exercises:types.${exerciseType}`)}</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
           <TouchableOpacity onPress={handleGroupMenu} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Superset">
@@ -1127,6 +1129,7 @@ const ExercisePickerItem = memo(function ExercisePickerItem({
   type: string;
   onPress: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <TouchableOpacity
       onPress={() => onPress(id)}
@@ -1134,7 +1137,7 @@ const ExercisePickerItem = memo(function ExercisePickerItem({
     >
       <View style={{ flex: 1 }}>
         <Text style={{ fontSize: 14, fontWeight: "500", color: "#0f172a" }}>{name}</Text>
-        <Text style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{type.replace(/_/g, " ").toLowerCase()}</Text>
+        <Text style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{t(`exercises:types.${type}`)}</Text>
       </View>
       <Ionicons name="add-circle-outline" size={20} color="#6366f1" />
     </TouchableOpacity>
