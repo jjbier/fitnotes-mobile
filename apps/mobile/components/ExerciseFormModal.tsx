@@ -79,7 +79,7 @@ export default function ExerciseFormModal({
   const [exCategoryId, setExCategoryId] = useState("");
   const [exType, setExType] = useState<ExerciseType>(ExerciseType.WEIGHT_REPS);
   const [exWeightUnit, setExWeightUnit] = useState<"kg" | "lb">("kg");
-  const [exWeightIncrement, setExWeightIncrement] = useState("2.5");
+  const [exWeightIncrement, setExWeightIncrement] = useState("1");
   const [exDefaultRest, setExDefaultRest] = useState("90");
   const [exDefaultChart, setExDefaultChart] = useState<"weight" | "volume" | "reps">("weight");
   const [saving, setSaving] = useState(false);
@@ -109,7 +109,7 @@ export default function ExerciseFormModal({
       setExCategoryId(defaultCategoryId ?? categories[0]?.id ?? "");
       setExType(ExerciseType.WEIGHT_REPS);
       setExWeightUnit("kg");
-      setExWeightIncrement("2.5");
+      setExWeightIncrement("1");
       setExDefaultRest("90");
       setExDefaultChart("weight");
     }
@@ -142,7 +142,7 @@ export default function ExerciseFormModal({
       category_id: exCategoryId,
       type: exType,
       weight_unit: WEIGHT_TYPES.includes(exType) ? exWeightUnit : "kg",
-      weight_increment: parseFloat(exWeightIncrement) || 2.5,
+      weight_increment: parseFloat(exWeightIncrement) || 1,
       default_rest_seconds: parseInt(exDefaultRest, 10) || 90,
       default_chart: exDefaultChart,
     };
@@ -357,7 +357,7 @@ export default function ExerciseFormModal({
                       keyboardType="decimal-pad"
                       value={exWeightIncrement}
                       onChangeText={setExWeightIncrement}
-                      placeholder="2.5"
+                      placeholder="1"
                     />
                     <Text style={{ paddingRight: 10, fontSize: 13, color: "#94a3b8" }}>{exWeightUnit}</Text>
                   </View>
