@@ -101,9 +101,10 @@ export default function ExerciseCategoryScreen() {
     : exercises.filter((e) => e.category_id === categoryId);
 
   const filtered = filterExercises(categoryExercises, search);
+  const byName = (a: Exercise, b: Exercise) => a.name.localeCompare(b.name, "es", { sensitivity: "base" });
   const sorted = [
-    ...filtered.filter((e) => e.is_favorite),
-    ...filtered.filter((e) => !e.is_favorite),
+    ...filtered.filter((e) => e.is_favorite).sort(byName),
+    ...filtered.filter((e) => !e.is_favorite).sort(byName),
   ];
 
   /** Abre `ExerciseFormModal` en modo creación (sin ejercicio precargado). */
