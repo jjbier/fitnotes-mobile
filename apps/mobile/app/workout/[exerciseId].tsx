@@ -470,6 +470,26 @@ export default function TrainingScreen() {
     }
   }
 
+  /**
+   * Saca a un ejercicio de su superset. Si tras salir solo queda un miembro en ese grupo,
+   * lo disuelve del todo (lo saca también a él) — un superset de un único ejercicio no
+   * tiene sentido y dejaría el badge "Superset" huérfano sin compañero.
+   */
+  async function handleUngroup(weId: string) {
+    const we = workoutExercises.find((w) => w.id === weId);
+    const groupId = we?.group_id;
+    ungroupExercise(weId);
+    await repo.updateWorkoutExercise(weId, { group_id: null });
+    if (groupId) {
+      const remaining = workoutExercises.filter((w) => w.group_id === groupId && w.id !== weId);
+      if (remaining.length === 1) {
+        const last = remaining[0]!;
+        ungroupExercise(last.id);
+        await repo.updateWorkoutExercise(last.id, { group_id: null });
+      }
+    }
+  }
+
   const exerciseType = (exercise?.type ?? ExerciseType.WEIGHT_REPS) as ExerciseType;
   const showWeight = [ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHT_ONLY, ExerciseType.WEIGHT_DISTANCE, ExerciseType.WEIGHT_TIME].includes(exerciseType);
   const showReps = [ExerciseType.WEIGHT_REPS, ExerciseType.REPS_ONLY, ExerciseType.REPS_DISTANCE, ExerciseType.REPS_TIME].includes(exerciseType);
@@ -1034,8 +1054,7 @@ export default function TrainingScreen() {
                 <TouchableOpacity
                   onPress={() => {
                     setShowGroupMenu(false);
-                    ungroupExercise(workoutExercise.id);
-                    void repo.updateWorkoutExercise(workoutExercise.id, { group_id: null });
+                    void handleUngroup(workoutExercise.id);
                   }}
                   style={{ paddingVertical: 14, paddingHorizontal: 16 }}
                 >
