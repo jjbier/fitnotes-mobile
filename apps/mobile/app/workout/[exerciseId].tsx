@@ -525,6 +525,12 @@ export default function TrainingScreen() {
             const weSets = sets[we.id] ?? [];
             const completedCount = weSets.filter((s) => s.is_complete).length;
             const totalCount = weSets.length;
+            // La pestaña del ejercicio actual no navega a ningún sitio (ya estás en él); solo aporta
+            // información útil cuando pertenece a un superset (badge de grupo). Fuera de un superset
+            // es redundante con el título del header, así que se omite (salvo mientras se arrastra).
+            if (isCurrent && !we.group_id && !isActive) {
+              return <View />;
+            }
             return (
               <ScaleDecorator activeScale={0.95}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
