@@ -476,47 +476,56 @@ export default function CalendarScreen() {
                   <ActivityIndicator color={theme.primary} />
                 </View>
               ) : (
-                <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-                  {Array.from({ length: firstDow }).map((_, i) => (
-                    <View key={`e${i}`} style={{ width: `${100/7}%`, aspectRatio: 1 }} />
-                  ))}
-                  {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
-                    const dateStr = `${year}-${pad(month)}-${pad(day)}`;
-                    const hasWorkout = workoutDates.has(dateStr);
-                    const matchesFilter = !isFiltered || activeFilterDates!.has(dateStr);
-                    const dimmed = isFiltered && hasWorkout && !matchesFilter;
-                    const isToday = dateStr === today;
-                    const isSelected = dateStr === selectedDate;
-                    const dots = showCategoryDots
-                      ? (categoryColors[dateStr] ?? (hasWorkout ? [theme.primary] : []))
-                      : (hasWorkout ? [theme.primary] : []);
-                    const visibleDots = dots.slice(0, showCategoryDots ? 4 : 1);
-                    return (
-                      <TouchableOpacity
-                        key={day}
-                        onPress={() => handleSelectDate(dateStr)}
-                        style={{ width: `${100/7}%`, aspectRatio: 1, alignItems: "center", justifyContent: "center", opacity: dimmed ? 0.3 : 1 }}
-                      >
-                        <View style={{
-                          width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center",
-                          backgroundColor: isSelected ? theme.primary : "transparent",
-                          borderWidth: isToday && !isSelected ? 2 : (isFiltered && matchesFilter && hasWorkout && !isSelected ? 1.5 : 0),
-                          borderColor: theme.primary,
-                        }}>
-                          <Text style={{ fontSize: 14, fontWeight: isToday || hasWorkout ? "600" : "400", color: isSelected ? "#fff" : isToday ? theme.primary : theme.text }}>
-                            {day}
-                          </Text>
-                          {visibleDots.length > 0 && (
-                            <View style={{ flexDirection: "row", gap: 2, position: "absolute", bottom: 2 }}>
-                              {visibleDots.map((color, ci) => (
-                                <View key={ci} style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: isSelected ? "#fff" : color }} />
-                              ))}
+                // Filas explícitas de 7 celdas con `flex: 1` en vez de `width: "100/7%"` +
+                // flexWrap: el redondeo a píxeles de un ancho no entero (14.2857...%) acumulado
+                // sobre 7 celdas podía no caber en el ancho de la fila y provocar un salto de
+                // línea prematuro (6 celdas en vez de 7), desplazando el resto del mes una columna.
+                <View>
+                  {Array.from({ length: Math.ceil((firstDow + daysInMonth) / 7) }, (_, rowIndex) => (
+                    <View key={rowIndex} style={{ flexDirection: "row" }}>
+                      {Array.from({ length: 7 }, (_, colIndex) => {
+                        const day = rowIndex * 7 + colIndex - firstDow + 1;
+                        if (day < 1 || day > daysInMonth) {
+                          return <View key={colIndex} style={{ flex: 1, aspectRatio: 1 }} />;
+                        }
+                        const dateStr = `${year}-${pad(month)}-${pad(day)}`;
+                        const hasWorkout = workoutDates.has(dateStr);
+                        const matchesFilter = !isFiltered || activeFilterDates!.has(dateStr);
+                        const dimmed = isFiltered && hasWorkout && !matchesFilter;
+                        const isToday = dateStr === today;
+                        const isSelected = dateStr === selectedDate;
+                        const dots = showCategoryDots
+                          ? (categoryColors[dateStr] ?? (hasWorkout ? [theme.primary] : []))
+                          : (hasWorkout ? [theme.primary] : []);
+                        const visibleDots = dots.slice(0, showCategoryDots ? 4 : 1);
+                        return (
+                          <TouchableOpacity
+                            key={day}
+                            onPress={() => handleSelectDate(dateStr)}
+                            style={{ flex: 1, aspectRatio: 1, alignItems: "center", justifyContent: "center", opacity: dimmed ? 0.3 : 1 }}
+                          >
+                            <View style={{
+                              width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center",
+                              backgroundColor: isSelected ? theme.primary : "transparent",
+                              borderWidth: isToday && !isSelected ? 2 : (isFiltered && matchesFilter && hasWorkout && !isSelected ? 1.5 : 0),
+                              borderColor: theme.primary,
+                            }}>
+                              <Text style={{ fontSize: 14, fontWeight: isToday || hasWorkout ? "600" : "400", color: isSelected ? "#fff" : isToday ? theme.primary : theme.text }}>
+                                {day}
+                              </Text>
+                              {visibleDots.length > 0 && (
+                                <View style={{ flexDirection: "row", gap: 2, position: "absolute", bottom: 2 }}>
+                                  {visibleDots.map((color, ci) => (
+                                    <View key={ci} style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: isSelected ? "#fff" : color }} />
+                                  ))}
+                                </View>
+                              )}
                             </View>
-                          )}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ))}
                 </View>
               )}
             </Animated.View>
