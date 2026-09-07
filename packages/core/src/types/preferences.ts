@@ -39,15 +39,15 @@ export interface UserPreferences {
 
 /**
  * Valores por defecto para un usuario/dispositivo sin preferencias guardadas
- * todavía (invitado nuevo o primera hidratación): kg, incremento de 2.5,
+ * todavía (invitado nuevo o primera hidratación): kg, incremento de 1,
  * semana empezando en lunes, 90s de descanso con sonido al 80% de volumen,
  * sin límite de reps para PRs estimados y ninguna categoría oculta.
  */
 export const DEFAULT_PREFERENCES: UserPreferences = {
-  theme_preference: "system",
+  theme_preference: "light",
   display_name: "",
   weight_unit: "kg",
-  default_weight_increment: 2.5,
+  default_weight_increment: 1,
   calendar_week_start: 1,
   auto_select_next_set: true,
   track_personal_records: true,

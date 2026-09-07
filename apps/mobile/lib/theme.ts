@@ -26,7 +26,7 @@ interface ThemeModeState {
  * arrancar y tras un wipe; este store en sí no persiste nada por su cuenta.
  */
 export const useThemeModeStore = create<ThemeModeState>((set) => ({
-  mode: "system",
+  mode: "light",
   setMode: (mode) => set({ mode }),
 }));
 

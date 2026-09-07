@@ -119,7 +119,7 @@ export default function SettingsScreen() {
   // inválidos mientras se escribe, sincronizado desde `preferences` al cargar.
   const [displayName, setDisplayName] = useState("");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [defaultWeightIncrement, setDefaultWeightIncrement] = useState("2.5");
+  const [defaultWeightIncrement, setDefaultWeightIncrement] = useState("1");
   const [defaultRestSeconds, setDefaultRestSeconds] = useState("90");
   const [restTimerVolume, setRestTimerVolume] = useState("80");
   const [estimatedRecordsRepLimit, setEstimatedRecordsRepLimit] = useState("");
@@ -585,7 +585,7 @@ export default function SettingsScreen() {
               keyboardType="decimal-pad"
               value={defaultWeightIncrement}
               onChangeText={handleDefaultIncrementChange}
-              placeholder="2.5"
+              placeholder="1"
               placeholderTextColor="#94a3b8"
             />
           </View>
@@ -725,7 +725,7 @@ export default function SettingsScreen() {
         {/* Appearance */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t("settings:sections.appearance")}</Text>
-          <View style={styles.prefRow}>
+          <View style={[styles.prefRow, styles.prefRowWrap]}>
             <View>
               <Text style={styles.prefLabel}>{t("settings:theme.label")}</Text>
               <Text style={styles.prefSub}>{t("settings:theme.description")}</Text>
@@ -1151,6 +1151,7 @@ const styles = StyleSheet.create({
   btnDanger: { borderWidth: 1, borderColor: "#ef4444" },
   btnDangerText: { color: "#ef4444", fontSize: 14, fontWeight: "500" },
   prefRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  prefRowWrap: { flexWrap: "wrap", rowGap: 8 },
   prefLabel: { fontSize: 13, fontWeight: "500", color: "#0f172a" },
   prefSub: { fontSize: 11, color: "#94a3b8", marginTop: 1 },
   unitToggle: { flexDirection: "row", borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, overflow: "hidden" },
