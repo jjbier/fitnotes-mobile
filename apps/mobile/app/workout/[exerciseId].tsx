@@ -110,6 +110,7 @@ export default function TrainingScreen() {
   const [addSearch, setAddSearch] = useState("");
   const [showRenameGroup, setShowRenameGroup] = useState(false);
   const [renameGroupText, setRenameGroupText] = useState("");
+  const [showGroupMenu, setShowGroupMenu] = useState(false);
 
   const [workoutTab, setWorkoutTab] = useState<"sets" | "history" | "chart">("sets");
   const [historySessions, setHistorySessions] = useState<HistorySession[]>([]);
@@ -446,52 +447,14 @@ export default function TrainingScreen() {
   }, []);
 
   /**
-   * Menú de superset para el ejercicio actual: si ya está agrupado, ofrece renombrar el
-   * grupo o salir de él; si no, ofrece agruparlo con el ejercicio anterior y/o siguiente
-   * en el orden del entrenamiento (según cuáles existan).
+   * Abre el menú de superset del ejercicio actual (modal propio, no `Alert.alert`, para
+   * controlar el layout de las opciones): si ya está agrupado, ofrece renombrar el grupo
+   * o salir de él; si no, ofrece agruparlo con el ejercicio anterior y/o siguiente en el
+   * orden del entrenamiento (según cuáles existan).
    */
   function handleGroupMenu() {
     if (!workoutExercise) return;
-    const currentIdx = sorted.findIndex((we) => we.id === workoutExercise.id);
-    const hasNext = currentIdx < sorted.length - 1;
-    const hasPrev = currentIdx > 0;
-
-    if (workoutExercise.group_id) {
-      Alert.alert("Superset", workoutExercise.group_name ?? "Superset", [
-        {
-          text: "Renombrar grupo",
-          onPress: () => {
-            setRenameGroupText(workoutExercise.group_name ?? "");
-            setShowRenameGroup(true);
-          },
-        },
-        {
-          text: "Quitar del grupo",
-          style: "destructive",
-          onPress: () => {
-            ungroupExercise(workoutExercise.id);
-            void repo.updateWorkoutExercise(workoutExercise.id, { group_id: null });
-          },
-        },
-        { text: "Cancelar", style: "cancel" },
-      ]);
-    } else {
-      const options: { text: string; onPress?: () => void; style?: "cancel" | "destructive" }[] = [];
-      if (hasNext) {
-        options.push({
-          text: "Agrupar con siguiente",
-          onPress: () => handleJoinGroup(workoutExercise.id, sorted[currentIdx + 1]!.id),
-        });
-      }
-      if (hasPrev) {
-        options.push({
-          text: "Agrupar con anterior",
-          onPress: () => handleJoinGroup(workoutExercise.id, sorted[currentIdx - 1]!.id),
-        });
-      }
-      options.push({ text: "Cancelar", style: "cancel" });
-      Alert.alert("Superset", "Agrupar este ejercicio", options);
-    }
+    setShowGroupMenu(true);
   }
 
   /** Une dos ejercicios del entrenamiento al mismo grupo de superset, reutilizando el `group_id` del socio si ya pertenece a uno, o creando uno nuevo. */
@@ -1046,6 +1009,78 @@ export default function TrainingScreen() {
           </ScrollView>
         )
       )}
+
+      {/* Group (superset) menu modal */}
+      <Modal visible={showGroupMenu} animationType="fade" transparent onRequestClose={() => setShowGroupMenu(false)}>
+        <TouchableOpacity activeOpacity={1} onPress={() => setShowGroupMenu(false)} style={{ flex: 1, backgroundColor: "#00000060", justifyContent: "center", paddingHorizontal: 32 }}>
+          <View onStartShouldSetResponder={() => true} style={{ backgroundColor: "#fff", borderRadius: 16, paddingVertical: 8, gap: 2 }}>
+            <Text style={{ fontSize: 13, fontWeight: "600", color: "#94a3b8", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 }} numberOfLines={2}>
+              {workoutExercise?.group_id ? (workoutExercise.group_name || "Superset") : "Agrupar este ejercicio"}
+            </Text>
+            {workoutExercise?.group_id ? (
+              <>
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowGroupMenu(false);
+                    setRenameGroupText(workoutExercise.group_name ?? "");
+                    setShowRenameGroup(true);
+                  }}
+                  style={{ paddingVertical: 14, paddingHorizontal: 16 }}
+                >
+                  <Text style={{ fontSize: 15, color: "#0f172a" }}>Renombrar grupo</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowGroupMenu(false);
+                    ungroupExercise(workoutExercise.id);
+                    void repo.updateWorkoutExercise(workoutExercise.id, { group_id: null });
+                  }}
+                  style={{ paddingVertical: 14, paddingHorizontal: 16 }}
+                >
+                  <Text style={{ fontSize: 15, color: "#ef4444" }}>Quitar del grupo</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              (() => {
+                if (!workoutExercise) return null;
+                const currentIdx = sorted.findIndex((we) => we.id === workoutExercise.id);
+                const hasNext = currentIdx < sorted.length - 1;
+                const hasPrev = currentIdx > 0;
+                return (
+                  <>
+                    {hasNext && (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setShowGroupMenu(false);
+                          handleJoinGroup(workoutExercise.id, sorted[currentIdx + 1]!.id);
+                        }}
+                        style={{ paddingVertical: 14, paddingHorizontal: 16 }}
+                      >
+                        <Text style={{ fontSize: 15, color: "#0f172a" }}>Agrupar con siguiente</Text>
+                      </TouchableOpacity>
+                    )}
+                    {hasPrev && (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setShowGroupMenu(false);
+                          handleJoinGroup(workoutExercise.id, sorted[currentIdx - 1]!.id);
+                        }}
+                        style={{ paddingVertical: 14, paddingHorizontal: 16 }}
+                      >
+                        <Text style={{ fontSize: 15, color: "#0f172a" }}>Agrupar con anterior</Text>
+                      </TouchableOpacity>
+                    )}
+                  </>
+                );
+              })()
+            )}
+            <View style={{ height: 1, backgroundColor: "#f1f5f9", marginTop: 4, marginHorizontal: 16 }} />
+            <TouchableOpacity onPress={() => setShowGroupMenu(false)} style={{ paddingVertical: 14, paddingHorizontal: 16 }}>
+              <Text style={{ fontSize: 15, fontWeight: "600", color: "#6366f1", textAlign: "center" }}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Rename group modal */}
       <Modal visible={showRenameGroup} animationType="fade" transparent onRequestClose={() => setShowRenameGroup(false)}>
