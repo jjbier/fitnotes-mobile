@@ -12,6 +12,11 @@ const MONTHS = [
   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ] as const;
 
+/** Formatea una fecha local (no UTC) como ISO YYYY-MM-DD. */
+function toLocalISODate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 /** Format a workout date string (YYYY-MM-DD) for display. */
 export function formatWorkoutDate(dateStr: string): string {
   const [year, month, day] = dateStr.split("-").map(Number);
@@ -36,10 +41,7 @@ export function getWeekRange(dateStr: string): { start: string; end: string } {
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
 
-  const fmt = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
-  return { start: fmt(monday), end: fmt(sunday) };
+  return { start: toLocalISODate(monday), end: toLocalISODate(sunday) };
 }
 
 /** Groups workouts by "MMMM YYYY" label. */
@@ -60,9 +62,9 @@ export function groupWorkoutsByMonth(
   return groups;
 }
 
-/** Returns today's date as an ISO date string (YYYY-MM-DD). */
+/** Returns today's date as an ISO date string (YYYY-MM-DD), in local time. */
 export function todayISO(): string {
-  return new Date().toISOString().split("T")[0]!;
+  return toLocalISODate(new Date());
 }
 
 /** Returns the number of days between two ISO date strings. */
