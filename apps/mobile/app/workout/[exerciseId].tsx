@@ -536,12 +536,8 @@ export default function TrainingScreen() {
                   )}
                   <TouchableOpacity
                     onPress={() => {
-                      if (isActive) return;
-                      if (isCurrent) {
-                        handleGroupMenu();
-                      } else {
-                        router.replace(`/workout/${we.exercise_id}` as never);
-                      }
+                      if (isActive || isCurrent) return;
+                      router.replace(`/workout/${we.exercise_id}` as never);
                     }}
                     onLongPress={drag}
                     delayLongPress={200}
