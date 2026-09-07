@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { SafeAreaView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
+import { SafeAreaView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, KeyboardAvoidingView, Platform, ScrollView, FlatList } from "react-native";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { NestableScrollContainer, NestableDraggableFlatList, ScaleDecorator } from "react-native-draggable-flatlist";
@@ -39,6 +39,7 @@ export default function RoutineDetailScreen() {
   const removeExerciseFromDay = useRoutineStore((s) => s.removeExerciseFromDay);
   const reorderDaysStore = useRoutineStore((s) => s.reorderDays);
   const reorderExercisesStore = useRoutineStore((s) => s.reorderExercisesInDay);
+  const updateRoutineDayStore = useRoutineStore((s) => s.updateRoutineDay);
   const setLoading = useRoutineStore((s) => s.setLoading);
 
   const predefinedSets = useRoutineStore((s) => s.predefinedSets);
@@ -46,6 +47,7 @@ export default function RoutineDetailScreen() {
   const savePredefinedSetsStore = useRoutineStore((s) => s.savePredefinedSets);
 
   const exercises = useExerciseStore((s) => s.exercises);
+  const categories = useExerciseStore((s) => s.categories);
   const loadExercises = useExerciseStore((s) => s.loadExercises);
 
   const loadWorkout = useWorkoutStore((s) => s.loadWorkout);
@@ -54,8 +56,6 @@ export default function RoutineDetailScreen() {
   const [editMode, setEditMode] = useState(false);
   const [newDayName, setNewDayName] = useState("");
   const [showDayInput, setShowDayInput] = useState(false);
-  const [addingExToDay, setAddingExToDay] = useState<string | null>(null);
-  const [selectedExId, setSelectedExId] = useState("");
   const [loggingDayId, setLoggingDayId] = useState<string | null>(null);
 
   // Predefined sets modal
@@ -68,6 +68,16 @@ export default function RoutineDetailScreen() {
   const [psLoading, setPsLoading] = useState(false);
   const [psSaving, setPsSaving] = useState(false);
   const psLoadingForRef = useRef<string | null>(null);
+
+  // Rename day modal
+  const [showRenameDay, setShowRenameDay] = useState(false);
+  const [renameDayText, setRenameDayText] = useState("");
+  const [renamingDayId, setRenamingDayId] = useState<string | null>(null);
+
+  // Exercise picker modal (by category)
+  const [exPickerDayId, setExPickerDayId] = useState<string | null>(null);
+  const [exPickerCategoryId, setExPickerCategoryId] = useState<string | null>(null);
+  const [exPickerSelected, setExPickerSelected] = useState<Set<string>>(new Set());
 
   // Rename superset group modal
   const [showRenameGroup, setShowRenameGroup] = useState(false);
@@ -149,18 +159,35 @@ export default function RoutineDetailScreen() {
     ]);
   }
 
-  async function handleAddExercise(dayId: string, exerciseId: string) {
-    const dayExs = routineDayExercises[dayId] ?? [];
-    const { data, error } = await routineRepo.addExercise({ routine_day_id: dayId, exercise_id: exerciseId, order_index: dayExs.length }, userId);
-    if (error || !data) { Alert.alert("Error", error?.message ?? "Ha ocurrido un error"); return; }
-    addExerciseToDay({ id: data.id, routine_day_id: data.routine_day_id, exercise_id: data.exercise_id, order_index: data.order_index, group_id: data.group_id ?? undefined });
-    setAddingExToDay(null);
-    setSelectedExId("");
-  }
-
   async function handleRemoveExercise(dayId: string, rdeId: string) {
     await routineRepo.removeExercise(rdeId);
     removeExerciseFromDay(dayId, rdeId);
+  }
+
+  async function handleRenameDay(dayId: string, name: string) {
+    if (!name.trim()) return;
+    const { error } = await routineRepo.updateDay(dayId, { name: name.trim() });
+    if (error) { Alert.alert("Error", error.message); return; }
+    updateRoutineDayStore(dayId, { name: name.trim() });
+  }
+
+  function openExPicker(dayId: string) {
+    setExPickerDayId(dayId);
+    setExPickerSelected(new Set());
+    setExPickerCategoryId(categories.slice().sort((a, b) => a.name.localeCompare(b.name, "es"))[0]?.id ?? null);
+  }
+
+  async function handleConfirmExPicker() {
+    const dayId = exPickerDayId;
+    if (!dayId || exPickerSelected.size === 0) { setExPickerDayId(null); return; }
+    setExPickerDayId(null);
+    let nextIndex = (routineDayExercises[dayId] ?? []).length;
+    for (const exerciseId of exPickerSelected) {
+      const { data, error } = await routineRepo.addExercise({ routine_day_id: dayId, exercise_id: exerciseId, order_index: nextIndex }, userId);
+      if (error || !data) continue;
+      addExerciseToDay({ id: data.id, routine_day_id: data.routine_day_id, exercise_id: data.exercise_id, order_index: data.order_index, group_id: data.group_id ?? undefined });
+      nextIndex++;
+    }
   }
 
   async function handleRenameGroup(dayId: string, groupId: string, name: string) {
@@ -536,7 +563,15 @@ export default function RoutineDetailScreen() {
               </TouchableOpacity>
             )}
             <Text style={{ flex: 1, fontSize: 14, fontWeight: "600", color: theme.text }}>{day.name}</Text>
-            <Text style={{ fontSize: 12, color: theme.textMuted }}>{dayExs.length} ejercicios</Text>
+            {editMode && (
+              <TouchableOpacity
+                onPress={() => { setRenamingDayId(day.id); setRenameDayText(day.name); setShowRenameDay(true); }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="pencil-outline" size={14} color={theme.textMuted} />
+              </TouchableOpacity>
+            )}
+            {!editMode && <Text style={{ fontSize: 12, color: theme.textMuted }}>{dayExs.length} ejercicios</Text>}
             {editMode && (
               <TouchableOpacity onPress={() => handleDeleteDay(day.id, day.name)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="trash-outline" size={14} color={theme.danger} />
@@ -567,34 +602,16 @@ export default function RoutineDetailScreen() {
               ItemSeparatorComponent={() => <View style={{ height: 6 }} />}
             />
 
-            {/* Add exercise inline picker */}
-            {editMode && addingExToDay === day.id ? (
-              <View style={{ gap: 6, marginTop: 4 }}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                  {exercises.map((ex) => (
-                    <TouchableOpacity
-                      key={ex.id}
-                      onPress={() => setSelectedExId(ex.id)}
-                      style={{ borderRadius: 8, borderWidth: 1, borderColor: selectedExId === ex.id ? theme.primary : theme.border, backgroundColor: selectedExId === ex.id ? theme.primary : "transparent", paddingHorizontal: 10, paddingVertical: 5 }}
-                    >
-                      <Text style={{ fontSize: 12, fontWeight: "500", color: selectedExId === ex.id ? "#fff" : theme.text }}>{ex.name}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-                <View style={{ flexDirection: "row", gap: 6 }}>
-                  <TouchableOpacity onPress={() => { setAddingExToDay(null); setSelectedExId(""); }} style={{ flex: 1, borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingVertical: 7, alignItems: "center" }}>
-                    <Text style={{ fontSize: 12, color: theme.text }}>Cancelar</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => selectedExId && handleAddExercise(day.id, selectedExId)} style={{ flex: 1, backgroundColor: theme.primary, borderRadius: 8, paddingVertical: 7, alignItems: "center" }}>
-                    <Text style={{ fontSize: 12, fontWeight: "600", color: "#fff" }}>Añadir</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : editMode ? (
-              <TouchableOpacity onPress={() => { setAddingExToDay(day.id); setSelectedExId(""); }} style={{ borderWidth: 1, borderColor: theme.border, borderStyle: "dashed", borderRadius: 8, paddingVertical: 8, alignItems: "center", marginTop: 4 }}>
-                <Text style={{ fontSize: 12, color: theme.textMuted }}>+ Añadir ejercicio</Text>
+            {/* Add exercise button → opens category picker modal */}
+            {editMode && (
+              <TouchableOpacity
+                onPress={() => openExPicker(day.id)}
+                style={{ borderWidth: 1, borderColor: theme.border, borderStyle: "dashed", borderRadius: 8, paddingVertical: 8, alignItems: "center", marginTop: 4, flexDirection: "row", justifyContent: "center", gap: 6 }}
+              >
+                <Ionicons name="add-circle-outline" size={14} color={theme.primary} />
+                <Text style={{ fontSize: 12, color: theme.primary, fontWeight: "500" }}>Añadir ejercicio</Text>
               </TouchableOpacity>
-            ) : null}
+            )}
           </View>
         </View>
       </ScaleDecorator>
@@ -834,6 +851,117 @@ export default function RoutineDetailScreen() {
             >
               <Text style={{ fontSize: 14, fontWeight: "600", color: selectedExerciseIds.length === 0 ? theme.textMuted : "#fff" }}>
                 Registrar {selectedExerciseIds.length} ejercicio{selectedExerciseIds.length !== 1 ? "s" : ""}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Rename day modal */}
+      <Modal visible={showRenameDay} animationType="fade" transparent onRequestClose={() => setShowRenameDay(false)}>
+        <View style={{ flex: 1, backgroundColor: theme.overlay, justifyContent: "center", paddingHorizontal: 32 }}>
+          <View style={{ backgroundColor: theme.surfaceCard, borderRadius: 16, padding: 20, gap: 16 }}>
+            <Text style={{ fontSize: 16, fontWeight: "600", color: theme.text }}>Renombrar día</Text>
+            <TextInput
+              style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, color: theme.text, backgroundColor: theme.inputBg }}
+              value={renameDayText}
+              onChangeText={setRenameDayText}
+              placeholder="Nombre del día"
+              placeholderTextColor={theme.textDisabled}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={() => {
+                if (renamingDayId) void handleRenameDay(renamingDayId, renameDayText);
+                setShowRenameDay(false);
+              }}
+            />
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <TouchableOpacity onPress={() => setShowRenameDay(false)} style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: theme.border, alignItems: "center" }}>
+                <Text style={{ fontSize: 14, color: theme.textSecondary }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  if (renamingDayId) void handleRenameDay(renamingDayId, renameDayText);
+                  setShowRenameDay(false);
+                }}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: theme.primary, alignItems: "center" }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: "600", color: "#fff" }}>Guardar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Exercise picker modal — by category */}
+      <Modal visible={exPickerDayId !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setExPickerDayId(null)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.surfaceCard }}>
+          {/* Header */}
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.borderLight }}>
+            <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: theme.text }}>
+              Añadir ejercicios
+              {exPickerSelected.size > 0 && (
+                <Text style={{ fontSize: 14, color: theme.primary, fontWeight: "400" }}> ({exPickerSelected.size})</Text>
+              )}
+            </Text>
+            <TouchableOpacity onPress={() => setExPickerDayId(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={22} color={theme.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Category tabs */}
+          <View style={{ height: 52, justifyContent: "center", borderBottomWidth: 1, borderBottomColor: theme.borderLight }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 8, alignItems: "center" }}>
+              {categories.slice().sort((a, b) => a.name.localeCompare(b.name, "es")).map((cat) => {
+                const isActive = exPickerCategoryId === cat.id;
+                return (
+                  <TouchableOpacity
+                    key={cat.id}
+                    onPress={() => setExPickerCategoryId(cat.id)}
+                    style={{ height: 32, paddingHorizontal: 14, borderRadius: 16, backgroundColor: isActive ? theme.primary : theme.border, justifyContent: "center", alignItems: "center" }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: "500", color: isActive ? "#fff" : theme.text }}>{cat.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          {/* Exercise list */}
+          <FlatList
+            data={exercises.filter((ex) => ex.category_id === exPickerCategoryId).sort((a, b) => a.name.localeCompare(b.name, "es"))}
+            keyExtractor={(ex) => ex.id}
+            contentContainerStyle={{ padding: 12, gap: 8 }}
+            ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+            renderItem={({ item: ex }) => {
+              const isSelected = exPickerSelected.has(ex.id);
+              return (
+                <TouchableOpacity
+                  onPress={() => setExPickerSelected((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(ex.id)) next.delete(ex.id); else next.add(ex.id);
+                    return next;
+                  })}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: isSelected ? theme.primary : theme.borderLight, backgroundColor: isSelected ? theme.primaryLight : theme.surfaceCard }}
+                >
+                  <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: isSelected ? theme.primary : theme.textDisabled, backgroundColor: isSelected ? theme.primary : "transparent", alignItems: "center", justifyContent: "center" }}>
+                    {isSelected && <Ionicons name="checkmark" size={13} color="#fff" />}
+                  </View>
+                  <Text style={{ flex: 1, fontSize: 14, color: theme.text }}>{ex.name}</Text>
+                </TouchableOpacity>
+              );
+            }}
+          />
+
+          {/* Footer */}
+          <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: theme.borderLight }}>
+            <TouchableOpacity
+              onPress={handleConfirmExPicker}
+              disabled={exPickerSelected.size === 0}
+              style={{ backgroundColor: exPickerSelected.size === 0 ? theme.border : theme.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center" }}
+            >
+              <Text style={{ fontSize: 15, fontWeight: "600", color: exPickerSelected.size === 0 ? theme.textMuted : "#fff" }}>
+                {exPickerSelected.size === 0 ? "Selecciona ejercicios" : `Añadir ${exPickerSelected.size} ejercicio${exPickerSelected.size !== 1 ? "s" : ""}`}
               </Text>
             </TouchableOpacity>
           </View>
