@@ -94,6 +94,7 @@ export default function SettingsScreen() {
     auto_select_next_set: autoSelectNextSet,
     track_personal_records: trackPersonalRecords,
     mark_sets_complete: markSetsComplete,
+    show_rest_timer: showRestTimer,
     rest_timer_sound_enabled: restTimerSoundEnabled,
     show_set_count_home: showSetCountHome,
     hidden_category_ids: hiddenCategoryIds,
@@ -218,6 +219,10 @@ export default function SettingsScreen() {
 
   async function handleMarkSetsComplete(val: boolean) {
     await persistPreference("mark_sets_complete", val);
+  }
+
+  async function handleShowRestTimer(val: boolean) {
+    await persistPreference("show_rest_timer", val);
   }
 
   async function handleDefaultRestSeconds(val: string) {
@@ -662,49 +667,68 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           </View>
           <View style={styles.prefRow}>
-            <View style={{ flex: 1, marginRight: 12 }}>
-              <Text style={styles.prefLabel}>{t("settings:defaultRestSeconds.label")}</Text>
-              <Text style={styles.prefSub}>{t("settings:defaultRestSeconds.description")}</Text>
-            </View>
-            <TextInput
-              style={[styles.input, { width: 70, textAlign: "center", marginBottom: 0 }]}
-              keyboardType="number-pad"
-              value={defaultRestSeconds}
-              onChangeText={handleDefaultRestSeconds}
-              placeholder="90"
-              placeholderTextColor="#94a3b8"
-            />
-          </View>
-          <View style={styles.prefRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.prefLabel}>{t("settings:restTimerSound.label")}</Text>
-              <Text style={styles.prefSub}>{t("settings:restTimerSound.description")}</Text>
+              <Text style={styles.prefLabel}>{t("settings:showRestTimer.label")}</Text>
+              <Text style={styles.prefSub}>{t("settings:showRestTimer.description")}</Text>
             </View>
             <TouchableOpacity
-              onPress={() => handleRestTimerSoundEnabled(!restTimerSoundEnabled)}
+              onPress={() => handleShowRestTimer(!showRestTimer)}
               accessibilityRole="switch"
-              accessibilityLabel="Sonido del rest timer"
-              accessibilityState={{ checked: restTimerSoundEnabled }}
-              style={{ width: 44, height: 26, borderRadius: 13, backgroundColor: restTimerSoundEnabled ? colors.primary : colors.border, justifyContent: "center", paddingHorizontal: 2 }}
+              accessibilityLabel="Mostrar el rest timer"
+              accessibilityState={{ checked: showRestTimer }}
+              style={{ width: 44, height: 26, borderRadius: 13, backgroundColor: showRestTimer ? colors.primary : colors.border, justifyContent: "center", paddingHorizontal: 2 }}
             >
-              <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: colors.background, alignSelf: restTimerSoundEnabled ? "flex-end" : "flex-start", shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 2, elevation: 2 }} />
+              <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: colors.background, alignSelf: showRestTimer ? "flex-end" : "flex-start", shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 2, elevation: 2 }} />
             </TouchableOpacity>
           </View>
-          {restTimerSoundEnabled && (
-            <View style={styles.prefRow}>
-              <View style={{ flex: 1, marginRight: 12 }}>
-                <Text style={styles.prefLabel}>{t("settings:restTimerVolume.label")}</Text>
-                <Text style={styles.prefSub}>{t("settings:restTimerVolume.description")}</Text>
+          {showRestTimer && (
+            <>
+              <View style={styles.prefRow}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={styles.prefLabel}>{t("settings:defaultRestSeconds.label")}</Text>
+                  <Text style={styles.prefSub}>{t("settings:defaultRestSeconds.description")}</Text>
+                </View>
+                <TextInput
+                  style={[styles.input, { width: 70, textAlign: "center", marginBottom: 0 }]}
+                  keyboardType="number-pad"
+                  value={defaultRestSeconds}
+                  onChangeText={handleDefaultRestSeconds}
+                  placeholder="90"
+                  placeholderTextColor="#94a3b8"
+                />
               </View>
-              <TextInput
-                style={[styles.input, { width: 70, textAlign: "center", marginBottom: 0 }]}
-                keyboardType="number-pad"
-                value={restTimerVolume}
-                onChangeText={handleRestTimerVolume}
-                placeholder="80"
-                placeholderTextColor="#94a3b8"
-              />
-            </View>
+              <View style={styles.prefRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.prefLabel}>{t("settings:restTimerSound.label")}</Text>
+                  <Text style={styles.prefSub}>{t("settings:restTimerSound.description")}</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => handleRestTimerSoundEnabled(!restTimerSoundEnabled)}
+                  accessibilityRole="switch"
+                  accessibilityLabel="Sonido del rest timer"
+                  accessibilityState={{ checked: restTimerSoundEnabled }}
+                  style={{ width: 44, height: 26, borderRadius: 13, backgroundColor: restTimerSoundEnabled ? colors.primary : colors.border, justifyContent: "center", paddingHorizontal: 2 }}
+                >
+                  <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: colors.background, alignSelf: restTimerSoundEnabled ? "flex-end" : "flex-start", shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 2, elevation: 2 }} />
+                </TouchableOpacity>
+              </View>
+              {restTimerSoundEnabled && (
+                <View style={styles.prefRow}>
+                  <View style={{ flex: 1, marginRight: 12 }}>
+                    <Text style={styles.prefLabel}>{t("settings:restTimerVolume.label")}</Text>
+                    <Text style={styles.prefSub}>{t("settings:restTimerVolume.description")}</Text>
+                  </View>
+                  <TextInput
+                    style={[styles.input, { width: 70, textAlign: "center", marginBottom: 0 }]}
+                    keyboardType="number-pad"
+                    value={restTimerVolume}
+                    onChangeText={handleRestTimerVolume}
+                    placeholder="80"
+                    placeholderTextColor="#94a3b8"
+                  />
+                </View>
+              )}
+            </>
           )}
           <View style={styles.prefRow}>
             <View style={{ flex: 1, marginRight: 12 }}>

@@ -113,6 +113,10 @@ export const en = {
       label: "Mark sets as completed",
       description: "Shows the completion checkbox on each set",
     },
+    showRestTimer: {
+      label: "Show rest timer",
+      description: "Shows the rest-timer bar while logging sets",
+    },
     defaultRestSeconds: {
       label: "Default rest",
       description: "Seconds between sets (default)",

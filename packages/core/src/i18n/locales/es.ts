@@ -115,6 +115,10 @@ export const es = {
       label: "Marcar series como completadas",
       description: "Muestra el checkbox de completado en cada serie",
     },
+    showRestTimer: {
+      label: "Mostrar el rest timer",
+      description: "Muestra la barra de temporizador de descanso al registrar series",
+    },
     defaultRestSeconds: {
       label: "Descanso por defecto",
       description: "Segundos entre series (por defecto)",

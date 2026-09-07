@@ -18,6 +18,8 @@ export interface UserPreferences {
   track_personal_records: boolean;
   /** Marca un set como completo automáticamente al rellenar sus campos (peso/reps/etc.), sin exigir un toque aparte. */
   mark_sets_complete: boolean;
+  /** Muestra la barra del temporizador de descanso al registrar series. Desactivado por defecto. */
+  show_rest_timer: boolean;
   /** Segundos de descanso por defecto tras completar un set, cuando el ejercicio no define el suyo propio (`Exercise.default_rest_seconds`). */
   default_rest_seconds: number;
   rest_timer_sound_enabled: boolean;
@@ -52,6 +54,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   auto_select_next_set: true,
   track_personal_records: true,
   mark_sets_complete: true,
+  show_rest_timer: false,
   default_rest_seconds: 90,
   rest_timer_sound_enabled: true,
   rest_timer_volume: 80,

@@ -93,6 +93,7 @@ export default function TrainingScreen() {
   const autoSelectNextSet = usePreferencesStore((s) => s.preferences.auto_select_next_set);
   const trackPersonalRecords = usePreferencesStore((s) => s.preferences.track_personal_records);
   const markSetsComplete = usePreferencesStore((s) => s.preferences.mark_sets_complete);
+  const showRestTimer = usePreferencesStore((s) => s.preferences.show_rest_timer);
   const timerSoundEnabled = usePreferencesStore((s) => s.preferences.rest_timer_sound_enabled);
   const timerVolume = usePreferencesStore((s) => s.preferences.rest_timer_volume);
   const defaultRestSeconds = usePreferencesStore((s) => s.preferences.default_rest_seconds);
@@ -628,6 +629,7 @@ export default function TrainingScreen() {
 
       {workoutTab === "sets" && <>
       {/* Rest Timer */}
+      {showRestTimer && (
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#f8fafc", gap: 8, backgroundColor: timerActive ? "#f0f0ff" : timerFinished ? "#f0fff4" : "#fafafa" }}>
         <Ionicons name="timer-outline" size={16} color={timerActive ? "#6366f1" : timerFinished ? "#22c55e" : "#94a3b8"} />
         <TouchableOpacity onPress={() => handleChangeDuration(-15)} disabled={timerRunning} style={{ padding: 4, opacity: timerRunning ? 0.4 : 1 }} accessibilityLabel="Restar 15 segundos">
@@ -652,6 +654,7 @@ export default function TrainingScreen() {
           <Ionicons name="refresh-outline" size={18} color="#94a3b8" />
         </TouchableOpacity>
       </View>
+      )}
 
       {/* PR + última sesión */}
       {((trackPersonalRecords && exercisePR) || lastSessionSets.length > 0) && (
