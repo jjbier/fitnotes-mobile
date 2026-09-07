@@ -120,7 +120,13 @@ export default function HomeScreen() {
       loadWorkout({ id: "", date }, [], {});
       return;
     }
-    await loadWorkoutById(workouts[0]!.id);
+    const targetId = workouts[0]!.id;
+    // Si ya es el entrenamiento activo, no recargar desde SQLite: pisaría con datos
+    // obsoletos ediciones optimistas (peso/reps/etc.) cuya escritura en BD aún esté en
+    // vuelo (fire-and-forget) al volver a esta pantalla — p.ej. justo tras registrar
+    // una serie y salir del detalle del ejercicio.
+    if (useWorkoutStore.getState().activeWorkout?.id === targetId) return;
+    await loadWorkoutById(targetId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadWorkoutById]);
 
@@ -1013,7 +1019,7 @@ export default function HomeScreen() {
                   { icon: "time-outline" as const, label: "Duración", value: formatClockDuration(summaryStats.duration) },
                   { icon: "barbell-outline" as const, label: "Ejercicios", value: String(summaryStats.exercises) },
                   { icon: "list-outline" as const, label: "Series", value: String(summaryStats.sets) },
-                  { icon: "flame-outline" as const, label: "Volumen", value: summaryStats.volume > 0 ? `${(summaryStats.volume / 1000).toFixed(1)}k kg` : "—" },
+                  { icon: "flame-outline" as const, label: "Volumen", value: summaryStats.volume > 0 ? (summaryStats.volume >= 1000 ? `${(summaryStats.volume / 1000).toFixed(1)}k kg` : `${summaryStats.volume} kg`) : "—" },
                 ].map((stat) => (
                   <View key={stat.label} style={{ width: "45%", backgroundColor: "#f8fafc", borderRadius: 14, padding: 14, alignItems: "center", gap: 4 }}>
                     <Ionicons name={stat.icon} size={20} color="#6366f1" />
