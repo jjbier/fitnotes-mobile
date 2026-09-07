@@ -103,6 +103,8 @@ export default function TrainingScreen() {
   const [prByReps, setPrByReps] = useState<Record<number, number>>({});
   const [showNotes, setShowNotes] = useState(false);
   const [commentingSetId, setCommentingSetId] = useState<string | null>(null);
+  /** Texto en curso de edición para inputs numéricos de series (weight/distance), clave `${setId}:${field}`. Evita que el round-trip por `parseFloat`/`String` en cada pulsación borre un punto decimal recién tecleado (p.ej. "70." -> 70 -> "70"). Se limpia al perder el foco, momento en el que el input vuelve a mostrar el valor formateado desde el store. */
+  const [numericDrafts, setNumericDrafts] = useState<Record<string, string>>({});
   const [showAddExercise, setShowAddExercise] = useState(false);
   const [addSearch, setAddSearch] = useState("");
   const [showRenameGroup, setShowRenameGroup] = useState(false);
@@ -339,6 +341,7 @@ export default function TrainingScreen() {
     const next = Math.max(0, parseFloat((current + delta).toFixed(2)));
     const patch = { [field]: next } as Partial<FitSet>;
     updateSet(workoutExercise.id, s.id, patch);
+    setNumericDrafts((prev) => { const key = `${s.id}:${field}`; if (!(key in prev)) return prev; const nextDrafts = { ...prev }; delete nextDrafts[key]; return nextDrafts; });
     await repo.updateSet(s.id, patch);
   }
 
@@ -779,15 +782,19 @@ export default function TrainingScreen() {
 
                       {/* Weight */}
                       {showWeight && (
-                        <View style={{ flexDirection: "row", alignItems: "center" }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", marginRight: 10 }}>
                           <TouchableOpacity onPress={() => handleIncrementField(s, "weight", -weightIncrement)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
                             <Text style={{ fontSize: 18, fontWeight: "500", color: "#64748b", paddingHorizontal: 4 }}>−</Text>
                           </TouchableOpacity>
                           <TextInput
                             style={{ width: 52, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingVertical: 6, paddingHorizontal: 4, fontSize: 14, fontWeight: "500", textAlign: "center" }}
                             keyboardType="decimal-pad"
-                            value={s.weight !== undefined ? String(s.weight) : ""}
-                            onChangeText={(v) => handleUpdateField(s.id, "weight", v)}
+                            value={numericDrafts[`${s.id}:weight`] ?? (s.weight !== undefined ? String(s.weight) : "")}
+                            onChangeText={(v) => {
+                              setNumericDrafts((prev) => ({ ...prev, [`${s.id}:weight`]: v }));
+                              handleUpdateField(s.id, "weight", v);
+                            }}
+                            onBlur={() => setNumericDrafts((prev) => { const next = { ...prev }; delete next[`${s.id}:weight`]; return next; })}
                             placeholder="—"
                             placeholderTextColor="#cbd5e1"
                           />
@@ -799,7 +806,7 @@ export default function TrainingScreen() {
 
                       {/* Reps */}
                       {showReps && (
-                        <View style={{ flexDirection: "row", alignItems: "center" }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", marginRight: 10 }}>
                           <TouchableOpacity onPress={() => handleIncrementField(s, "reps", -1)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
                             <Text style={{ fontSize: 18, fontWeight: "500", color: "#64748b", paddingHorizontal: 4 }}>−</Text>
                           </TouchableOpacity>
@@ -819,15 +826,19 @@ export default function TrainingScreen() {
 
                       {/* Distance */}
                       {showDistance && (
-                        <View style={{ flexDirection: "row", alignItems: "center" }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", marginRight: 10 }}>
                           <TouchableOpacity onPress={() => handleIncrementField(s, "distance", -0.1)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
                             <Text style={{ fontSize: 18, fontWeight: "500", color: "#64748b", paddingHorizontal: 4 }}>−</Text>
                           </TouchableOpacity>
                           <TextInput
                             style={{ width: 52, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingVertical: 6, paddingHorizontal: 4, fontSize: 14, fontWeight: "500", textAlign: "center" }}
                             keyboardType="decimal-pad"
-                            value={s.distance !== undefined ? String(s.distance) : ""}
-                            onChangeText={(v) => handleUpdateField(s.id, "distance", v)}
+                            value={numericDrafts[`${s.id}:distance`] ?? (s.distance !== undefined ? String(s.distance) : "")}
+                            onChangeText={(v) => {
+                              setNumericDrafts((prev) => ({ ...prev, [`${s.id}:distance`]: v }));
+                              handleUpdateField(s.id, "distance", v);
+                            }}
+                            onBlur={() => setNumericDrafts((prev) => { const next = { ...prev }; delete next[`${s.id}:distance`]; return next; })}
                             placeholder="—"
                             placeholderTextColor="#cbd5e1"
                           />
@@ -882,10 +893,11 @@ export default function TrainingScreen() {
                       {markSetsComplete && (
                         <TouchableOpacity
                           onPress={() => handleToggleComplete(s.id, s.is_complete)}
-                          style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: s.is_complete ? "#6366f1" : "#cbd5e1", backgroundColor: s.is_complete ? "#6366f1" : "transparent", alignItems: "center", justifyContent: "center" }}
+                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: s.is_complete ? "#6366f1" : "#cbd5e1", backgroundColor: s.is_complete ? "#6366f1" : "transparent", alignItems: "center", justifyContent: "center" }}
                           accessibilityLabel={s.is_complete ? "Desmarcar serie" : "Marcar serie completa"}
                         >
-                          {s.is_complete && <Ionicons name="checkmark" size={14} color="white" />}
+                          {s.is_complete && <Ionicons name="checkmark" size={11} color="white" />}
                         </TouchableOpacity>
                       )}
 
