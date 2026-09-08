@@ -4,7 +4,7 @@ import { NestableScrollContainer, NestableDraggableFlatList, ScaleDecorator, typ
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useWorkoutStore, useExerciseStore, usePreferencesStore, formatWorkoutDate, todayISO, ExerciseType, formatClockDuration } from "@fitnotes/core";
-import type { WorkoutExercise } from "@fitnotes/core";
+import type { WorkoutExercise, RoutineDay } from "@fitnotes/core";
 import { useSyncStatus } from "../../contexts/SyncContext";
 import { useRepositories } from "../../contexts/RepositoryContext";
 import DateInput from "../../components/DateInput";
@@ -68,6 +68,7 @@ export default function HomeScreen() {
   const [startRoutines, setStartRoutines] = useState<{ id: string; name: string; notes?: string | null }[]>([]);
   const [startModalLoading, setStartModalLoading] = useState(false);
   const [loggingRoutineId, setLoggingRoutineId] = useState<string | null>(null);
+  const [routineDaysToPick, setRoutineDaysToPick] = useState<{ routineId: string; routineName: string; days: RoutineDay[] } | null>(null);
   const [showCopyModal, setShowCopyModal] = useState(false);
   const [copyLoading, setCopyLoading] = useState(false);
   const [showMoveModal, setShowMoveModal] = useState(false);
@@ -275,6 +276,7 @@ export default function HomeScreen() {
   /** Abre el modal de "iniciar entrenamiento" y carga la lista de rutinas disponibles para registrar. */
   async function openStartModal() {
     setShowStartModal(true);
+    setRoutineDaysToPick(null);
     setStartModalLoading(true);
     const { data } = await routineRepo.getRoutines();
     setStartRoutines(data ?? []);
@@ -298,33 +300,48 @@ export default function HomeScreen() {
   }
 
   /**
-   * Registra una rutina como un entrenamiento nuevo de la fecha actual (siempre
-   * crea uno, sin preguntar ni reutilizar — "Registrar" es una acción explícita
-   * de "empezar esto ahora"): añade todos los ejercicios únicos de todos los
-   * días de la rutina (deduplicados por `exercise_id`) y sus series
-   * predefinidas, y vuelca el resultado al store como entrenamiento activo.
+   * Punto de entrada al elegir una rutina en "iniciar entrenamiento": si la
+   * rutina tiene un único día lo registra directamente; si tiene varios
+   * (p.ej. "Empuje"/"Tirón"/"Pierna") muestra un selector para que el
+   * usuario escoja solo el día que corresponde, en vez de mezclar los
+   * ejercicios de todos los días en un mismo entrenamiento.
    */
   async function handleLogRoutine(routineId: string) {
     setLoggingRoutineId(routineId);
     const { data: days } = await routineRepo.getDays(routineId);
-    const allDayExercises: { id: string; exercise_id: string; routine_day_id: string; order_index: number; group_id?: string; group_name?: string }[] = [];
-    for (const day of days ?? []) {
-      const { data: dayExs } = await routineRepo.getDayExercises(day.id);
-      for (const rde of dayExs ?? []) {
-        if (!allDayExercises.some((e) => e.exercise_id === rde.exercise_id)) {
-          allDayExercises.push({ ...rde, group_id: rde.group_id ?? undefined, group_name: rde.group_name ?? undefined });
-        }
-      }
+    if (!days || days.length === 0) {
+      Alert.alert("Sin días", "Esta rutina no tiene días. Añádelos en el editor de rutinas.");
+      setLoggingRoutineId(null);
+      return;
     }
-    if (allDayExercises.length === 0) {
-      Alert.alert("Sin ejercicios", "Esta rutina no tiene ejercicios. Añádelos en el editor de rutinas.");
+    if (days.length === 1) {
+      await handleLogRoutineDay(days[0]!.id, routineId);
+      return;
+    }
+    setLoggingRoutineId(null);
+    const routine = startRoutines.find((r) => r.id === routineId);
+    setRoutineDaysToPick({ routineId, routineName: routine?.name ?? "", days });
+  }
+
+  /**
+   * Registra un único día de una rutina como un entrenamiento nuevo de la
+   * fecha actual (siempre crea uno, sin preguntar ni reutilizar): añade solo
+   * los ejercicios de ESE día (no de toda la rutina) y sus series
+   * predefinidas, y vuelca el resultado al store como entrenamiento activo.
+   */
+  async function handleLogRoutineDay(dayId: string, loadingKey: string = dayId) {
+    setLoggingRoutineId(loadingKey);
+    const { data: dayExs } = await routineRepo.getDayExercises(dayId);
+    const dayExercises = (dayExs ?? []).map((rde) => ({ ...rde, group_id: rde.group_id ?? undefined, group_name: rde.group_name ?? undefined }));
+    if (dayExercises.length === 0) {
+      Alert.alert("Sin ejercicios", "Este día no tiene ejercicios. Añádelos en el editor de rutinas.");
       setLoggingRoutineId(null);
       return;
     }
     const { data: workout, error } = await repo.createWorkout({ date: currentDate, start_time: new Date().toISOString() }, userId);
     if (error || !workout) { setLoggingRoutineId(null); return; }
-    for (let i = 0; i < allDayExercises.length; i++) {
-      const rde = allDayExercises[i]!;
+    for (let i = 0; i < dayExercises.length; i++) {
+      const rde = dayExercises[i]!;
       const { data: we } = await repo.addExercise(
         { workout_id: workout.id, exercise_id: rde.exercise_id, order_index: i, group_id: rde.group_id, group_name: rde.group_name }, userId
       );
@@ -342,7 +359,14 @@ export default function HomeScreen() {
     await loadWorkoutById(workout.id);
     addWorkoutToHistory({ id: workout.id, date: currentDate });
     setLoggingRoutineId(null);
+    setRoutineDaysToPick(null);
     setShowStartModal(false);
+  }
+
+  /** Cierra el modal de "iniciar entrenamiento" y limpia el selector de días si estaba abierto. */
+  function closeStartModal() {
+    setShowStartModal(false);
+    setRoutineDaysToPick(null);
   }
 
   /**
@@ -364,9 +388,16 @@ export default function HomeScreen() {
         }
         if (durationRef.current) clearInterval(durationRef.current);
         setTimerState("idle");
-        const dur = timerElapsedRef.current;
-
         const endTime = new Date().toISOString();
+
+        // Si el cronómetro manual nunca se inició (p.ej. el usuario no pulsó
+        // play, o la app se reinició durante el entrenamiento), su acumulador
+        // se queda a 0 y subestimaría la duración real: en ese caso se usa
+        // como respaldo el tiempo transcurrido entre start_time y end_time.
+        const dur = timerElapsedRef.current > 0 || !activeWorkout.start_time
+          ? timerElapsedRef.current
+          : Math.round((new Date(endTime).getTime() - new Date(activeWorkout.start_time).getTime()) / 1000);
+
         await repo.updateWorkout(activeWorkout.id, { end_time: endTime, duration_minutes: Math.round(dur / 60) });
 
         // Compute summary before clearing store (warmup sets excluded from volume)
@@ -861,17 +892,45 @@ export default function HomeScreen() {
           )}
         </NestableScrollContainer>
       )}
-      {/* Start workout modal — routine selector */}
-      <Modal visible={showStartModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowStartModal(false)}>
+      {/* Start workout modal — routine selector (o selector de día si la rutina tiene varios) */}
+      <Modal visible={showStartModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={closeStartModal}>
         <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
           <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
-            <Text style={{ flex: 1, fontSize: 16, fontWeight: "700", color: "#0f172a" }}>Elige una rutina</Text>
-            <TouchableOpacity onPress={() => setShowStartModal(false)} accessibilityLabel="Cerrar">
+            {routineDaysToPick ? (
+              <TouchableOpacity onPress={() => setRoutineDaysToPick(null)} accessibilityLabel="Volver" style={{ paddingRight: 12 }}>
+                <Ionicons name="chevron-back" size={22} color="#64748b" />
+              </TouchableOpacity>
+            ) : null}
+            <Text style={{ flex: 1, fontSize: 16, fontWeight: "700", color: "#0f172a" }}>
+              {routineDaysToPick ? `${routineDaysToPick.routineName} — elige un día` : "Elige una rutina"}
+            </Text>
+            <TouchableOpacity onPress={closeStartModal} accessibilityLabel="Cerrar">
               <Ionicons name="close" size={22} color="#64748b" />
             </TouchableOpacity>
           </View>
 
-          {startModalLoading ? (
+          {routineDaysToPick ? (
+            <FlatList
+              data={routineDaysToPick.days}
+              keyExtractor={(d) => d.id}
+              contentContainerStyle={{ padding: 16, gap: 10 }}
+              renderItem={({ item: d }) => (
+                <TouchableOpacity
+                  onPress={() => handleLogRoutineDay(d.id)}
+                  disabled={!!loggingRoutineId}
+                  style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 16, paddingHorizontal: 16, paddingVertical: 16, gap: 14, backgroundColor: "#fff", opacity: loggingRoutineId && loggingRoutineId !== d.id ? 0.4 : 1 }}
+                >
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#6366f115", alignItems: "center", justifyContent: "center" }}>
+                    {loggingRoutineId === d.id
+                      ? <ActivityIndicator size="small" color="#6366f1" />
+                      : <Ionicons name="barbell-outline" size={20} color="#6366f1" />}
+                  </View>
+                  <Text style={{ flex: 1, fontSize: 15, fontWeight: "600", color: "#0f172a" }}>{d.name}</Text>
+                  <Ionicons name="play-circle-outline" size={24} color="#6366f1" />
+                </TouchableOpacity>
+              )}
+            />
+          ) : startModalLoading ? (
             <ActivityIndicator style={{ flex: 1 }} color="#6366f1" />
           ) : startRoutines.length === 0 ? (
             <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 16 }}>
