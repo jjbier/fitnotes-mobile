@@ -13,28 +13,6 @@ type CategoryUpdate = Database["public"]["Tables"]["categories"]["Update"];
 type ExerciseInsert = Database["public"]["Tables"]["exercises"]["Insert"];
 type ExerciseUpdate = Database["public"]["Tables"]["exercises"]["Update"];
 
-/** Fila de `categories` mapeada al dominio (sin `user_id`/`updated_at`). */
-export interface CategoryDomain {
-  id: string;
-  name: string;
-  color: string;
-  order_index: number;
-}
-
-/** Fila de `exercises` mapeada al dominio, con nulos normalizados a `undefined`. */
-export interface ExerciseDomain {
-  id: string;
-  name: string;
-  category_id: string;
-  type: string;
-  weight_unit: string;
-  notes?: string;
-  is_favorite: boolean;
-  created_at: string;
-  /** URL de una imagen o vídeo que muestra cómo se realiza el ejercicio. */
-  demo_url?: string;
-}
-
 export function createExerciseRepository(client: Client) {
   return {
     // ─── Categories ────────────────────────────────────────────────────────────
