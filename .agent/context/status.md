@@ -30,7 +30,6 @@ _Last updated: 2026-07-03_
 
 ## Pendiente real (bloqueado externamente)
 - **EAS `projectId`**: placeholder en `app.json` — requiere `eas init` con cuenta Expo real
-- `packages/ui` vacío, sin spec
 - Sin gaps funcionales conocidos vs. la app de referencia (paridad Fases 0–5 web/mobile)
 
 ## Pendiente — plan offline mobile

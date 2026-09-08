@@ -8,7 +8,6 @@ App de fitness tracking (workout logging, PRs, rutinas, body tracker, calculador
 apps/mobile         Expo SDK 52 + Expo Router v4 — offline-first (SQLite local + sync)
 packages/core       lógica pura — CERO imports react/next/expo
 packages/database   cliente Supabase + repositorios remotos + repos locales SQLite + SyncEngine
-packages/ui         vacío, sin spec
 ```
 `packages/core` y `packages/database` son propios de este repo (duplicados desde el monorepo original al separar mobile y web en repos independientes) — ya no se comparten en vivo con ninguna app web.
 
@@ -59,7 +58,6 @@ Offline (plan de 7 fases → 6 tras fusionar bootstrap en Fase 5, `.agent/contex
 ## Pendiente inmediato
 - **Duplicado de PRs tras claim+sync**: un PR generado offline (JS) y el mismo PR regenerado por el trigger SQL remoto al pushear el set pueden convivir como dos filas distintas — sin dedup entre ambos mecanismos. Aceptado, no bloquea (ver `offline-sync.md`)
 - **Multi-dispositivo en modo invitado**: si el mismo usuario usa invitado en dos dispositivos antes de crear cuenta, ambos claims generan filas duplicadas al vincularse a la misma cuenta (sin deduplicación) — limitación aceptada, documentada en `offline-sync.md`
-- `packages/ui` vacío, sin spec
 - **EAS sin secrets configurados**: `eas env:list` no devuelve nada en ningún environment/scope (2026-08-27) — si se retoma EAS Build, hay que dar de alta `EXPO_PUBLIC_SUPABASE_URL`/`EXPO_PUBLIC_SUPABASE_ANON_KEY` ahí (`eas env:create`) antes de compilar
 - Sin gaps funcionales conocidos vs. la app de referencia (paridad Fases 0–5); plan offline completo (Fases 0–6), verificado en dispositivo físico 2026-07-03 (ver `offline-sync.md`)
 

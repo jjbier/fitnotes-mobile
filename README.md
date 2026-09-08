@@ -243,9 +243,6 @@ Lógica de negocio sin dependencias de plataforma (cero imports de `react`/`next
 ### `@fitnotes/database`
 Dos mitades: `repositories/`+`supabase/` (cliente Supabase + 8 repositorios remotos, usados por el `SyncEngine`) y `local/`+`sync/` (7 repositorios locales SQLite + `SyncEngine`). **87 tests Vitest**.
 
-### `@fitnotes/ui`
-Vacío — reservado, sin design tokens ni componentes todavía.
-
 ### `@fitnotes/tsconfig`
 Presets TypeScript compartidos: `base.json`, `expo.json`.
 

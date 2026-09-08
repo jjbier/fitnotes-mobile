@@ -64,7 +64,6 @@
 
 | Item | Motivo |
 |---|---|
-| `packages/ui` | Vacío, no se inició — sin necesidad clara |
 | `shadcn/ui` | Incompatibilidad `eslint-config-next` + ESLint v9 |
 | `routines/index.tsx` mobile | Código muerto — el tab de Rutinas usa `(tabs)/tools.tsx` que duplica la UI |
 | SyncEngine pull completo | Solo sincroniza workout del día; ejercicios/rutinas requieren rediseño del flujo |

@@ -5,7 +5,6 @@ _Last updated: 2026-07-03_
 ## Pendiente real (bloqueado externamente)
 - **EAS `projectId`**: `app.json` tiene placeholder — `eas init` requiere cuenta Expo del usuario
 - Cuenta de test Supabase (`e2e-tests@fitnotes.local`) compartida y frágil ante fechas relativas — algunos specs de Playwright/Detox pueden fallar por datos, no por código (ver CLAUDE.md)
-- `packages/ui` vacío, sin spec
 
 ## Pendiente — plan offline mobile (completo, Fases 0–6 — ver `offline-sync.md`)
 - Duplicado de PRs tras claim+sync: PR generado offline (JS) + el mismo PR regenerado por el trigger SQL remoto al pushear el set — sin dedup entre ambos mecanismos, aceptado
@@ -16,7 +15,6 @@ Sin gaps funcionales conocidos vs. la app de referencia (paridad web/mobile Fase
 
 ## Descartado
 - `shadcn/ui` — incompatibilidad eslint-config-next + ESLint v9
-- `packages/ui` — sin spec de design tokens
 
 ## Historial (más reciente primero)
 
