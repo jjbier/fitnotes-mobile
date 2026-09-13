@@ -54,7 +54,7 @@ export { createLocalGoalsRepository } from "./local/repositories/localGoalsRepos
 export type { LocalGoalsRepository } from "./local/repositories/localGoalsRepository.js";
 export { createLocalProgressRepository } from "./local/repositories/localProgressRepository.js";
 export type { LocalProgressRepository } from "./local/repositories/localProgressRepository.js";
-export { createLocalPreferencesRepository } from "./local/repositories/localPreferencesRepository.js";
+export { createLocalPreferencesRepository, EPHEMERAL_KEY_PREFIX } from "./local/repositories/localPreferencesRepository.js";
 export type { LocalPreferencesRepository } from "./local/repositories/localPreferencesRepository.js";
 export { createLocalCalendarRepository } from "./local/repositories/localCalendarRepository.js";
 export type { LocalCalendarRepository } from "./local/repositories/localCalendarRepository.js";

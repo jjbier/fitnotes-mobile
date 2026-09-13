@@ -5,6 +5,7 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useWorkoutStore, useExerciseStore, usePreferencesStore, formatWorkoutDate, todayISO, ExerciseType, formatClockDuration } from "@fitnotes/core";
 import type { WorkoutExercise, RoutineDay } from "@fitnotes/core";
+import { EPHEMERAL_KEY_PREFIX } from "@fitnotes/database";
 import { useSyncStatus } from "../../contexts/SyncContext";
 import { useRepositories } from "../../contexts/RepositoryContext";
 import DateInput from "../../components/DateInput";
@@ -30,6 +31,21 @@ import { useTheme } from "../../lib/theme";
  * - Recarga automática cuando `refetchSignal` indica que un sync trajo
  *   entrenamientos nuevos (p.ej. historial de una cuenta recién vinculada).
  */
+
+/** Estado efímero del cronómetro persistido en `user_preferences` (ver {@link timerStorageKey}). */
+type PersistedTimerState = { accumulatedSeconds: number; runningSince: string | null };
+
+/**
+ * Clave de `user_preferences` para el estado del cronómetro de un
+ * entrenamiento — persistido para que sobreviva a que la app muera a mitad
+ * de sesión (el `ref` en memoria se pierde en el relanzamiento, pero
+ * `runningSince` es un timestamp absoluto: al restaurar, el tiempo "muerto"
+ * mientras la app estaba cerrada se cuenta igualmente como transcurrido).
+ */
+function timerStorageKey(workoutId: string) {
+  return `${EPHEMERAL_KEY_PREFIX}active_timer:${workoutId}`;
+}
+
 export default function HomeScreen() {
   const colors = useTheme();
   const router = useRouter();
@@ -81,7 +97,7 @@ export default function HomeScreen() {
   const [selectedWEIds, setSelectedWEIds] = useState<Set<string>>(new Set());
   const { status: syncStatus, pendingCount, refetchSignal } = useSyncStatus();
 
-  const { workoutRepo: repo, exerciseRepo: exRepo, routineRepo, userId } = useRepositories();
+  const { workoutRepo: repo, exerciseRepo: exRepo, routineRepo, userId, preferencesRepo } = useRepositories();
   const showSetCountHome = usePreferencesStore((s) => s.preferences.show_set_count_home);
 
   /** Carga en el store un entrenamiento ya resuelto por id, junto con sus ejercicios y series. */
@@ -226,13 +242,31 @@ export default function HomeScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moveDate, showMoveModal]);
 
-  // Reset timer when workout changes
+  // Reset timer when workout changes, restaurando el estado persistido si lo
+  // hay (el entrenamiento tenía el cronómetro en marcha o en pausa cuando la
+  // app murió o se cerró) en vez de asumir siempre 0/idle.
   useEffect(() => {
     if (durationRef.current) clearInterval(durationRef.current);
     setTimerDisplay(0);
     setTimerState("idle");
     timerElapsedRef.current = 0;
     timerSegmentStartRef.current = null;
+    const workoutId = activeWorkout?.id;
+    if (!workoutId || activeWorkout?.end_time) return;
+    let cancelled = false;
+    preferencesRepo.getRaw(timerStorageKey(workoutId)).then((raw) => {
+      if (cancelled || !raw) return;
+      const persisted = JSON.parse(raw) as PersistedTimerState;
+      timerElapsedRef.current = persisted.accumulatedSeconds;
+      if (persisted.runningSince) {
+        timerSegmentStartRef.current = new Date(persisted.runningSince).getTime();
+        setTimerState("running");
+      } else if (persisted.accumulatedSeconds > 0) {
+        setTimerDisplay(persisted.accumulatedSeconds);
+        setTimerState("paused");
+      }
+    });
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWorkout?.id]);
 
@@ -250,11 +284,25 @@ export default function HomeScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timerState]);
 
+  /**
+   * Persiste el estado actual del cronómetro (segundos acumulados + desde
+   * cuándo corre el segmento activo, si corre) para poder recuperarlo si la
+   * app muere a mitad de entrenamiento — ver {@link timerStorageKey}.
+   */
+  async function persistTimerState(workoutId: string, running: boolean) {
+    const state: PersistedTimerState = {
+      accumulatedSeconds: timerElapsedRef.current,
+      runningSince: running && timerSegmentStartRef.current !== null ? new Date(timerSegmentStartRef.current).toISOString() : null,
+    };
+    await preferencesRepo.setRaw(timerStorageKey(workoutId), JSON.stringify(state));
+  }
+
   /** Inicia o reanuda el temporizador del entrenamiento; en el primer arranque persiste `start_time` en el entrenamiento. */
   async function handleStartTimer() {
     if (!activeWorkout?.id) return;
     timerSegmentStartRef.current = Date.now();
     setTimerState("running");
+    await persistTimerState(activeWorkout.id, true);
     if (!activeWorkout.start_time) {
       const startTime = new Date().toISOString();
       await repo.updateWorkout(activeWorkout.id, { start_time: startTime });
@@ -263,7 +311,7 @@ export default function HomeScreen() {
   }
 
   /** Pausa el temporizador, acumulando el tiempo transcurrido del segmento actual en `timerElapsedRef`. */
-  function handlePauseTimer() {
+  async function handlePauseTimer() {
     if (timerSegmentStartRef.current !== null) {
       timerElapsedRef.current += Math.floor((Date.now() - timerSegmentStartRef.current) / 1000);
       timerSegmentStartRef.current = null;
@@ -271,6 +319,7 @@ export default function HomeScreen() {
     if (durationRef.current) clearInterval(durationRef.current);
     setTimerDisplay(timerElapsedRef.current);
     setTimerState("paused");
+    if (activeWorkout?.id) await persistTimerState(activeWorkout.id, false);
   }
 
   /** Abre el modal de "iniciar entrenamiento" y carga la lista de rutinas disponibles para registrar. */
@@ -399,6 +448,7 @@ export default function HomeScreen() {
           : Math.round((new Date(endTime).getTime() - new Date(activeWorkout.start_time).getTime()) / 1000);
 
         await repo.updateWorkout(activeWorkout.id, { end_time: endTime, duration_minutes: Math.round(dur / 60) });
+        await preferencesRepo.deleteRaw(timerStorageKey(activeWorkout.id));
 
         // Compute summary before clearing store (warmup sets excluded from volume)
         const allSets = Object.values(sets).flat();
@@ -478,6 +528,7 @@ export default function HomeScreen() {
       { text: "Eliminar", style: "destructive", onPress: async () => {
         removeWorkoutFromHistory(workoutId);
         await repo.deleteWorkout(workoutId);
+        await preferencesRepo.deleteRaw(timerStorageKey(workoutId));
         if (date === currentDate && workoutId === activeWorkout?.id) {
           await loadWorkoutForDate(currentDate);
         }

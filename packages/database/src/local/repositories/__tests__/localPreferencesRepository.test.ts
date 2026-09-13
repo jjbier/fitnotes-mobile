@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { DEFAULT_PREFERENCES } from "@fitnotes/core";
 import { createNodeSqlExecutor } from "../../testing/nodeSqlExecutor.js";
 import { runLocalMigrations } from "../../migrations.js";
-import { createLocalPreferencesRepository } from "../localPreferencesRepository.js";
+import { createLocalPreferencesRepository, EPHEMERAL_KEY_PREFIX } from "../localPreferencesRepository.js";
 import type { SqlExecutor } from "../../sqlExecutor.js";
 
 describe("localPreferencesRepository", () => {
@@ -52,5 +52,40 @@ describe("localPreferencesRepository", () => {
     expect(prefs.auto_select_next_set).toBe(false);
     expect(prefs.calendar_week_start).toBe(0);
     expect(prefs.mark_sets_complete).toBe(DEFAULT_PREFERENCES.mark_sets_complete);
+  });
+
+  const timerKey = `${EPHEMERAL_KEY_PREFIX}active_timer:w1`;
+
+  it("getRaw returns null for a key that was never written", async () => {
+    expect(await repo.getRaw(timerKey)).toBeNull();
+  });
+
+  it("setRaw persists an arbitrary key/value and getRaw reads it back", async () => {
+    await repo.setRaw(timerKey, JSON.stringify({ accumulatedSeconds: 42, runningSince: null }));
+    const raw = await repo.getRaw(timerKey);
+    expect(raw && JSON.parse(raw)).toEqual({ accumulatedSeconds: 42, runningSince: null });
+  });
+
+  it("setRaw on an existing key overwrites it instead of duplicating the row", async () => {
+    await repo.setRaw(timerKey, "a");
+    await repo.setRaw(timerKey, "b");
+    const rows = await db.getAllAsync<{ key: string }>(
+      "SELECT key FROM user_preferences WHERE key = ?", [timerKey]
+    );
+    expect(rows).toHaveLength(1);
+    expect(await repo.getRaw(timerKey)).toBe("b");
+  });
+
+  it("deleteRaw removes the key and is a no-op if it doesn't exist", async () => {
+    await repo.setRaw(timerKey, "a");
+    await repo.deleteRaw(timerKey);
+    expect(await repo.getRaw(timerKey)).toBeNull();
+    await expect(repo.deleteRaw(timerKey)).resolves.not.toThrow();
+  });
+
+  it("a raw entry doesn't leak into getAll's typed UserPreferences result", async () => {
+    await repo.setRaw(timerKey, "a");
+    const prefs = await repo.getAll();
+    expect((prefs as unknown as Record<string, unknown>)[timerKey]).toBeUndefined();
   });
 });

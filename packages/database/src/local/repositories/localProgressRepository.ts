@@ -4,6 +4,27 @@ import { type RawRow, type RepoError } from "./shared.js";
 
 type PersonalRecordRow = Database["public"]["Tables"]["personal_records"]["Row"];
 
+/**
+ * CTE compartida por `getPersonalRecords`/`getAllPersonalRecords`: para cada
+ * `(exercise_id, reps)` no borrado, elige una única fila canónica (mayor
+ * peso; empate por `achieved_at` más antiguo, y por `id` como último
+ * desempate para que el resultado sea determinista) vía `ROW_NUMBER()`.
+ * Colapsa así el duplicado aceptado de `personal_records` (ver doc de
+ * `getPersonalRecords`) sin tocar las filas ni el mecanismo que las genera.
+ */
+const DEDUP_PERSONAL_RECORDS_CTE = `
+  WITH ranked AS (
+    SELECT id, ROW_NUMBER() OVER (
+      PARTITION BY exercise_id, reps
+      ORDER BY weight DESC, achieved_at ASC, id ASC
+    ) AS rn
+    FROM personal_records
+    WHERE _deleted = 0
+  ), best AS (
+    SELECT id FROM ranked WHERE rn = 1
+  )
+`;
+
 function mapPersonalRecordRow(row: RawRow): PersonalRecordRow {
   return {
     id: row.id as string,
@@ -31,19 +52,34 @@ function mapPersonalRecordRow(row: RawRow): PersonalRecordRow {
  */
 export function createLocalProgressRepository(db: SqlExecutor) {
   return {
-    /** Lee de `personal_records` (solo lectura, sin cascada ni pending_ops) los PRs de un ejercicio, un peor-a-mejor por número de reps. */
+    /**
+     * Lee de `personal_records` (solo lectura, sin cascada ni pending_ops) los
+     * PRs de un ejercicio, un peor-a-mejor por número de reps — colapsando a
+     * una única fila por `reps` (ver {@link DEDUP_PERSONAL_RECORDS_CTE}): el
+     * mismo set completado offline puede generar dos filas para el mismo PR
+     * (una vía `maybeRecordPersonalRecord` local, otra vía el trigger SQL
+     * remoto al pushear el set, ver `offline-sync.md`); ambas quedan en la
+     * tabla (esto no las borra), pero solo una llega a la UI.
+     */
     async getPersonalRecords(exerciseId: string): Promise<{ data: PersonalRecordRow[]; error: RepoError | null }> {
       const rows = await db.getAllAsync<RawRow>(
-        `SELECT * FROM personal_records WHERE exercise_id = ? AND _deleted = 0 ORDER BY reps ASC, weight DESC`,
+        `${DEDUP_PERSONAL_RECORDS_CTE}
+         SELECT pr.* FROM personal_records pr
+         JOIN best ON best.id = pr.id
+         WHERE pr.exercise_id = ?
+         ORDER BY pr.reps ASC, pr.weight DESC`,
         [exerciseId]
       );
       return { data: rows.map(mapPersonalRecordRow), error: null };
     },
 
-    /** Lee todos los PRs del usuario activo, usado por el badge de PR y el tab Progreso. */
+    /** Lee todos los PRs del usuario activo, usado por el badge de PR y el tab Progreso — mismo dedup que {@link getPersonalRecords}. */
     async getAllPersonalRecords(): Promise<{ data: PersonalRecordRow[]; error: RepoError | null }> {
       const rows = await db.getAllAsync<RawRow>(
-        `SELECT * FROM personal_records WHERE _deleted = 0 ORDER BY exercise_id ASC, reps ASC, weight DESC`,
+        `${DEDUP_PERSONAL_RECORDS_CTE}
+         SELECT pr.* FROM personal_records pr
+         JOIN best ON best.id = pr.id
+         ORDER BY pr.exercise_id ASC, pr.reps ASC, pr.weight DESC`,
         []
       );
       return { data: rows.map(mapPersonalRecordRow), error: null };
