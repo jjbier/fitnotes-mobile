@@ -291,9 +291,9 @@ export default function TrainingScreen() {
 
   async function handleRemoveExercise() {
     if (!workoutExercise) return;
-    Alert.alert(`¿Eliminar "${exercise?.name ?? "ejercicio"}"?`, "Se eliminarán todas sus series.", [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Eliminar", style: "destructive", onPress: async () => {
+    Alert.alert(t("workout:alerts.deleteExerciseTitle", { name: exercise?.name ?? t("workout:alerts.deleteExerciseFallbackName") }), t("workout:alerts.deleteExerciseSetsMessage"), [
+      { text: t("common:cancel"), style: "cancel" },
+      { text: t("common:delete"), style: "destructive", onPress: async () => {
         removeExerciseFromWorkout(workoutExercise.id);
         await repo.removeExercise(workoutExercise.id);
         router.back();
@@ -398,11 +398,11 @@ export default function TrainingScreen() {
         if (nextWe) {
           const nextEx = exercises.find((e) => e.id === nextWe.exercise_id);
           Alert.alert(
-            "¡Series completadas!",
-            `¿Pasar a "${nextEx?.name ?? "siguiente ejercicio"}"?`,
+            t("workout:alerts.setsCompleteTitle"),
+            t("workout:alerts.setsCompleteMessage", { name: nextEx?.name ?? t("workout:alerts.nextExerciseFallbackName") }),
             [
-              { text: "Quedarse", style: "cancel" },
-              { text: "Siguiente", onPress: () => router.replace(`/workout/${nextWe.exercise_id}` as never) },
+              { text: t("workout:alerts.stayButton"), style: "cancel" },
+              { text: t("workout:alerts.nextButton"), onPress: () => router.replace(`/workout/${nextWe.exercise_id}` as never) },
             ]
           );
         }
@@ -412,9 +412,9 @@ export default function TrainingScreen() {
 
   async function handleDeleteSet(setId: string) {
     if (!workoutExercise) return;
-    Alert.alert("¿Eliminar serie?", undefined, [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Eliminar", style: "destructive", onPress: async () => {
+    Alert.alert(t("workout:alerts.deleteSetTitle"), undefined, [
+      { text: t("common:cancel"), style: "cancel" },
+      { text: t("common:delete"), style: "destructive", onPress: async () => {
         await repo.deleteSet(setId);
         deleteSet(workoutExercise.id, setId);
       }},
@@ -499,21 +499,21 @@ export default function TrainingScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
       {/* Header */}
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
-        <TouchableOpacity onPress={() => router.back()} accessibilityLabel="Cerrar">
+        <TouchableOpacity onPress={() => router.back()} accessibilityLabel={t("common:close")}>
           <Ionicons name="close" size={24} color="#0f172a" />
         </TouchableOpacity>
         <View style={{ alignItems: "center" }}>
-          <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>{exercise?.name ?? "Ejercicio"}</Text>
+          <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>{exercise?.name ?? t("workout:exerciseFallbackName")}</Text>
           <Text style={{ fontSize: 11, color: "#94a3b8" }}>{t(`exercises:types.${exerciseType}`)}</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-          <TouchableOpacity onPress={handleGroupMenu} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Superset">
+          <TouchableOpacity onPress={handleGroupMenu} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={t("workout:supersetIconLabel")}>
             <Ionicons name="link-outline" size={20} color={workoutExercise?.group_id ? "#6366f1" : "#64748b"} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push("/calculators" as never)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Calculadoras">
+          <TouchableOpacity onPress={() => router.push("/calculators" as never)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={t("workout:calculatorsLabel")}>
             <Ionicons name="calculator-outline" size={20} color="#64748b" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleRemoveExercise} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Eliminar ejercicio">
+          <TouchableOpacity onPress={handleRemoveExercise} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={t("workout:removeExerciseLabel")}>
             <Ionicons name="trash-outline" size={20} color="#ef4444" />
           </TouchableOpacity>
         </View>
@@ -552,7 +552,7 @@ export default function TrainingScreen() {
                   {isFirstInGroup && (
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: groupColor + "20", borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
                       <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: groupColor }} />
-                      <Text style={{ fontSize: 10, fontWeight: "600", color: groupColor }}>{we.group_name ?? "Superset"}</Text>
+                      <Text style={{ fontSize: 10, fontWeight: "600", color: groupColor }}>{we.group_name ?? t("routines:supersetDefaultLabel")}</Text>
                     </View>
                   )}
                   <TouchableOpacity
@@ -595,7 +595,7 @@ export default function TrainingScreen() {
 
       {/* Workout tabs */}
       <View style={{ flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#f1f5f9", backgroundColor: "#fff" }}>
-        {([["sets", "barbell-outline", "Series"], ["history", "time-outline", "Historial"], ["chart", "trending-up-outline", "Gráfico"]] as const).map(([key, icon, label]) => (
+        {([["sets", "barbell-outline", t("workout:tabs.sets")], ["history", "time-outline", t("workout:tabs.history")], ["chart", "trending-up-outline", t("workout:tabs.chart")]] as const).map(([key, icon, label]) => (
           <TouchableOpacity
             key={key}
             onPress={() => handleWorkoutTabChange(key)}
@@ -612,13 +612,13 @@ export default function TrainingScreen() {
       {showRestTimer && (
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#f8fafc", gap: 8, backgroundColor: timerActive ? "#f0f0ff" : timerFinished ? "#f0fff4" : "#fafafa" }}>
         <Ionicons name="timer-outline" size={16} color={timerActive ? "#6366f1" : timerFinished ? "#22c55e" : "#94a3b8"} />
-        <TouchableOpacity onPress={() => handleChangeDuration(-15)} disabled={timerRunning} style={{ padding: 4, opacity: timerRunning ? 0.4 : 1 }} accessibilityLabel="Restar 15 segundos">
+        <TouchableOpacity onPress={() => handleChangeDuration(-15)} disabled={timerRunning} style={{ padding: 4, opacity: timerRunning ? 0.4 : 1 }} accessibilityLabel={t("workout:restTimer.subtractLabel")}>
           <Ionicons name="remove-circle-outline" size={20} color="#64748b" />
         </TouchableOpacity>
         <Text style={{ fontSize: 18, fontWeight: "700", color: timerActive ? "#6366f1" : timerFinished ? "#22c55e" : "#0f172a", minWidth: 52, textAlign: "center" }}>
           {formatMinutesSeconds(timerRemaining)}
         </Text>
-        <TouchableOpacity onPress={() => handleChangeDuration(15)} disabled={timerRunning} style={{ padding: 4, opacity: timerRunning ? 0.4 : 1 }} accessibilityLabel="Añadir 15 segundos">
+        <TouchableOpacity onPress={() => handleChangeDuration(15)} disabled={timerRunning} style={{ padding: 4, opacity: timerRunning ? 0.4 : 1 }} accessibilityLabel={t("workout:restTimer.addLabel")}>
           <Ionicons name="add-circle-outline" size={20} color="#64748b" />
         </TouchableOpacity>
         <TouchableOpacity
@@ -627,10 +627,10 @@ export default function TrainingScreen() {
         >
           <Ionicons name={timerActive ? "pause" : timerFinished ? "refresh" : "play"} size={14} color="#fff" />
           <Text style={{ fontSize: 12, fontWeight: "600", color: "#fff" }}>
-            {timerActive ? "Pausar" : timerFinished ? "Reiniciar" : "Iniciar"}
+            {timerActive ? t("workout:restTimer.pauseButton") : timerFinished ? t("workout:restTimer.restartButton") : t("workout:restTimer.startButton")}
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={handleTimerReset} style={{ padding: 4 }} accessibilityLabel="Reiniciar timer">
+        <TouchableOpacity onPress={handleTimerReset} style={{ padding: 4 }} accessibilityLabel={t("workout:restTimer.resetLabel")}>
           <Ionicons name="refresh-outline" size={18} color="#94a3b8" />
         </TouchableOpacity>
       </View>
@@ -678,7 +678,7 @@ export default function TrainingScreen() {
           </TouchableOpacity>
           {showLastSession && (
             <View style={{ paddingHorizontal: 16, paddingVertical: 10, backgroundColor: "#f8fafc", borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
-              <Text style={{ fontSize: 10, fontWeight: "700", color: "#94a3b8", letterSpacing: 0.5, marginBottom: 6 }}>ÚLTIMA SESIÓN</Text>
+              <Text style={{ fontSize: 10, fontWeight: "700", color: "#94a3b8", letterSpacing: 0.5, marginBottom: 6 }}>{t("workout:lastSessionHeading")}</Text>
               {lastSessionSets.map((s, i) => (
                 <Text key={i} style={{ fontSize: 13, color: "#475569", paddingVertical: 1 }}>
                   {i + 1}.  {formatLastSet(s)}
@@ -725,7 +725,7 @@ export default function TrainingScreen() {
                 }}
                 hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               >
-                <Text style={{ fontSize: 10, fontWeight: "600", color: "#6366f1" }}>Todo ✓</Text>
+                <Text style={{ fontSize: 10, fontWeight: "600", color: "#6366f1" }}>{t("workout:markAllCompleteButton")}</Text>
               </TouchableOpacity>
             )}
             <Text style={{ fontSize: 11, color: "#cbd5e1", width: 16 }}>≡</Text>
@@ -736,7 +736,7 @@ export default function TrainingScreen() {
         {exerciseSets.length === 0 ? (
           <View style={{ paddingVertical: 40, alignItems: "center", gap: 8 }}>
             <Ionicons name="barbell-outline" size={32} color="#94a3b8" />
-            <Text style={{ fontSize: 13, color: "#94a3b8" }}>Sin series aún. Toca abajo para añadir tu primera serie.</Text>
+            <Text style={{ fontSize: 13, color: "#94a3b8" }}>{t("workout:emptySetsMessage")}</Text>
           </View>
         ) : (
           <NestableDraggableFlatList
@@ -862,13 +862,13 @@ export default function TrainingScreen() {
                       <TouchableOpacity
                         onPress={() => setCommentingSetId(commentingSetId === s.id ? null : s.id)}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        accessibilityLabel={s.comment ? "Editar comentario" : "Añadir comentario"}
+                        accessibilityLabel={s.comment ? t("workout:editCommentLabel") : t("workout:addCommentLabel")}
                       >
                         <Ionicons name={s.comment ? "chatbubble" : "chatbubble-outline"} size={14} color={s.comment ? "#6366f1" : "#cbd5e1"} />
                       </TouchableOpacity>
 
                       {/* Delete */}
-                      <TouchableOpacity onPress={() => handleDeleteSet(s.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Eliminar serie">
+                      <TouchableOpacity onPress={() => handleDeleteSet(s.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={t("workout:deleteSetLabel")}>
                         <Ionicons name="trash-outline" size={14} color="#ef4444" />
                       </TouchableOpacity>
 
@@ -878,14 +878,14 @@ export default function TrainingScreen() {
                           onPress={() => handleToggleComplete(s.id, s.is_complete)}
                           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                           style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: s.is_complete ? "#6366f1" : "#cbd5e1", backgroundColor: s.is_complete ? "#6366f1" : "transparent", alignItems: "center", justifyContent: "center" }}
-                          accessibilityLabel={s.is_complete ? "Desmarcar serie" : "Marcar serie completa"}
+                          accessibilityLabel={s.is_complete ? t("workout:markIncompleteLabel") : t("workout:markCompleteLabel")}
                         >
                           {s.is_complete && <Ionicons name="checkmark" size={11} color="white" />}
                         </TouchableOpacity>
                       )}
 
                       {/* Drag handle */}
-                      <TouchableOpacity onLongPress={drag} delayLongPress={150} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel="Reordenar serie">
+                      <TouchableOpacity onLongPress={drag} delayLongPress={150} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={t("workout:reorderSetLabel")}>
                         <Ionicons name="reorder-two-outline" size={18} color="#cbd5e1" />
                       </TouchableOpacity>
                     </View>
@@ -901,7 +901,7 @@ export default function TrainingScreen() {
                     {commentingSetId === s.id && (
                       <TextInput
                         style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, fontSize: 13, color: "#0f172a", backgroundColor: "#fafafa" }}
-                        placeholder="Nota sobre esta serie…"
+                        placeholder={t("workout:setCommentPlaceholder")}
                         placeholderTextColor="#94a3b8"
                         value={s.comment ?? ""}
                         onChangeText={(v) => handleUpdateField(s.id, "comment", v)}
@@ -924,7 +924,7 @@ export default function TrainingScreen() {
             style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 14, paddingVertical: 14, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 6 }}
           >
             {saving ? <ActivityIndicator size="small" color="#6366f1" /> : <Ionicons name="add-circle-outline" size={18} color="#6366f1" />}
-            <Text style={{ fontSize: 14, fontWeight: "500", color: "#6366f1" }}>{saving ? "Añadiendo…" : "Añadir serie"}</Text>
+            <Text style={{ fontSize: 14, fontWeight: "500", color: "#6366f1" }}>{saving ? t("workout:addingButton") : t("workout:addSetButton")}</Text>
           </TouchableOpacity>
         )}
       </NestableScrollContainer>
@@ -939,7 +939,7 @@ export default function TrainingScreen() {
             {historySessions.length === 0 ? (
               <View style={{ alignItems: "center", paddingVertical: 48 }}>
                 <Ionicons name="time-outline" size={40} color="#cbd5e1" />
-                <Text style={{ fontSize: 14, color: "#94a3b8", marginTop: 12 }}>Sin historial previo</Text>
+                <Text style={{ fontSize: 14, color: "#94a3b8", marginTop: 12 }}>{t("workout:noHistoryMessage")}</Text>
               </View>
             ) : (
               historySessions.map((session) => {
@@ -950,7 +950,7 @@ export default function TrainingScreen() {
                       {new Date(session.date + "T00:00:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
                     </Text>
                     {visible.length === 0 ? (
-                      <Text style={{ fontSize: 12, color: "#cbd5e1" }}>Sin series</Text>
+                      <Text style={{ fontSize: 12, color: "#cbd5e1" }}>{t("workout:noSetsLabel")}</Text>
                     ) : (
                       visible.map((s, i) => (
                         <Text key={i} style={{ fontSize: 13, color: "#0f172a" }}>
@@ -974,13 +974,13 @@ export default function TrainingScreen() {
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}>
             <Ionicons name="trending-up-outline" size={40} color="#cbd5e1" />
             <Text style={{ fontSize: 14, color: "#94a3b8", marginTop: 12, textAlign: "center" }}>
-              Completa series para ver tu progreso
+              {t("workout:chartEmptyMessage")}
             </Text>
           </View>
         ) : (
           <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
             <View style={{ flexDirection: "row", gap: 8 }}>
-              {([["weight", "Peso"], ["volume", "Volumen"], ["reps", "Reps"]] as const)
+              {([["weight", t("workout:chartMetric.weight")], ["volume", t("workout:chartMetric.volume")], ["reps", t("workout:chartMetric.reps")]] as const)
                 .filter(([key]) => key === "volume" ? showWeight && showReps : key === "weight" ? showWeight : showReps)
                 .map(([key, label]) => (
                   <TouchableOpacity
@@ -1011,9 +1011,9 @@ export default function TrainingScreen() {
               return (
                 <View style={{ flexDirection: "row", gap: 12 }}>
                   {[
-                    { label: "Mejor", value: `${best % 1 === 0 ? best : best.toFixed(1)}` },
-                    { label: "Último", value: `${latest % 1 === 0 ? latest : latest.toFixed(1)}` },
-                    { label: "Progresión", value: `${trend >= 0 ? "+" : ""}${trend.toFixed(1)}%` },
+                    { label: t("workout:chartStats.best"), value: `${best % 1 === 0 ? best : best.toFixed(1)}` },
+                    { label: t("workout:chartStats.latest"), value: `${latest % 1 === 0 ? latest : latest.toFixed(1)}` },
+                    { label: t("workout:chartStats.progression"), value: `${trend >= 0 ? "+" : ""}${trend.toFixed(1)}%` },
                   ].map((stat) => (
                     <View key={stat.label} style={{ flex: 1, backgroundColor: "#f8fafc", borderRadius: 12, borderWidth: 1, borderColor: "#f1f5f9", padding: 12, alignItems: "center", gap: 4 }}>
                       <Text style={{ fontSize: 10, fontWeight: "600", color: "#94a3b8", textTransform: "uppercase" }}>{stat.label}</Text>
@@ -1032,7 +1032,7 @@ export default function TrainingScreen() {
         <TouchableOpacity activeOpacity={1} onPress={() => setShowGroupMenu(false)} style={{ flex: 1, backgroundColor: "#00000060", justifyContent: "center", paddingHorizontal: 32 }}>
           <View onStartShouldSetResponder={() => true} style={{ backgroundColor: "#fff", borderRadius: 16, paddingVertical: 8, gap: 2 }}>
             <Text style={{ fontSize: 13, fontWeight: "600", color: "#94a3b8", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 }} numberOfLines={2}>
-              {workoutExercise?.group_id ? (workoutExercise.group_name || "Superset") : "Agrupar este ejercicio"}
+              {workoutExercise?.group_id ? (workoutExercise.group_name || t("routines:supersetDefaultLabel")) : t("workout:groupMenu.ungroupedTitle")}
             </Text>
             {workoutExercise?.group_id ? (
               <>
@@ -1044,7 +1044,7 @@ export default function TrainingScreen() {
                   }}
                   style={{ paddingVertical: 14, paddingHorizontal: 16 }}
                 >
-                  <Text style={{ fontSize: 15, color: "#0f172a" }}>Renombrar grupo</Text>
+                  <Text style={{ fontSize: 15, color: "#0f172a" }}>{t("routines:alerts.renameGroupOption")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => {
@@ -1053,7 +1053,7 @@ export default function TrainingScreen() {
                   }}
                   style={{ paddingVertical: 14, paddingHorizontal: 16 }}
                 >
-                  <Text style={{ fontSize: 15, color: "#ef4444" }}>Quitar del grupo</Text>
+                  <Text style={{ fontSize: 15, color: "#ef4444" }}>{t("routines:alerts.removeFromGroupOption")}</Text>
                 </TouchableOpacity>
               </>
             ) : (
@@ -1072,7 +1072,7 @@ export default function TrainingScreen() {
                         }}
                         style={{ paddingVertical: 14, paddingHorizontal: 16 }}
                       >
-                        <Text style={{ fontSize: 15, color: "#0f172a" }}>Agrupar con siguiente</Text>
+                        <Text style={{ fontSize: 15, color: "#0f172a" }}>{t("workout:groupMenu.joinNextButton")}</Text>
                       </TouchableOpacity>
                     )}
                     {hasPrev && (
@@ -1083,7 +1083,7 @@ export default function TrainingScreen() {
                         }}
                         style={{ paddingVertical: 14, paddingHorizontal: 16 }}
                       >
-                        <Text style={{ fontSize: 15, color: "#0f172a" }}>Agrupar con anterior</Text>
+                        <Text style={{ fontSize: 15, color: "#0f172a" }}>{t("workout:groupMenu.joinPrevButton")}</Text>
                       </TouchableOpacity>
                     )}
                   </>
@@ -1092,7 +1092,7 @@ export default function TrainingScreen() {
             )}
             <View style={{ height: 1, backgroundColor: "#f1f5f9", marginTop: 4, marginHorizontal: 16 }} />
             <TouchableOpacity onPress={() => setShowGroupMenu(false)} style={{ paddingVertical: 14, paddingHorizontal: 16 }}>
-              <Text style={{ fontSize: 15, fontWeight: "600", color: "#6366f1", textAlign: "center" }}>Cancelar</Text>
+              <Text style={{ fontSize: 15, fontWeight: "600", color: "#6366f1", textAlign: "center" }}>{t("common:cancel")}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -1102,12 +1102,12 @@ export default function TrainingScreen() {
       <Modal visible={showRenameGroup} animationType="fade" transparent onRequestClose={() => setShowRenameGroup(false)}>
         <View style={{ flex: 1, backgroundColor: "#00000060", justifyContent: "center", paddingHorizontal: 32 }}>
           <View style={{ backgroundColor: "#fff", borderRadius: 16, padding: 20, gap: 16 }}>
-            <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>Nombre del superset</Text>
+            <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>{t("routines:renameSupersetTitle")}</Text>
             <TextInput
               style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15 }}
               value={renameGroupText}
               onChangeText={setRenameGroupText}
-              placeholder="Ej. Pecho + Tríceps"
+              placeholder={t("routines:supersetNamePlaceholder")}
               placeholderTextColor="#cbd5e1"
               autoFocus
               returnKeyType="done"
@@ -1121,7 +1121,7 @@ export default function TrainingScreen() {
             />
             <View style={{ flexDirection: "row", gap: 10 }}>
               <TouchableOpacity onPress={() => setShowRenameGroup(false)} style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: "#e2e8f0", alignItems: "center" }}>
-                <Text style={{ fontSize: 14, color: "#64748b" }}>Cancelar</Text>
+                <Text style={{ fontSize: 14, color: "#64748b" }}>{t("common:cancel")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => {
@@ -1133,7 +1133,7 @@ export default function TrainingScreen() {
                 }}
                 style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: "#6366f1", alignItems: "center" }}
               >
-                <Text style={{ fontSize: 14, fontWeight: "600", color: "#fff" }}>Guardar</Text>
+                <Text style={{ fontSize: 14, fontWeight: "600", color: "#fff" }}>{t("routines:saveButton")}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1148,7 +1148,7 @@ export default function TrainingScreen() {
               <Ionicons name="search" size={16} color="#94a3b8" />
               <TextInput
                 style={{ flex: 1, paddingVertical: 10, fontSize: 14 }}
-                placeholder="Buscar ejercicio…"
+                placeholder={t("workout:addExerciseModal.searchPlaceholder")}
                 value={addSearch}
                 onChangeText={setAddSearch}
                 autoFocus
@@ -1172,7 +1172,7 @@ export default function TrainingScreen() {
               <View style={{ paddingVertical: 40, alignItems: "center", gap: 8 }}>
                 <Ionicons name="barbell-outline" size={32} color="#cbd5e1" />
                 <Text style={{ fontSize: 14, color: "#94a3b8" }}>
-                  {addSearch ? "Sin resultados" : "Todos los ejercicios ya están en el workout"}
+                  {addSearch ? t("workout:addExerciseModal.noResultsMessage") : t("workout:addExerciseModal.allInWorkoutMessage")}
                 </Text>
               </View>
             }

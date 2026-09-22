@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator, Alert, TextInput, Modal, FlatList } from "react-native";
 import { NestableScrollContainer, NestableDraggableFlatList, ScaleDecorator, type RenderItemParams } from "react-native-draggable-flatlist";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { useWorkoutStore, useExerciseStore, usePreferencesStore, formatWorkoutDate, todayISO, ExerciseType, formatClockDuration } from "@fitnotes/core";
 import type { WorkoutExercise, RoutineDay } from "@fitnotes/core";
@@ -49,6 +50,7 @@ function timerStorageKey(workoutId: string) {
 export default function HomeScreen() {
   const colors = useTheme();
   const router = useRouter();
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ date?: string; workoutId?: string }>();
   const today = todayISO();
 
@@ -359,7 +361,7 @@ export default function HomeScreen() {
     setLoggingRoutineId(routineId);
     const { data: days } = await routineRepo.getDays(routineId);
     if (!days || days.length === 0) {
-      Alert.alert("Sin días", "Esta rutina no tiene días. Añádelos en el editor de rutinas.");
+      Alert.alert(t("workout:alerts.noDaysTitle"), t("workout:alerts.noDaysMessage"));
       setLoggingRoutineId(null);
       return;
     }
@@ -383,7 +385,7 @@ export default function HomeScreen() {
     const { data: dayExs } = await routineRepo.getDayExercises(dayId);
     const dayExercises = (dayExs ?? []).map((rde) => ({ ...rde, group_id: rde.group_id ?? undefined, group_name: rde.group_name ?? undefined }));
     if (dayExercises.length === 0) {
-      Alert.alert("Sin ejercicios", "Este día no tiene ejercicios. Añádelos en el editor de rutinas.");
+      Alert.alert(t("workout:alerts.noExercisesTitle"), t("workout:alerts.noExercisesMessage"));
       setLoggingRoutineId(null);
       return;
     }
@@ -427,9 +429,9 @@ export default function HomeScreen() {
    */
   async function handleFinish() {
     if (!activeWorkout) return;
-    Alert.alert("¿Finalizar entrenamiento?", "¿Estás seguro?", [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Finalizar", onPress: async () => {
+    Alert.alert(t("workout:alerts.finishTitle"), t("workout:alerts.finishMessage"), [
+      { text: t("common:cancel"), style: "cancel" },
+      { text: t("workout:alerts.finishConfirmButton"), onPress: async () => {
         // Snapshot elapsed time before stopping
         if (timerSegmentStartRef.current !== null) {
           timerElapsedRef.current += Math.floor((Date.now() - timerSegmentStartRef.current) / 1000);
@@ -481,11 +483,11 @@ export default function HomeScreen() {
   function handleDeleteSelected() {
     if (selectedWEIds.size === 0) return;
     Alert.alert(
-      `¿Eliminar ${selectedWEIds.size} ejercicio(s)?`,
-      "Se eliminarán también todas sus series.",
+      t("workout:alerts.deleteSelectedTitle", { count: selectedWEIds.size }),
+      t("workout:alerts.deleteSetsAlsoMessage"),
       [
-        { text: "Cancelar", style: "cancel" },
-        { text: "Eliminar", style: "destructive", onPress: async () => {
+        { text: t("common:cancel"), style: "cancel" },
+        { text: t("common:delete"), style: "destructive", onPress: async () => {
           const ids = [...selectedWEIds];
           for (const id of ids) {
             removeExerciseFromWorkout(id);
@@ -507,9 +509,9 @@ export default function HomeScreen() {
 
   /** Pide confirmación y elimina un único ejercicio del entrenamiento (y todas sus series). */
   async function handleRemoveExercise(workoutExerciseId: string, exerciseName: string) {
-    Alert.alert(`¿Eliminar "${exerciseName}"?`, "Se eliminarán también todas sus series.", [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Eliminar", style: "destructive", onPress: async () => {
+    Alert.alert(t("workout:alerts.deleteExerciseTitle", { name: exerciseName }), t("workout:alerts.deleteSetsAlsoMessage"), [
+      { text: t("common:cancel"), style: "cancel" },
+      { text: t("common:delete"), style: "destructive", onPress: async () => {
         removeExerciseFromWorkout(workoutExerciseId);
         await repo.removeExercise(workoutExerciseId);
       }},
@@ -523,9 +525,9 @@ export default function HomeScreen() {
    * que se estaba viendo dejaba "Sin entrenamiento aún" aunque el día todavía tuviera otro).
    */
   async function handleDeleteWorkout(workoutId: string, date: string) {
-    Alert.alert(`¿Eliminar entrenamiento del ${formatWorkoutDate(date)}?`, "Se eliminará permanentemente.", [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Eliminar", style: "destructive", onPress: async () => {
+    Alert.alert(t("workout:alerts.deleteWorkoutTitle", { date: formatWorkoutDate(date) }), t("workout:alerts.deleteWorkoutMessage"), [
+      { text: t("common:cancel"), style: "cancel" },
+      { text: t("common:delete"), style: "destructive", onPress: async () => {
         removeWorkoutFromHistory(workoutId);
         await repo.deleteWorkout(workoutId);
         await preferencesRepo.deleteRaw(timerStorageKey(workoutId));
@@ -562,7 +564,7 @@ export default function HomeScreen() {
     let workoutId = activeWorkout?.id;
     if (!workoutId) {
       const { data, error } = await repo.createWorkout({ date: currentDate, start_time: new Date().toISOString() }, userId);
-      if (error || !data) { Alert.alert("Error", error?.message ?? "No se pudo crear el entrenamiento"); setCopyLoading(false); return; }
+      if (error || !data) { Alert.alert(t("workout:alerts.errorTitle"), error?.message ?? t("workout:alerts.workoutCreateErrorMessage")); setCopyLoading(false); return; }
       workoutId = data.id;
     }
     const { data: weList } = await repo.getWorkoutExercises(sourceWorkoutId);
@@ -622,24 +624,27 @@ export default function HomeScreen() {
     });
   })();
 
-  const WEEK_LABELS = ["L", "M", "X", "J", "V", "S", "D"];
+  const WEEK_LABELS = [
+    t("workout:weekLabels.mon"), t("workout:weekLabels.tue"), t("workout:weekLabels.wed"), t("workout:weekLabels.thu"),
+    t("workout:weekLabels.fri"), t("workout:weekLabels.sat"), t("workout:weekLabels.sun"),
+  ];
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Date nav header */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 8 }}>
-        <TouchableOpacity onPress={() => handleNavigateDate(-1)} style={{ padding: 6 }} accessibilityLabel="Día anterior">
+        <TouchableOpacity onPress={() => handleNavigateDate(-1)} style={{ padding: 6 }} accessibilityLabel={t("workout:previousDayLabel")}>
           <Ionicons name="chevron-back" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 20, fontWeight: "700", color: colors.text }}>
-            {currentDate === today ? "Hoy" : formatWorkoutDate(currentDate)}
+            {currentDate === today ? t("workout:todayLabel") : formatWorkoutDate(currentDate)}
           </Text>
           {currentDate === today && (
             <Text style={{ fontSize: 13, color: colors.textMuted }}>{formatWorkoutDate(today)}</Text>
           )}
         </View>
-        <TouchableOpacity onPress={() => handleNavigateDate(1)} disabled={currentDate >= today} style={{ padding: 6, opacity: currentDate >= today ? 0.4 : 1 }} accessibilityLabel="Día siguiente">
+        <TouchableOpacity onPress={() => handleNavigateDate(1)} disabled={currentDate >= today} style={{ padding: 6, opacity: currentDate >= today ? 0.4 : 1 }} accessibilityLabel={t("workout:nextDayLabel")}>
           <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
         {syncStatus === "syncing" ? (
@@ -694,17 +699,17 @@ export default function HomeScreen() {
             /* No workout */
             <View style={{ borderWidth: 1, borderColor: colors.border, borderStyle: "dashed", borderRadius: 20, padding: 40, alignItems: "center", gap: 12, marginTop: 8 }}>
               <Ionicons name="barbell-outline" size={40} color={colors.textMuted} />
-              <Text style={{ fontSize: 16, fontWeight: "600", color: colors.text }}>Sin entrenamiento aún</Text>
+              <Text style={{ fontSize: 16, fontWeight: "600", color: colors.text }}>{t("workout:emptyTitle")}</Text>
               <Text style={{ fontSize: 13, color: colors.textMuted, textAlign: "center" }}>
-                Inicia un entrenamiento para registrar tus series y hacer seguimiento del progreso.
+                {t("workout:emptySubtitle")}
               </Text>
               <TouchableOpacity onPress={openStartModal} style={{ backgroundColor: colors.primary, borderRadius: 14, paddingHorizontal: 32, paddingVertical: 12 }}>
-                <Text style={{ color: colors.background, fontSize: 14, fontWeight: "600" }}>Iniciar entrenamiento</Text>
+                <Text style={{ color: colors.background, fontSize: 14, fontWeight: "600" }}>{t("workout:startWorkoutButton")}</Text>
               </TouchableOpacity>
               {workouts.length > 0 && (
                 <TouchableOpacity onPress={() => setShowCopyModal(true)} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <Ionicons name="copy-outline" size={15} color={colors.primary} />
-                  <Text style={{ fontSize: 13, color: colors.primary, fontWeight: "500" }}>Copiar entrenamiento anterior</Text>
+                  <Text style={{ fontSize: 13, color: colors.primary, fontWeight: "500" }}>{t("workout:copyPreviousButton")}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -718,7 +723,7 @@ export default function HomeScreen() {
                     <TouchableOpacity
                       onPress={timerState === "running" ? handlePauseTimer : handleStartTimer}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      accessibilityLabel={timerState === "running" ? "Pausar temporizador" : "Iniciar temporizador"}
+                      accessibilityLabel={timerState === "running" ? t("workout:pauseTimerLabel") : t("workout:startTimerLabel")}
                     >
                       <Ionicons
                         name={timerState === "running" ? "pause-circle" : "play-circle"}
@@ -730,33 +735,33 @@ export default function HomeScreen() {
                   {activeWorkout.end_time && <Ionicons name="time-outline" size={14} color="#6366f1" />}
                   <Text style={{ fontSize: 13, fontWeight: "600", color: "#6366f1" }} numberOfLines={1}>{formatClockDuration(timerDisplay)}</Text>
                   {timerState === "paused" && timerDisplay > 0 && (
-                    <Text style={{ fontSize: 11, color: "#94a3b8" }} numberOfLines={1}>pausado</Text>
+                    <Text style={{ fontSize: 11, color: "#94a3b8" }} numberOfLines={1}>{t("workout:pausedLabel")}</Text>
                   )}
-                  {activeWorkout.end_time && <Text style={{ fontSize: 11, color: "#94a3b8" }} numberOfLines={1}>finalizado</Text>}
+                  {activeWorkout.end_time && <Text style={{ fontSize: 11, color: "#94a3b8" }} numberOfLines={1}>{t("workout:finishedLabel")}</Text>}
                 </View>
                 <TouchableOpacity
                   onPress={() => { setMoveDate(activeWorkout.date); setShowMoveModal(true); }}
                   style={{ flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}
                 >
                   <Ionicons name="calendar-outline" size={16} color="#64748b" />
-                  <Text style={{ fontSize: 13, color: "#64748b" }}>Mover</Text>
+                  <Text style={{ fontSize: 13, color: "#64748b" }}>{t("workout:moveButton")}</Text>
                 </TouchableOpacity>
                 {/* Solo tiene sentido añadir un entrenamiento nuevo cuando el activo ya ha finalizado. */}
                 {activeWorkout.end_time && (
                   <TouchableOpacity
                     onPress={openStartModal}
                     style={{ flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}
-                    accessibilityLabel="Añadir otro entrenamiento este día"
+                    accessibilityLabel={t("workout:addAnotherWorkoutLabel")}
                   >
                     <Ionicons name="add-circle-outline" size={16} color="#64748b" />
-                    <Text style={{ fontSize: 13, color: "#64748b" }}>Nuevo</Text>
+                    <Text style={{ fontSize: 13, color: "#64748b" }}>{t("workout:newButton")}</Text>
                   </TouchableOpacity>
                 )}
                 {workoutExercises.length > 0 && (
                   <TouchableOpacity
                     onPress={toggleSelectMode}
                     style={{ flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: selectMode ? "#6366f1" : "#e2e8f0", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}
-                    accessibilityLabel={selectMode ? "Cancelar selección" : "Seleccionar varios ejercicios"}
+                    accessibilityLabel={selectMode ? t("workout:cancelSelectionLabel") : t("workout:selectMultipleLabel")}
                   >
                     <Ionicons name="checkbox-outline" size={16} color={selectMode ? "#6366f1" : "#64748b"} />
                   </TouchableOpacity>
@@ -765,13 +770,13 @@ export default function HomeScreen() {
 
               {selectMode && (
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#eff0fe", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}>
-                  <Text style={{ fontSize: 13, color: "#6366f1", fontWeight: "500" }}>{selectedWEIds.size} seleccionado(s)</Text>
+                  <Text style={{ fontSize: 13, color: "#6366f1", fontWeight: "500" }}>{t("workout:selectedCount", { count: selectedWEIds.size })}</Text>
                   <TouchableOpacity
                     onPress={handleDeleteSelected}
                     disabled={selectedWEIds.size === 0}
                     style={{ opacity: selectedWEIds.size === 0 ? 0.4 : 1 }}
                   >
-                    <Text style={{ fontSize: 13, color: "#ef4444", fontWeight: "600" }}>Eliminar seleccionados</Text>
+                    <Text style={{ fontSize: 13, color: "#ef4444", fontWeight: "600" }}>{t("workout:deleteSelectedButton")}</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -812,7 +817,7 @@ export default function HomeScreen() {
                               onPress={() => toggleSelectWE(we.id)}
                               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                               style={{ paddingLeft: 14 }}
-                              accessibilityLabel={isSelected ? "Deseleccionar" : "Seleccionar"}
+                              accessibilityLabel={isSelected ? t("workout:deselectLabel") : t("workout:selectLabel")}
                             >
                               <Ionicons name={isSelected ? "checkbox" : "square-outline"} size={20} color={isSelected ? "#6366f1" : "#94a3b8"} />
                             </TouchableOpacity>
@@ -826,10 +831,10 @@ export default function HomeScreen() {
                               {showSetCountHome && (
                                 <Text style={{ fontSize: 12, color: allDone ? "#16a34a" : "#94a3b8", marginTop: 2 }}>
                                   {totalCount === 0
-                                    ? "Sin series"
+                                    ? t("workout:noSetsLabel")
                                     : allDone
-                                    ? `${totalCount} series completadas`
-                                    : `${completedCount}/${totalCount} series`}
+                                    ? t("workout:setsCompletedLabel", { count: totalCount })
+                                    : t("workout:setsProgressLabel", { completed: completedCount, total: totalCount })}
                                 </Text>
                               )}
                             </View>
@@ -843,7 +848,7 @@ export default function HomeScreen() {
                                 onPress={() => handleRemoveExercise(we.id, exName)}
                                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                                 style={{ padding: 8 }}
-                                accessibilityLabel="Eliminar ejercicio"
+                                accessibilityLabel={t("workout:removeExerciseLabel")}
                               >
                                 <Ionicons name="trash-outline" size={16} color="#ef4444" />
                               </TouchableOpacity>
@@ -853,7 +858,7 @@ export default function HomeScreen() {
                                   disabled={isActive}
                                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                                   style={{ padding: 8 }}
-                                  accessibilityLabel="Mantener pulsado para reordenar"
+                                  accessibilityLabel={t("workout:reorderExerciseHintLabel")}
                                 >
                                   <Ionicons name="reorder-three-outline" size={18} color="#94a3b8" />
                                 </TouchableOpacity>
@@ -878,14 +883,14 @@ export default function HomeScreen() {
                   onPress={() => router.push("/exercises")}
                   style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 16, paddingVertical: 14, alignItems: "center" }}
                 >
-                  <Text style={{ fontSize: 13, color: "#94a3b8" }}>+ Añadir ejercicio</Text>
+                  <Text style={{ fontSize: 13, color: "#94a3b8" }}>{t("workout:addExerciseButton")}</Text>
                 </TouchableOpacity>
               )}
 
               {/* Workout comment */}
               <TextInput
                 style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, fontSize: 13, color: "#0f172a", backgroundColor: "#fafafa", minHeight: 44 }}
-                placeholder="Añadir nota al entrenamiento…"
+                placeholder={t("workout:commentPlaceholder")}
                 placeholderTextColor="#94a3b8"
                 value={workoutComment}
                 onChangeText={setWorkoutCommentLocal}
@@ -896,7 +901,7 @@ export default function HomeScreen() {
 
               {!activeWorkout.end_time && (
                 <TouchableOpacity onPress={handleFinish} style={{ borderWidth: 1, borderColor: "#ef4444", borderRadius: 14, paddingVertical: 12, alignItems: "center", marginTop: 4 }}>
-                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#ef4444" }}>Finalizar entrenamiento</Text>
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#ef4444" }}>{t("workout:finishButton")}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -905,7 +910,7 @@ export default function HomeScreen() {
           {/* Recent workouts — solo los del día que se está viendo */}
           {workouts.filter((w) => w.date === currentDate).length > 0 && (
             <View style={{ gap: 8 }}>
-              <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>Actividad reciente</Text>
+              <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>{t("workout:recentActivityTitle")}</Text>
               {workouts.filter((w) => w.date === currentDate).map((w) => {
                 const s = recentSummaries[w.id];
                 return (
@@ -918,7 +923,7 @@ export default function HomeScreen() {
                       {s && s.exerciseCount > 0 ? (
                         <View style={{ flexDirection: "row", gap: 10, marginTop: 3 }}>
                           <Text style={{ fontSize: 11, color: "#94a3b8" }}>
-                            {s.exerciseCount} ejercicio{s.exerciseCount !== 1 ? "s" : ""}
+                            {t("routines:exercisesCount", { count: s.exerciseCount })}
                           </Text>
                           {s.volume > 0 && (
                             <Text style={{ fontSize: 11, color: "#6366f1", fontWeight: "600" }}>
@@ -932,7 +937,7 @@ export default function HomeScreen() {
                       onPress={() => handleDeleteWorkout(w.id, w.date)}
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       style={{ padding: 8 }}
-                      accessibilityLabel="Eliminar entrenamiento"
+                      accessibilityLabel={t("workout:deleteWorkoutLabel")}
                     >
                       <Ionicons name="trash-outline" size={14} color="#ef4444" />
                     </TouchableOpacity>
@@ -948,14 +953,14 @@ export default function HomeScreen() {
         <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
           <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
             {routineDaysToPick ? (
-              <TouchableOpacity onPress={() => setRoutineDaysToPick(null)} accessibilityLabel="Volver" style={{ paddingRight: 12 }}>
+              <TouchableOpacity onPress={() => setRoutineDaysToPick(null)} accessibilityLabel={t("workout:startModal.backLabel")} style={{ paddingRight: 12 }}>
                 <Ionicons name="chevron-back" size={22} color="#64748b" />
               </TouchableOpacity>
             ) : null}
             <Text style={{ flex: 1, fontSize: 16, fontWeight: "700", color: "#0f172a" }}>
-              {routineDaysToPick ? `${routineDaysToPick.routineName} — elige un día` : "Elige una rutina"}
+              {routineDaysToPick ? t("workout:startModal.chooseDayTitle", { routineName: routineDaysToPick.routineName }) : t("workout:startModal.chooseRoutineTitle")}
             </Text>
-            <TouchableOpacity onPress={closeStartModal} accessibilityLabel="Cerrar">
+            <TouchableOpacity onPress={closeStartModal} accessibilityLabel={t("common:close")}>
               <Ionicons name="close" size={22} color="#64748b" />
             </TouchableOpacity>
           </View>
@@ -986,9 +991,9 @@ export default function HomeScreen() {
           ) : startRoutines.length === 0 ? (
             <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 16 }}>
               <Ionicons name="clipboard-outline" size={48} color="#cbd5e1" />
-              <Text style={{ fontSize: 16, fontWeight: "600", color: "#64748b", textAlign: "center" }}>Sin rutinas</Text>
+              <Text style={{ fontSize: 16, fontWeight: "600", color: "#64748b", textAlign: "center" }}>{t("workout:startModal.noRoutinesTitle")}</Text>
               <Text style={{ fontSize: 14, color: "#94a3b8", textAlign: "center" }}>
-                Crea una rutina en el tab Rutinas para registrarla, o empieza un entrenamiento en blanco.
+                {t("workout:startModal.noRoutinesSubtitle")}
               </Text>
               <TouchableOpacity
                 onPress={handleStartBlankWorkout}
@@ -997,13 +1002,13 @@ export default function HomeScreen() {
               >
                 {loggingRoutineId === "blank"
                   ? <ActivityIndicator size="small" color="#fff" />
-                  : <Text style={{ fontSize: 14, fontWeight: "600", color: "#fff" }}>Entrenamiento en blanco</Text>}
+                  : <Text style={{ fontSize: 14, fontWeight: "600", color: "#fff" }}>{t("workout:startModal.blankWorkoutButton")}</Text>}
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => { setShowStartModal(false); router.push("/tools"); }}
                 style={{ paddingHorizontal: 24, paddingVertical: 8 }}
               >
-                <Text style={{ fontSize: 14, fontWeight: "600", color: "#6366f1" }}>Ir a Rutinas</Text>
+                <Text style={{ fontSize: 14, fontWeight: "600", color: "#6366f1" }}>{t("workout:startModal.goToRoutinesButton")}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -1022,7 +1027,7 @@ export default function HomeScreen() {
                       ? <ActivityIndicator size="small" color="#6366f1" />
                       : <Ionicons name="add-outline" size={22} color="#6366f1" />}
                   </View>
-                  <Text style={{ flex: 1, fontSize: 15, fontWeight: "600", color: "#0f172a" }}>Entrenamiento en blanco</Text>
+                  <Text style={{ flex: 1, fontSize: 15, fontWeight: "600", color: "#0f172a" }}>{t("workout:startModal.blankWorkoutButton")}</Text>
                 </TouchableOpacity>
               }
               renderItem={({ item: r }) => (
@@ -1052,26 +1057,26 @@ export default function HomeScreen() {
       <Modal visible={showMoveModal} animationType="fade" transparent onRequestClose={() => setShowMoveModal(false)}>
         <View style={{ flex: 1, backgroundColor: "#00000060", justifyContent: "center", paddingHorizontal: 32 }}>
           <View style={{ backgroundColor: "#fff", borderRadius: 16, padding: 20, gap: 16 }}>
-            <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>Mover entrenamiento</Text>
+            <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>{t("workout:moveModal.heading")}</Text>
             <View style={{ gap: 6 }}>
-              <Text style={{ fontSize: 12, color: "#64748b" }}>Nueva fecha</Text>
+              <Text style={{ fontSize: 12, color: "#64748b" }}>{t("workout:moveModal.newDateLabel")}</Text>
               <DateInput value={moveDate} onChange={setMoveDate} />
               {moveConflict && (
                 <Text style={{ fontSize: 12, color: "#ef4444" }}>
-                  Ya existe un entrenamiento en esa fecha. Elige otra.
+                  {t("workout:moveModal.conflictMessage")}
                 </Text>
               )}
             </View>
             <View style={{ flexDirection: "row", gap: 10 }}>
               <TouchableOpacity onPress={() => setShowMoveModal(false)} style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: "#e2e8f0", alignItems: "center" }}>
-                <Text style={{ fontSize: 14, color: "#64748b" }}>Cancelar</Text>
+                <Text style={{ fontSize: 14, color: "#64748b" }}>{t("common:cancel")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleMoveWorkout}
                 disabled={!moveDate || moveDate === activeWorkout?.date || moveConflict}
                 style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: moveDate && moveDate !== activeWorkout?.date && !moveConflict ? "#6366f1" : "#e2e8f0", alignItems: "center" }}
               >
-                <Text style={{ fontSize: 14, fontWeight: "600", color: moveDate && moveDate !== activeWorkout?.date && !moveConflict ? "#fff" : "#94a3b8" }}>Mover</Text>
+                <Text style={{ fontSize: 14, fontWeight: "600", color: moveDate && moveDate !== activeWorkout?.date && !moveConflict ? "#fff" : "#94a3b8" }}>{t("workout:moveButton")}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1082,8 +1087,8 @@ export default function HomeScreen() {
       <Modal visible={showCopyModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowCopyModal(false)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
           <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
-            <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: "#0f172a" }}>Copiar ejercicios de…</Text>
-            <TouchableOpacity onPress={() => setShowCopyModal(false)} accessibilityLabel="Cerrar">
+            <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: "#0f172a" }}>{t("workout:copyModal.heading")}</Text>
+            <TouchableOpacity onPress={() => setShowCopyModal(false)} accessibilityLabel={t("common:close")}>
               <Ionicons name="close" size={22} color="#64748b" />
             </TouchableOpacity>
           </View>
@@ -1091,7 +1096,7 @@ export default function HomeScreen() {
             data={workouts.filter((w) => w.id !== activeWorkout?.id).slice(0, 10)}
             keyExtractor={(w) => w.id}
             contentContainerStyle={{ padding: 16, gap: 8 }}
-            ListEmptyComponent={<Text style={{ color: "#94a3b8", textAlign: "center", marginTop: 40 }}>Sin entrenamientos anteriores</Text>}
+            ListEmptyComponent={<Text style={{ color: "#94a3b8", textAlign: "center", marginTop: 40 }}>{t("workout:copyModal.emptyMessage")}</Text>}
             renderItem={({ item: w }) => (
               <TouchableOpacity
                 onPress={() => handleCopyWorkout(w.id)}
@@ -1110,7 +1115,7 @@ export default function HomeScreen() {
         <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#00000030", justifyContent: "center", alignItems: "center" }}>
           <View style={{ backgroundColor: "#fff", borderRadius: 16, padding: 24, alignItems: "center", gap: 12 }}>
             <ActivityIndicator color="#6366f1" />
-            <Text style={{ fontSize: 14, color: "#64748b" }}>Copiando ejercicios…</Text>
+            <Text style={{ fontSize: 14, color: "#64748b" }}>{t("workout:copyModal.copyingMessage")}</Text>
           </View>
         </View>
       )}
@@ -1122,14 +1127,14 @@ export default function HomeScreen() {
             <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: "#6366f115", alignItems: "center", justifyContent: "center" }}>
               <Ionicons name="trophy" size={28} color="#6366f1" />
             </View>
-            <Text style={{ fontSize: 20, fontWeight: "700", color: "#0f172a" }}>¡Entrenamiento completado!</Text>
+            <Text style={{ fontSize: 20, fontWeight: "700", color: "#0f172a" }}>{t("workout:summaryModal.heading")}</Text>
             {summaryStats && (
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "center", width: "100%" }}>
                 {[
-                  { icon: "time-outline" as const, label: "Duración", value: formatClockDuration(summaryStats.duration) },
-                  { icon: "barbell-outline" as const, label: "Ejercicios", value: String(summaryStats.exercises) },
-                  { icon: "list-outline" as const, label: "Series", value: String(summaryStats.sets) },
-                  { icon: "flame-outline" as const, label: "Volumen", value: summaryStats.volume > 0 ? (summaryStats.volume >= 1000 ? `${(summaryStats.volume / 1000).toFixed(1)}k kg` : `${summaryStats.volume} kg`) : "—" },
+                  { icon: "time-outline" as const, label: t("workout:summaryModal.durationLabel"), value: formatClockDuration(summaryStats.duration) },
+                  { icon: "barbell-outline" as const, label: t("workout:summaryModal.exercisesLabel"), value: String(summaryStats.exercises) },
+                  { icon: "list-outline" as const, label: t("workout:summaryModal.setsLabel"), value: String(summaryStats.sets) },
+                  { icon: "flame-outline" as const, label: t("workout:summaryModal.volumeLabel"), value: summaryStats.volume > 0 ? (summaryStats.volume >= 1000 ? `${(summaryStats.volume / 1000).toFixed(1)}k kg` : `${summaryStats.volume} kg`) : "—" },
                 ].map((stat) => (
                   <View key={stat.label} style={{ width: "45%", backgroundColor: "#f8fafc", borderRadius: 14, padding: 14, alignItems: "center", gap: 4 }}>
                     <Ionicons name={stat.icon} size={20} color="#6366f1" />
@@ -1143,7 +1148,7 @@ export default function HomeScreen() {
               onPress={() => setShowSummary(false)}
               style={{ backgroundColor: "#6366f1", borderRadius: 14, paddingHorizontal: 40, paddingVertical: 14, width: "100%", alignItems: "center" }}
             >
-              <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>Cerrar</Text>
+              <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>{t("workout:summaryModal.closeButton")}</Text>
             </TouchableOpacity>
           </View>
         </View>
