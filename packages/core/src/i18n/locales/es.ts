@@ -277,7 +277,6 @@ export const es = {
       rowsDetected: "{{count}} filas detectadas",
       button: "Importar",
       noRowsError: "No se encontraron filas válidas. Asegúrate de pegar un CSV con el formato correcto.",
-      noSessionError: "No hay sesión activa.",
       completedTitle: "Importación completada",
       completedMessage: "{{count}} series importadas.",
       skippedMessage: "{{count}} series omitidas (fechas ya existentes).",

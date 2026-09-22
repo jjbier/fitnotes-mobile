@@ -346,4 +346,91 @@ describe("localWorkoutRepository", () => {
       expect(await personalRecordsFor("ex-1")).toEqual([]);
     });
   });
+
+  describe("CSV import/export (2026-09-22)", () => {
+    it("exportAllCSV returns an empty string when there are no workouts", async () => {
+      expect(await repo.exportAllCSV()).toBe("");
+    });
+
+    it("exportAllCSV writes one row per set, resolving the exercise name and sanitizing commas in comments", async () => {
+      await db.runAsync(`INSERT INTO exercises (id, user_id, name, type, weight_unit, is_favorite, created_at, updated_at, _dirty, _deleted) VALUES ('ex-1', ?, 'Press banca', 'WEIGHT_REPS', 'kg', 0, '2026-01-01', '2026-01-01', 0, 0)`, [USER_ID]);
+      const { data: workout } = await repo.createWorkout({ date: "2026-07-10", comment: "buen día" }, USER_ID);
+      const { data: we } = await repo.addExercise({ workout_id: workout!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+      const { data: set } = await repo.createSet({ workout_exercise_id: we!.id, order_index: 0, weight: 80, reps: 5 }, USER_ID);
+      await repo.updateSet(set!.id, { is_complete: true, comment: "duro, pero bien" });
+
+      const csv = await repo.exportAllCSV();
+      const lines = csv.split("\n");
+      expect(lines[0]).toBe("Date,Exercise,Weight,Reps,Distance,Time,Comment,Completed,Warmup");
+      expect(lines[1]).toBe("2026-07-10,Press banca,80,5,,,duro; pero bien,1,0");
+    });
+
+    it("exportAllCSV writes a blank-sets row for a workout_exercise with no sets", async () => {
+      const { data: workout } = await repo.createWorkout({ date: "2026-07-11" }, USER_ID);
+      await repo.addExercise({ workout_id: workout!.id, exercise_id: "ex-empty", order_index: 0 }, USER_ID);
+
+      const csv = await repo.exportAllCSV();
+      expect(csv.split("\n")[1]).toBe("2026-07-11,ex-empty,,,,,,");
+    });
+
+    it("importFromCSV creates a workout/exercise/set per row, resolving exercises case-insensitively and creating new ones on the fly", async () => {
+      await db.runAsync(`INSERT INTO exercises (id, user_id, name, type, weight_unit, is_favorite, created_at, updated_at, _dirty, _deleted) VALUES ('ex-1', ?, 'Sentadilla', 'WEIGHT_REPS', 'kg', 0, '2026-01-01', '2026-01-01', 0, 0)`, [USER_ID]);
+
+      const result = await repo.importFromCSV(
+        [
+          { date: "2026-07-12", exerciseName: "sentadilla", weight: 100, reps: 5, isComplete: true, isWarmup: false },
+          { date: "2026-07-12", exerciseName: "Curl bíceps", weight: 20, reps: 10, isComplete: true, isWarmup: false },
+        ],
+        USER_ID
+      );
+
+      expect(result).toEqual({ imported: 2, skipped: 0, newExercises: 1 });
+
+      const curl = await db.getFirstAsync<{ id: string }>(`SELECT id FROM exercises WHERE name = 'Curl bíceps'`);
+      expect(curl).not.toBeNull();
+
+      const { data: workout } = await repo.getWorkoutByDate("2026-07-12");
+      expect(workout).not.toBeNull();
+      const { data: wes } = await repo.getWorkoutExercises(workout!.id);
+      expect(wes.map((w) => w.exercise_id).sort()).toEqual(["ex-1", curl!.id].sort());
+
+      const ops = await pendingOpsFor(db, "exercises");
+      expect(ops.some((o) => o.row_id === curl!.id && o.op_type === "insert")).toBe(true);
+    });
+
+    it("importFromCSV skips every row for a date that already has a workout, without touching it", async () => {
+      await repo.createWorkout({ date: "2026-07-13" }, USER_ID);
+
+      const result = await repo.importFromCSV(
+        [{ date: "2026-07-13", exerciseName: "Dominadas", weight: 0, reps: 8, isComplete: true, isWarmup: false }],
+        USER_ID
+      );
+
+      expect(result).toEqual({ imported: 0, skipped: 1, newExercises: 0 });
+    });
+
+    it("importFromCSV records a personal record for a completed set with weight and reps, same as manual entry", async () => {
+      await repo.importFromCSV(
+        [{ date: "2026-07-14", exerciseName: "Peso muerto", weight: 120, reps: 3, isComplete: true, isWarmup: false }],
+        USER_ID
+      );
+
+      const exercise = await db.getFirstAsync<{ id: string }>(`SELECT id FROM exercises WHERE name = 'Peso muerto'`);
+      const prs = await db.getAllAsync<{ weight: number; reps: number }>(
+        `SELECT weight, reps FROM personal_records WHERE exercise_id = ? AND _deleted = 0`,
+        [exercise!.id]
+      );
+      expect(prs).toEqual([{ weight: 120, reps: 3 }]);
+    });
+
+    it("importFromCSV does not record a personal record for an incomplete set", async () => {
+      await repo.importFromCSV(
+        [{ date: "2026-07-15", exerciseName: "Remo", weight: 60, reps: 8, isComplete: false, isWarmup: false }],
+        USER_ID
+      );
+
+      const prs = await db.getAllAsync<{ id: string }>(`SELECT id FROM personal_records WHERE _deleted = 0`);
+      expect(prs).toEqual([]);
+    });
+  });
 });

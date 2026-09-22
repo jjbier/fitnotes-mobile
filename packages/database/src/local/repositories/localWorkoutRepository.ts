@@ -8,6 +8,7 @@ type WorkoutRow = Database["public"]["Tables"]["workouts"]["Row"];
 type WorkoutExerciseRow = Database["public"]["Tables"]["workout_exercises"]["Row"];
 type SetRow = Database["public"]["Tables"]["sets"]["Row"];
 type PersonalRecordRow = Database["public"]["Tables"]["personal_records"]["Row"];
+type ExerciseRow = Database["public"]["Tables"]["exercises"]["Row"];
 
 /**
  * Réplica local del trigger SQL `update_personal_record` (ver
@@ -168,8 +169,10 @@ function mapSetRow(row: RawRow): SetRow {
  * transacción) y devuelve el mismo shape que el repo de Supabase. Los borrados
  * marcan _deleted=1 (tombstone) en vez de borrar físicamente.
  *
- * importFromCSV/exportAllCSV/shareWorkout/deleteWorkoutHistory se quedan
- * fuera — siguen requiriendo red (ver plan, "fuera de alcance").
+ * `importFromCSV`/`exportAllCSV` (2026-09-22) también tienen réplica local,
+ * mismo formato exacto que el remoto. `shareWorkout`/`deleteWorkoutHistory`
+ * siguen fuera — la primera ni siquiera existe como método de repo, la
+ * segunda sigue requiriendo cuenta real (ver plan, "fuera de alcance").
  */
 export function createLocalWorkoutRepository(db: SqlExecutor) {
   return {
@@ -757,6 +760,220 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
         };
       }
       return result;
+    },
+
+    // ─── CSV import/export ─────────────────────────────────────────────────────
+
+    /** Exporta TODO el historial de entrenamientos vivo a CSV (`Date,Exercise,Weight,Reps,Distance,Time,Comment,Completed,Warmup`), una fila por set (o una fila vacía de sets si el ejercicio no tiene ninguno) — réplica local de `workoutRepository.exportAllCSV`, mismo formato exacto para que un export local y uno remoto sean intercambiables. Comas en comentarios se sustituyen por `;` para no romper el CSV. */
+    async exportAllCSV(): Promise<string> {
+      const workoutsData = await db.getAllAsync<{ id: string; date: string; comment: string | null }>(
+        `SELECT id, date, comment FROM workouts WHERE _deleted = 0 ORDER BY date ASC`
+      );
+      if (workoutsData.length === 0) return "";
+
+      const workoutIds = workoutsData.map((w) => w.id);
+      const wPlaceholders = workoutIds.map(() => "?").join(",");
+      const wesData = await db.getAllAsync<{ id: string; workout_id: string; exercise_id: string; order_index: number }>(
+        `SELECT id, workout_id, exercise_id, order_index FROM workout_exercises WHERE _deleted = 0 AND workout_id IN (${wPlaceholders}) ORDER BY order_index ASC`,
+        workoutIds
+      );
+      if (wesData.length === 0) return "";
+
+      const exerciseIds = [...new Set(wesData.map((we) => we.exercise_id))];
+      const exPlaceholders = exerciseIds.map(() => "?").join(",");
+      const exRows = await db.getAllAsync<{ id: string; name: string }>(
+        `SELECT id, name FROM exercises WHERE id IN (${exPlaceholders})`,
+        exerciseIds
+      );
+      const nameMap: Record<string, string> = {};
+      for (const ex of exRows) nameMap[ex.id] = ex.name;
+
+      const weIds = wesData.map((we) => we.id);
+      const wePlaceholders = weIds.map(() => "?").join(",");
+      const setsData = await db.getAllAsync<{
+        workout_exercise_id: string; weight: number | null; reps: number | null;
+        distance: number | null; time_seconds: number | null; comment: string | null;
+        is_complete: number; is_warmup: number; order_index: number;
+      }>(
+        `SELECT workout_exercise_id, weight, reps, distance, time_seconds, comment, is_complete, is_warmup, order_index
+         FROM sets WHERE _deleted = 0 AND workout_exercise_id IN (${wePlaceholders}) ORDER BY order_index ASC`,
+        weIds
+      );
+
+      const setsByWE: Record<string, typeof setsData> = {};
+      for (const s of setsData) (setsByWE[s.workout_exercise_id] ??= []).push(s);
+
+      const workoutById: Record<string, { date: string; comment: string | null }> = {};
+      for (const w of workoutsData) workoutById[w.id] = { date: w.date, comment: w.comment };
+
+      const rows: string[] = ["Date,Exercise,Weight,Reps,Distance,Time,Comment,Completed,Warmup"];
+      for (const we of wesData) {
+        const workout = workoutById[we.workout_id];
+        if (!workout) continue;
+        const exName = nameMap[we.exercise_id] ?? we.exercise_id;
+        const weSets = setsByWE[we.id] ?? [];
+        if (weSets.length === 0) {
+          rows.push([workout.date, exName, "", "", "", "", workout.comment ?? "", ""].join(","));
+        } else {
+          for (const s of weSets) {
+            const comment = (s.comment ?? workout.comment ?? "").replace(/,/g, ";");
+            rows.push([
+              workout.date, exName,
+              s.weight ?? "", s.reps ?? "",
+              s.distance ?? "", s.time_seconds ?? "",
+              comment, s.is_complete ? "1" : "0",
+              s.is_warmup ? "1" : "0",
+            ].join(","));
+          }
+        }
+      }
+      return rows.join("\n");
+    },
+
+    /**
+     * Importa entrenamientos desde filas de CSV ya parseadas: agrupa por fecha y,
+     * dentro de cada fecha, por nombre de ejercicio (preservando el orden de
+     * aparición); crea ejercicios nuevos sobre la marcha si el nombre no existe
+     * (case-insensitive) por defecto como `WEIGHT_REPS`/kg. Si ya existe un
+     * entrenamiento en una fecha del CSV, esa fecha entera se omite (`skipped`)
+     * para no duplicar — no hace merge parcial. Réplica local de
+     * `workoutRepository.importFromCSV`; a diferencia del remoto (donde el
+     * trigger SQL genera los PRs al insertar), aquí se llama a
+     * `maybeRecordPersonalRecord` explícitamente por cada set completo insertado.
+     */
+    async importFromCSV(
+      rows: Array<{
+        date: string;
+        exerciseName: string;
+        weight?: number;
+        reps?: number;
+        distance?: number;
+        timeSecs?: number;
+        comment?: string;
+        isComplete: boolean;
+        isWarmup: boolean;
+      }>,
+      userId: string
+    ): Promise<{ imported: number; skipped: number; newExercises: number }> {
+      if (rows.length === 0) return { imported: 0, skipped: 0, newExercises: 0 };
+
+      const exData = await db.getAllAsync<{ id: string; name: string }>(`SELECT id, name FROM exercises WHERE _deleted = 0`);
+      const nameToId = new Map<string, string>(exData.map((e) => [e.name.toLowerCase(), e.id]));
+      let newExercises = 0;
+
+      async function resolveExercise(name: string): Promise<string> {
+        const key = name.toLowerCase();
+        if (nameToId.has(key)) return nameToId.get(key)!;
+        const id = generateUUID();
+        const ts = nowIso();
+        const row: ExerciseRow = {
+          id, user_id: userId, category_id: null, name, notes: null,
+          type: "WEIGHT_REPS", weight_unit: "kg", is_favorite: false,
+          weight_increment: null, default_rest_seconds: null, default_chart: null, demo_url: null,
+          created_at: ts, updated_at: ts,
+        };
+        await db.runAsync(
+          `INSERT INTO exercises (id, user_id, category_id, name, notes, type, weight_unit, is_favorite, weight_increment, default_rest_seconds, default_chart, demo_url, created_at, updated_at, _dirty, _deleted)
+           VALUES (?, ?, NULL, ?, NULL, ?, ?, 0, NULL, NULL, NULL, NULL, ?, ?, 1, 0)`,
+          [row.id, row.user_id, row.name, row.type, row.weight_unit, row.created_at, row.updated_at]
+        );
+        await enqueuePendingOp(db, "exercises", id, "insert", row);
+        nameToId.set(key, id);
+        newExercises++;
+        return id;
+      }
+
+      // Group by date
+      const byDate = new Map<string, typeof rows>();
+      for (const row of rows) {
+        if (!row.date || !row.exerciseName) continue;
+        if (!byDate.has(row.date)) byDate.set(row.date, []);
+        byDate.get(row.date)!.push(row);
+      }
+
+      const dates = [...byDate.keys()];
+      const datePlaceholders = dates.map(() => "?").join(",");
+      const existingWorkouts = dates.length > 0
+        ? await db.getAllAsync<{ date: string }>(`SELECT date FROM workouts WHERE _deleted = 0 AND date IN (${datePlaceholders})`, dates)
+        : [];
+      const existingDates = new Set(existingWorkouts.map((w) => w.date));
+
+      let imported = 0;
+      let skipped = 0;
+
+      await db.withTransactionAsync(async () => {
+        for (const [date, dateRows] of byDate) {
+          if (existingDates.has(date)) { skipped += dateRows.length; continue; }
+
+          const workoutId = generateUUID();
+          const wTs = nowIso();
+          const workoutRow: WorkoutRow = {
+            id: workoutId, user_id: userId, date, comment: null, start_time: null, end_time: null,
+            duration_minutes: null, created_at: wTs, updated_at: wTs,
+          };
+          await db.runAsync(
+            `INSERT INTO workouts (id, user_id, date, comment, start_time, end_time, duration_minutes, created_at, updated_at, _dirty, _deleted)
+             VALUES (?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, 1, 0)`,
+            [workoutRow.id, workoutRow.user_id, workoutRow.date, workoutRow.created_at, workoutRow.updated_at]
+          );
+          await enqueuePendingOp(db, "workouts", workoutId, "insert", workoutRow);
+
+          // Group by exercise within this date (preserve order)
+          const exOrder: string[] = [];
+          const byEx = new Map<string, typeof dateRows>();
+          for (const row of dateRows) {
+            const key = row.exerciseName;
+            if (!byEx.has(key)) { exOrder.push(key); byEx.set(key, []); }
+            byEx.get(key)!.push(row);
+          }
+
+          let exIdx = 0;
+          for (const exName of exOrder) {
+            const exerciseId = await resolveExercise(exName);
+            const weId = generateUUID();
+            const weTs = nowIso();
+            const weRow: WorkoutExerciseRow = {
+              id: weId, user_id: userId, workout_id: workoutId, exercise_id: exerciseId,
+              order_index: exIdx, group_id: null, group_name: null, created_at: weTs, updated_at: weTs,
+            };
+            await db.runAsync(
+              `INSERT INTO workout_exercises (id, user_id, workout_id, exercise_id, order_index, group_id, group_name, created_at, updated_at, _dirty, _deleted)
+               VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, 1, 0)`,
+              [weRow.id, weRow.user_id, weRow.workout_id, weRow.exercise_id, weRow.order_index, weRow.created_at, weRow.updated_at]
+            );
+            await enqueuePendingOp(db, "workout_exercises", weId, "insert", weRow);
+            exIdx++;
+
+            const exRows = byEx.get(exName) ?? [];
+            for (let i = 0; i < exRows.length; i++) {
+              const r = exRows[i]!;
+              const setId = generateUUID();
+              const setTs = nowIso();
+              const setRow: SetRow = {
+                id: setId, user_id: userId, workout_exercise_id: weId, order_index: i,
+                weight: r.weight ?? null, reps: r.reps ?? null, distance: r.distance ?? null, time_seconds: r.timeSecs ?? null,
+                is_complete: r.isComplete, is_warmup: r.isWarmup, comment: r.comment ?? null,
+                created_at: setTs, updated_at: setTs,
+              };
+              await db.runAsync(
+                `INSERT INTO sets (id, user_id, workout_exercise_id, order_index, weight, reps, distance, time_seconds, is_complete, is_warmup, comment, created_at, updated_at, _dirty, _deleted)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)`,
+                [
+                  setRow.id, setRow.user_id, setRow.workout_exercise_id, setRow.order_index,
+                  setRow.weight, setRow.reps, setRow.distance, setRow.time_seconds,
+                  fromBool(setRow.is_complete), fromBool(setRow.is_warmup), setRow.comment,
+                  setRow.created_at, setRow.updated_at,
+                ]
+              );
+              await enqueuePendingOp(db, "sets", setId, "insert", setRow);
+              if (setRow.is_complete) await maybeRecordPersonalRecord(db, setRow as unknown as RawRow);
+              imported++;
+            }
+          }
+        }
+      });
+
+      return { imported, skipped, newExercises };
     },
 
     /**

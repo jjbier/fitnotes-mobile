@@ -20,7 +20,7 @@ import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { useTheme, useThemeModeStore, type ThemeMode } from "../../lib/theme";
 import { usePreferencesStore, computeDefaultCatalogSeedPlan, resolveDefaultExerciseCatalog, type UserPreferences, type DefaultCatalogSeedPlan } from "@fitnotes/core";
-import { createWorkoutRepository, createBackupRepository, createBodyTrackerRepository, isBackupData, type BackupData } from "@fitnotes/database";
+import { createWorkoutRepository, createBackupRepository, isBackupData, type BackupData } from "@fitnotes/database";
 import { useRepositories } from "../../contexts/RepositoryContext";
 import { useSyncStatus } from "../../contexts/SyncContext";
 
@@ -59,21 +59,22 @@ function parseCSVRows(csv: string) {
  * inicio de semana, toggles de entrenamiento y rest timer, límite de reps
  * para récords estimados), apariencia (tema claro/oscuro/sistema),
  * categorías visibles en Inicio, accesos a calculadoras y a medidas
- * corporales, exportación/importación CSV, copia de seguridad completa
- * (.fitnotes) y restauración, recalcular PRs, eliminar historial/cuenta, y
- * cerrar sesión. Todas las preferencias se leen/escriben siempre desde la
- * tabla local (invitado o cuenta real) vía `usePreferencesStore` +
- * `preferencesRepo`; con cuenta real también se replican en `user_metadata`
- * en segundo plano para sincronizar entre dispositivos.
+ * corporales, exportación/importación CSV (repos locales, 2026-09-22 —
+ * funciona sin cuenta), copia de seguridad completa (.fitnotes) y
+ * restauración, recalcular PRs, eliminar historial/cuenta, y cerrar sesión.
+ * Todas las preferencias se leen/escriben siempre desde la tabla local
+ * (invitado o cuenta real) vía `usePreferencesStore` + `preferencesRepo`;
+ * con cuenta real también se replican en `user_metadata` en segundo plano
+ * para sincronizar entre dispositivos.
  */
 export default function SettingsScreen() {
   const colors = useTheme();
   const router = useRouter();
   const { t } = useTranslation();
-  const { exerciseRepo, preferencesRepo, isGuest, userId } = useRepositories();
+  const { exerciseRepo, workoutRepo, bodyTrackerRepo, preferencesRepo, isGuest, userId } = useRepositories();
   const { pendingCount } = useSyncStatus();
 
-  /** Backup/CSV/recalcular PRs/restaurar/eliminar historial siguen siendo remote-only (fuera de alcance offline) — requieren cuenta real. */
+  /** Backup completo (.fitnotes)/recalcular PRs/restaurar/eliminar historial siguen siendo remote-only (fuera de alcance offline) — requieren cuenta real. CSV de entrenamientos/body tracker (2026-09-22) ya no pasa por aquí: usa los repos locales, funciona en modo invitado. */
   function requireAccount(): boolean {
     if (isGuest) {
       Alert.alert(t("settings:requireAccount.title"), t("settings:requireAccount.message"));
@@ -251,27 +252,21 @@ export default function SettingsScreen() {
     await persistPreference("estimated_records_rep_limit", !isNaN(parsed) && parsed > 0 ? parsed : null);
   }
 
-  /** Exporta todo el historial de entrenamientos a CSV (repo remoto, requiere cuenta) y abre el share sheet nativo. */
+  /** Exporta todo el historial de entrenamientos a CSV (repo local, funciona sin cuenta) y abre el share sheet nativo. */
   async function handleExportCSV() {
-    if (!requireAccount()) return;
     setExportLoading(true);
-    const repo = createWorkoutRepository(supabase);
-    const csv = await repo.exportAllCSV();
+    const csv = await workoutRepo.exportAllCSV();
     setExportLoading(false);
     if (!csv) { Alert.alert(t("settings:bodyExport.noData"), t("settings:exportWorkouts.noDataMessage")); return; }
     await Share.share({ message: csv, title: "FitNotes Export" });
   }
 
-  /** Parsea el CSV pegado e importa las filas válidas al historial remoto, omitiendo fechas que ya tengan entrenamiento y creando ejercicios nuevos si hace falta. */
+  /** Parsea el CSV pegado e importa las filas válidas al historial local (repo local, funciona sin cuenta), omitiendo fechas que ya tengan entrenamiento y creando ejercicios nuevos si hace falta. */
   async function handleImportCSV() {
-    if (!requireAccount()) return;
     const rows = parseCSVRows(importCSV);
     if (rows.length === 0) { Alert.alert("Error", t("settings:importCSVModal.noRowsError")); return; }
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) { Alert.alert("Error", t("settings:importCSVModal.noSessionError")); return; }
     setImportLoading(true);
-    const repo = createWorkoutRepository(supabase);
-    const { imported, skipped, newExercises } = await repo.importFromCSV(rows, session.user.id);
+    const { imported, skipped, newExercises } = await workoutRepo.importFromCSV(rows, userId);
     setImportLoading(false);
     setShowImportModal(false);
     setImportCSV("");
@@ -349,13 +344,11 @@ export default function SettingsScreen() {
     }
   }
 
-  /** Exporta las medidas corporales a CSV (repo remoto, requiere cuenta) y abre el share sheet nativo. */
+  /** Exporta las medidas corporales a CSV (repo local, funciona sin cuenta) y abre el share sheet nativo. */
   async function handleExportBodyTrackerCSV() {
-    if (!requireAccount()) return;
     setBodyExportLoading(true);
     try {
-      const repo = createBodyTrackerRepository(supabase);
-      const csv = await repo.exportAllCSV();
+      const csv = await bodyTrackerRepo.exportAllCSV(userId);
       if (!csv) { Alert.alert(t("settings:bodyExport.noData"), t("settings:bodyExport.noDataMessage")); return; }
       await Share.share({ message: csv, title: "FitNotes Body Tracker Export" });
     } finally {
@@ -873,6 +866,27 @@ export default function SettingsScreen() {
             )}
           </TouchableOpacity>
           <TouchableOpacity
+            onPress={handleExportCSV}
+            disabled={exportLoading}
+            style={[styles.btn, styles.btnOutline]}
+          >
+            {exportLoading ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <>
+                <Ionicons name="download-outline" size={16} color={colors.textSecondary} />
+                <Text style={styles.btnOutlineText}>{t("settings:account.exportCSV")}</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => { setImportCSV(""); setShowImportModal(true); }}
+            style={[styles.btn, styles.btnOutline]}
+          >
+            <Ionicons name="cloud-upload-outline" size={16} color={colors.textSecondary} />
+            <Text style={styles.btnOutlineText}>{t("settings:account.importCSV")}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             onPress={handleCheckCatalogImport}
             disabled={catalogChecking || catalogImporting}
             style={[styles.btn, styles.btnOutline]}
@@ -916,31 +930,10 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Account */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t("settings:sections.account")}</Text>
-          <TouchableOpacity
-            onPress={handleExportCSV}
-            disabled={exportLoading}
-            style={[styles.btn, styles.btnOutline]}
-          >
-            {exportLoading ? (
-              <ActivityIndicator size="small" color={colors.primary} />
-            ) : (
-              <>
-                <Ionicons name="download-outline" size={16} color={colors.textSecondary} />
-                <Text style={styles.btnOutlineText}>{t("settings:account.exportCSV")}</Text>
-              </>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => { if (!requireAccount()) return; setImportCSV(""); setShowImportModal(true); }}
-            style={[styles.btn, styles.btnOutline]}
-          >
-            <Ionicons name="cloud-upload-outline" size={16} color={colors.textSecondary} />
-            <Text style={styles.btnOutlineText}>{t("settings:account.importCSV")}</Text>
-          </TouchableOpacity>
-          {!isGuest && (
+        {/* Account — solo con cuenta real, en modo invitado no hay nada que mostrar aquí (crear cuenta/iniciar sesión vive en la cabecera del perfil). */}
+        {!isGuest && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t("settings:sections.account")}</Text>
             <TouchableOpacity
               onPress={handleSignOut}
               disabled={signOutLoading}
@@ -955,8 +948,8 @@ export default function SettingsScreen() {
                 </>
               )}
             </TouchableOpacity>
-          )}
-        </View>
+          </View>
+        )}
 
         {/* Danger Zone */}
         <View style={[styles.section, styles.dangerSection]}>

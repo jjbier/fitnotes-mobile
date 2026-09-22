@@ -91,4 +91,22 @@ describe("localBodyTrackerRepository", () => {
     const { data } = await repo.getMeasurements();
     expect(data.map((m) => m.name)).toEqual(["B", "A"]);
   });
+
+  describe("exportAllCSV (2026-09-22)", () => {
+    it("returns an empty string when there are no entries", async () => {
+      expect(await repo.exportAllCSV(USER_ID)).toBe("");
+    });
+
+    it("writes one row per entry, oldest first, resolving name/unit and escaping quotes in comments", async () => {
+      const { data: m } = await repo.createMeasurement({ name: "Peso corporal", unit: "kg" }, USER_ID);
+      await repo.addEntry({ measurement_id: m!.id, value: 80, recorded_at: "2026-01-02T00:00:00Z" }, USER_ID);
+      await repo.addEntry({ measurement_id: m!.id, value: 79, recorded_at: "2026-01-01T00:00:00Z", comment: 'día "top"' }, USER_ID);
+
+      const csv = await repo.exportAllCSV(USER_ID);
+      const lines = csv.split("\n");
+      expect(lines[0]).toBe("measurement,value,unit,recorded_at,comment");
+      expect(lines[1]).toBe('"Peso corporal",79,"kg",2026-01-01T00:00:00Z,"día ""top"""');
+      expect(lines[2]).toBe('"Peso corporal",80,"kg",2026-01-02T00:00:00Z,""');
+    });
+  });
 });

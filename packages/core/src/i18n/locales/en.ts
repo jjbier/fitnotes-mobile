@@ -275,7 +275,6 @@ export const en = {
       rowsDetected: "{{count}} rows detected",
       button: "Import",
       noRowsError: "No valid rows were found. Make sure you're pasting a CSV with the correct format.",
-      noSessionError: "There is no active session.",
       completedTitle: "Import completed",
       completedMessage: "{{count}} sets imported.",
       skippedMessage: "{{count}} sets skipped (dates already have a workout).",

@@ -38,8 +38,8 @@ function mapEntryRow(row: RawRow): EntryRow {
 
 /**
  * Repositorio local de body tracker (medidas corporales + registros) —
- * espeja createBodyTrackerRepository() método a método. `exportAllCSV` se
- * queda en el repo remoto (backup, fuera de alcance offline).
+ * espeja createBodyTrackerRepository() método a método, incluido
+ * `exportAllCSV` (2026-09-22, mismo formato exacto que el remoto).
  */
 export function createLocalBodyTrackerRepository(db: SqlExecutor) {
   return {
@@ -277,6 +277,36 @@ export function createLocalBodyTrackerRepository(db: SqlExecutor) {
         }
       });
       return { seeded: true };
+    },
+
+    /** Exporta todas las entradas vivas del usuario como CSV (`measurement,value,unit,recorded_at,comment`), con nombre/unidad resueltos y comillas escapadas — réplica local de `bodyTrackerRepository.exportAllCSV`, mismo formato exacto. Devuelve cadena vacía si no hay entradas. */
+    async exportAllCSV(userId: string): Promise<string> {
+      const measurements = await db.getAllAsync<{ id: string; name: string; unit: string }>(
+        `SELECT id, name, unit FROM body_measurements WHERE _deleted = 0`
+      );
+      const mMap: Record<string, { name: string; unit: string }> = {};
+      for (const m of measurements) mMap[m.id] = { name: m.name, unit: m.unit };
+
+      const entries = await db.getAllAsync<{ measurement_id: string; value: number; recorded_at: string; comment: string | null }>(
+        `SELECT measurement_id, value, recorded_at, comment FROM body_measurement_entries WHERE _deleted = 0 AND user_id = ? ORDER BY recorded_at ASC`,
+        [userId]
+      );
+      if (entries.length === 0) return "";
+
+      const rows = ["measurement,value,unit,recorded_at,comment"];
+      for (const e of entries) {
+        const m = mMap[e.measurement_id] ?? { name: e.measurement_id, unit: "" };
+        rows.push(
+          [
+            `"${m.name}"`,
+            e.value,
+            `"${m.unit}"`,
+            e.recorded_at,
+            `"${(e.comment ?? "").replace(/"/g, '""')}"`,
+          ].join(",")
+        );
+      }
+      return rows.join("\n");
     },
   };
 }

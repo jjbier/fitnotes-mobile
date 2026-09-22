@@ -26,7 +26,7 @@ Plan completo en `/home/xabier/.claude/plans/precious-snuggling-shannon.md` (6 f
 - **`wipeAndSetIdentity`** (en `RepositoryContext`): `resetLocalDb()` (cierra+borra+reabre `expo-sqlite`) → crea identidad → opcionalmente la fija a cuenta real. Usado en sign-out y en cambio directo entre dos cuentas reales.
 - **Guard crítico de seguridad**: `handleSessionChange(session, isExplicitSignOut)` en `_layout.tsx` solo vacía la DB si `isExplicitSignOut` (evento `SIGNED_OUT` real) — nunca en la comprobación de sesión del arranque en frío. Sin esto, el bug de sesión-no-sobrevive-a-force-stop (abajo) borraría datos de una cuenta real en vez de solo fallar el sync en silencio.
 - **`SyncEngine` no corre en modo invitado**: `runSync()` retorna temprano si `isGuest === true` — RLS/FK de Supabase rechazarían filas de invitado.
-- **Gating remote-only**: backup/CSV, recalcular PRs, restaurar, eliminar historial, estadísticas avanzadas — `settings.tsx` usa `requireAccount()` antes de cada una.
+- **Gating remote-only**: backup completo (.fitnotes)/restaurar, recalcular PRs, eliminar historial — `settings.tsx` usa `requireAccount()` antes de cada una. Export/import CSV (entrenamientos y body tracker) ya no está en esta lista desde 2026-09-22 (repos locales).
 - **Limitación aceptada**: mismo usuario invitado en dos dispositivos antes de crear cuenta → ambos claims generan filas duplicadas al vincularse a la misma cuenta (sin dedup).
 
 ## Preferencias offline (post-Fase 6)
@@ -100,16 +100,18 @@ async createExercise(data, userId) {
 ## Repos locales — alcance (qué se queda en remoto)
 | Repo local | Cubre | Fuera de alcance (remoto) |
 |---|---|---|
-| `localWorkoutRepository` | workouts, workout_exercises, sets — CRUD completo, incl. `personal_records` en `updateSet` | `exportAllCSV`, `shareWorkout`, `deleteWorkoutHistory` |
+| `localWorkoutRepository` | workouts, workout_exercises, sets — CRUD completo, incl. `personal_records` en `updateSet`, `exportAllCSV`, `importFromCSV` | `shareWorkout` (no existe como método de repo), `deleteWorkoutHistory` |
 | `localExerciseRepository` | categorías + ejercicios — CRUD completo, `getExerciseHistory`, `getExerciseStats`, `convertExerciseWeights` | — |
 | `localRoutineRepository` | rutinas, días, ejercicios, predefined sets, `copyRoutine` deep, `getRoutineStats` | — |
-| `localBodyTrackerRepository` | medidas + registros — CRUD, `seedDefaultMeasurementsIfNeeded` | `exportAllCSV` |
+| `localBodyTrackerRepository` | medidas + registros — CRUD, `seedDefaultMeasurementsIfNeeded`, `exportAllCSV` | — |
 | `localGoalsRepository` | goals (`upsertGoal` traduce `onConflict: user_id,exercise_id` a `INSERT ... ON CONFLICT DO UPDATE`) | — |
 | `localProgressRepository` | `getPersonalRecords`, `getAllPersonalRecords`, `getWeeklyTraining`, `getBestSetsByExercise`, `getChartData` | — |
 | `localCalendarRepository` | calendario mensual, `getWorkoutSetDetail` (detalle de sesión de solo lectura) | — |
 | `localPreferencesRepository` | 16 claves de `UserPreferences` — fuera de `SYNCABLE_TABLES` | `user_metadata` sigue como sync entre dispositivos para cuentas reales |
 
-**2026-09-11**: se cerró el último hueco de "split-repo" — `getExerciseHistory`/`getChartData`/`getExerciseStats`/`convertExerciseWeights`/`getRoutineStats`/`getWorkoutSetDetail` (antes remote-only, ver plan Fase 4 original) ahora tienen réplica local y las pantallas que los usaban (`exercise-history/[exerciseId].tsx`, `workout/[exerciseId].tsx`, `(tabs)/exercises.tsx`, `exercises/[categoryId].tsx`, `(tabs)/tools.tsx`, `workout-detail/[workoutId].tsx`) leen siempre de `useRepositories()` (local) — antes mostraban "sin datos" en silencio para un usuario invitado (Supabase no tiene sus filas). Solo backup/CSV, recalcular PRs, restaurar y eliminar historial (`settings.tsx`) siguen siendo remote-only de verdad, gateados con `requireAccount()`.
+**2026-09-11**: se cerró el último hueco de "split-repo" — `getExerciseHistory`/`getChartData`/`getExerciseStats`/`convertExerciseWeights`/`getRoutineStats`/`getWorkoutSetDetail` (antes remote-only, ver plan Fase 4 original) ahora tienen réplica local y las pantallas que los usaban (`exercise-history/[exerciseId].tsx`, `workout/[exerciseId].tsx`, `(tabs)/exercises.tsx`, `exercises/[categoryId].tsx`, `(tabs)/tools.tsx`, `workout-detail/[workoutId].tsx`) leen siempre de `useRepositories()` (local) — antes mostraban "sin datos" en silencio para un usuario invitado (Supabase no tiene sus filas). Solo backup/CSV, recalcular PRs, restaurar y eliminar historial (`settings.tsx`) seguían siendo remote-only de verdad, gateados con `requireAccount()`.
+
+**2026-09-22**: export/import CSV pasa a local — `localWorkoutRepository.exportAllCSV`/`importFromCSV` y `localBodyTrackerRepository.exportAllCSV`, mismo formato exacto que sus equivalentes en `workoutRepository.ts`/`bodyTrackerRepository.ts` (para que un fichero exportado en local o en remoto sea intercambiable). A diferencia del remoto (donde un trigger SQL genera los PRs al insertar sets vía `importFromCSV`), la versión local llama a `maybeRecordPersonalRecord` explícitamente por cada set completo insertado. `settings.tsx` ya no llama a `requireAccount()` antes de exportar/importar CSV (de entrenamientos o body tracker) — los tres botones correspondientes se movieron de la sección "Cuenta" a "Datos/Backup" para reflejar que ya no dependen de tener cuenta. Solo backup completo (.fitnotes)/restaurar, recalcular PRs y eliminar historial siguen siendo remote-only de verdad, gateados con `requireAccount()`.
 
 ## DI — `RepositoryContext`
 - `lib/db/client.ts` → `getLocalDb(): Promise<SqlExecutor>` — abre `expo-sqlite` (singleton `dbPromise`), aplica migraciones, envuelve con `serializeExecutor`. `resetLocalDb()` — cierra+borra+reabre.
@@ -160,7 +162,7 @@ class SyncEngine {
 6. `force-stop` + reabrir offline → datos locales intactos; si la sesión no se restaura (bug conocido), sigue mostrando la cuenta activa sin pedir login ni borrar nada.
 7. Reactivar red, reabrir/foreground → banner "Sincronizando…" → confirmar en Supabase que los cambios offline llegaron.
 8. Cerrar sesión con cambios pendientes → aviso, y tras confirmar: DB vacía + nueva identidad invitado + vuelve a `(tabs)`.
-9. Backup/CSV/recalcular PRs/restaurar/eliminar historial en modo invitado → mensaje "requiere una cuenta", no fallo silencioso.
+9. Backup completo (.fitnotes)/recalcular PRs/restaurar/eliminar historial en modo invitado → mensaje "requiere una cuenta", no fallo silencioso. Export/import CSV (entrenamientos y body tracker) en modo invitado → funciona sin cuenta (2026-09-22, sin pasar por `requireAccount()`).
 10. ADB: usar SIEMPRE coordenadas de `uiautomator dump` (bounds reales), no las de un PNG escalado (factor 1.2x en el dispositivo de pruebas) — re-dumpear tras cualquier cambio de layout (teclado, colapso de panel).
 
 **Resultado (2026-07-03, `ZY22G9PDSV`)**: puntos 1-9 confirmados. Único detalle: una rutina creada como invitado necesitó un segundo `sync()` (al re-foregroundear) para llegar a Supabase — no es un bug, es la cola `pending_ops` procesando de forma asíncrona. Datos de prueba borrados de la cuenta compartida después; dispositivo devuelto a `pm clear`.
