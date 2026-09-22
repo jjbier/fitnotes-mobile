@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTheme } from "../../lib/theme";
 import {
   SafeAreaView, Text, View, TouchableOpacity,
@@ -11,8 +11,7 @@ import { useTranslation } from "react-i18next";
 import ViewShot from "react-native-view-shot";
 import * as Sharing from "expo-sharing";
 import { ExerciseType, useExerciseStore, usePreferencesStore, calculate1RM, estimateRepMax, todayISO, formatFullDate, formatSetDisplay, isImageUrl } from "@fitnotes/core";
-import { createExerciseRepository, createProgressRepository, type ChartPoint } from "@fitnotes/database";
-import { supabase } from "../../lib/supabase";
+import type { ChartPoint } from "@fitnotes/database";
 import LineChart, { type ChartDataPoint } from "../../components/LineChart";
 import DateInput from "../../components/DateInput";
 import { useRepositories } from "../../contexts/RepositoryContext";
@@ -45,6 +44,11 @@ function formatDateShort(dateStr: string): string {
   return date.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
 }
 
+/** Convierte una fecha a "YYYY-MM-DD" en hora local (evita el desfase de un día de `toISOString`, que usa UTC). */
+function toLocalDateStr(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 const ALL_METRICS: { key: Metric; label: string; types: ExerciseType[] | "all" }[] = [
   { key: "weight",       label: "Peso máx",     types: [ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHT_ONLY, ExerciseType.WEIGHT_DISTANCE, ExerciseType.WEIGHT_TIME] },
   { key: "volume",       label: "Volumen",      types: [ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHT_DISTANCE, ExerciseType.WEIGHT_TIME] },
@@ -68,10 +72,9 @@ const ALL_METRICS: { key: Metric; label: string; types: ExerciseType[] | "all" }
  * estimado, reps, distancia, tiempo, velocidad, ritmo, o series especiales como
  * "peso por reps objetivo"— con línea de tendencia opcional y exportación a imagen
  * vía `react-native-view-shot`) y Estadísticas (resumen agregado por periodo).
- * Usa el patrón split-repo: `useRepositories()` (local, para leer/mutar series del
- * historial) junto a repos remotos creados ad-hoc (`createExerciseRepository`,
- * `createProgressRepository` sobre `supabase`) para operaciones de solo-lectura pesadas
- * (historial completo, datos del gráfico) que quedan fuera del alcance offline.
+ * Todo se lee/escribe contra los repos locales de `useRepositories()`
+ * (`exerciseRepo.getExerciseHistory`, `progressRepo.getChartData`) — funciona
+ * igual con cuenta o en modo invitado, sin llamadas directas a Supabase.
  */
 export default function ExerciseHistoryScreen() {
   const colors = useTheme();
@@ -84,9 +87,7 @@ export default function ExerciseHistoryScreen() {
 
   const storeExercise = useExerciseStore((s) => s.exercises.find((e) => e.id === exerciseId));
   const updateExerciseStore = useExerciseStore((s) => s.updateExercise);
-  const { exerciseRepo, workoutRepo, userId } = useRepositories();
-  const remoteExerciseRepo = useMemo(() => createExerciseRepository(supabase), []);
-  const progressRepo = useMemo(() => createProgressRepository(supabase), []);
+  const { exerciseRepo, workoutRepo, progressRepo, userId } = useRepositories();
 
   const [tab, setTab] = useState<HistoryTab>("history");
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -125,8 +126,8 @@ export default function ExerciseHistoryScreen() {
   const [copyingSetId, setCopyingSetId] = useState<string | null>(null);
   const [copiedSetIds, setCopiedSetIds] = useState<Set<string>>(new Set());
   const [statsPeriod, setStatsPeriod] = useState<"workout" | "week" | "month" | "year" | "all" | "custom">("all");
-  const [statsFrom, setStatsFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]!; });
-  const [statsTo, setStatsTo] = useState(() => new Date().toISOString().split("T")[0]!);
+  const [statsFrom, setStatsFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 30); return toLocalDateStr(d); });
+  const [statsTo, setStatsTo] = useState(() => toLocalDateStr(new Date()));
 
   const [hideWarmup, setHideWarmup] = useState(true);
 
@@ -189,7 +190,7 @@ export default function ExerciseHistoryScreen() {
 
   useEffect(() => {
     async function load() {
-      const { data, error: err } = await remoteExerciseRepo.getExerciseHistory(exerciseId);
+      const { data, error: err } = await exerciseRepo.getExerciseHistory(exerciseId);
       if (err) { setError(err.message); setLoading(false); return; }
       setSessions(data ?? []);
       setLoading(false);
@@ -558,6 +559,8 @@ export default function ExerciseHistoryScreen() {
       {tab === "stats" && (
         loading ? (
           <ActivityIndicator style={{ marginTop: 48 }} color="#6366f1" />
+        ) : error ? (
+          <Text style={{ textAlign: "center", marginTop: 48, color: "#ef4444", paddingHorizontal: 24 }}>{error}</Text>
         ) : sessions.length === 0 ? (
           <View style={{ alignItems: "center", marginTop: 80, paddingHorizontal: 32 }}>
             <Ionicons name="bar-chart-outline" size={48} color="#cbd5e1" />
@@ -571,18 +574,20 @@ export default function ExerciseHistoryScreen() {
             const days = statsPeriod === "week" ? 7 : statsPeriod === "month" ? 30 : 365;
             const cutoff = new Date();
             cutoff.setDate(cutoff.getDate() - days);
-            const cutoffStr = cutoff.toISOString().split("T")[0]!;
+            const cutoffStr = toLocalDateStr(cutoff);
             return sessions.filter((s) => s.date >= cutoffStr);
           })();
           const allSets = filteredSessions.flatMap((s) => s.sets);
           const completeSets = allSets.filter((s) => s.is_complete && !s.is_warmup);
-          const setsWithWeight = completeSets.filter((s) => s.weight != null && s.reps != null);
+          const setsWithWeight = completeSets.filter((s) => s.weight != null);
+          const setsWithReps = completeSets.filter((s) => s.reps != null);
+          const setsWithWeightAndReps = completeSets.filter((s) => s.weight != null && s.reps != null);
           const bestWeight = setsWithWeight.length > 0 ? Math.max(...setsWithWeight.map((s) => s.weight!)) : null;
-          const bestReps = completeSets.filter((s) => s.reps != null).length > 0 ? Math.max(...completeSets.filter((s) => s.reps != null).map((s) => s.reps!)) : null;
-          const totalVolume = setsWithWeight.reduce((acc, s) => acc + s.weight! * s.reps!, 0);
+          const bestReps = setsWithReps.length > 0 ? Math.max(...setsWithReps.map((s) => s.reps!)) : null;
+          const totalVolume = setsWithWeightAndReps.reduce((acc, s) => acc + s.weight! * s.reps!, 0);
           const totalSets = completeSets.length;
           const avgSetsPerSession = filteredSessions.length > 0 ? (totalSets / filteredSessions.length).toFixed(1) : "0";
-          const ormEligible = setsWithWeight.filter((s) => s.reps! < 37 && (!estRepLimit || s.reps! <= estRepLimit));
+          const ormEligible = setsWithWeightAndReps.filter((s) => s.reps! < 37 && (!estRepLimit || s.reps! <= estRepLimit));
           const bestORM = ormEligible.length > 0
             ? Math.max(...ormEligible.map((s) => calculate1RM(s.weight!, s.reps!)))
             : null;

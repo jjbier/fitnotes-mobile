@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback, memo } from "react";
+import { useEffect, useState, useCallback, memo } from "react";
 import {
   SafeAreaView, ScrollView, Text, View, TouchableOpacity,
   TextInput, ActivityIndicator, Modal, Alert,
@@ -10,8 +10,6 @@ import DraggableFlatList, { ScaleDecorator } from "react-native-draggable-flatli
 import type { RenderItemParams } from "react-native-draggable-flatlist";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useExerciseStore, useWorkoutStore, usePreferencesStore, filterExercises, ExerciseType, formatLastUsedLabel } from "@fitnotes/core";
-import { createExerciseRepository } from "@fitnotes/database";
-import { supabase } from "../../lib/supabase";
 import type { Category, Exercise } from "@fitnotes/core";
 import { useTheme } from "../../lib/theme";
 import { useSyncStatus } from "../../contexts/SyncContext";
@@ -39,8 +37,7 @@ const PRESET_COLORS = [
  *   existente (ofrece convertir los valores históricos o solo la etiqueta) y
  *   al eliminar ejercicio/categoría (cascada de historial/PRs/objetivos).
  * - Favoritos, categorías ocultas (preferencia local) y estadísticas de uso
- *   (sesiones, última vez usado) por ejercicio, leídas del repo remoto de
- *   estadísticas.
+ *   (sesiones, última vez usado) por ejercicio, leídas del repo local.
  */
 export default function ExercisesScreen() {
   const colors = useTheme();
@@ -88,17 +85,16 @@ export default function ExercisesScreen() {
   const [showHiddenCategories, setShowHiddenCategories] = useState(false);
 
   const { exerciseRepo: repo, userId } = useRepositories();
-  const remoteExerciseRepo = useMemo(() => createExerciseRepository(supabase), []);
   const { refetchSignal } = useSyncStatus();
 
   /** Opciones de tipo de ejercicio mostradas en el modal de creación/edición, con su etiqueta traducida. */
-  /** Carga categorías, ejercicios (repo local) y estadísticas de uso (repo remoto de estadísticas) y los vuelca al store. */
+  /** Carga categorías, ejercicios y estadísticas de uso, todo del repo local, y los vuelca al store. */
   const load = useCallback(async () => {
     setLoading(true);
     const [catRes, exRes, statsRes] = await Promise.all([
       repo.getCategories(),
       repo.getExercises(),
-      remoteExerciseRepo.getExerciseStats(),
+      repo.getExerciseStats(),
     ]);
     if (catRes.data && exRes.data) {
       loadExercises(
@@ -122,7 +118,7 @@ export default function ExercisesScreen() {
     if (statsRes.data) setExerciseStats(statsRes.data);
     setLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repo, remoteExerciseRepo]);
+  }, [repo]);
 
   useEffect(() => {
     load();
@@ -189,7 +185,7 @@ export default function ExercisesScreen() {
         default_chart: (data.default_chart ?? "weight") as "weight" | "volume" | "reps",
       });
       if (opts.convertFactor) {
-        await remoteExerciseRepo.convertExerciseWeights(editingExercise.id, opts.convertFactor);
+        await repo.convertExerciseWeights(editingExercise.id, opts.convertFactor);
       }
     } else {
       const { data, error } = await repo.createExercise(patch, userId);

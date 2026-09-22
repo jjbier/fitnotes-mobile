@@ -3,9 +3,8 @@ import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicat
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { formatWorkoutDate } from "@fitnotes/core";
-import { createCalendarRepository } from "@fitnotes/database";
-import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../lib/theme";
+import { useRepositories } from "../../contexts/RepositoryContext";
 
 interface DetailSet {
   weight: number | null;
@@ -38,21 +37,20 @@ function formatSet(s: DetailSet): string {
  * necesariamente el activo ni el de hoy): usada como destino al navegar desde el
  * historial de un ejercicio ("ver entrenamiento completo") para consultar todas las
  * series de todos los ejercicios de esa sesión. Sin edición ni CRUD — solo lectura vía
- * `createCalendarRepository(supabase)` (repo remoto ad-hoc, fuera del patrón local de
- * `useRepositories()` porque esta consulta no forma parte del flujo offline habitual).
+ * `calendarRepo` de `useRepositories()` (local).
  */
 export default function WorkoutDetailScreen() {
   const colors = useTheme();
   const router = useRouter();
   const { workoutId } = useLocalSearchParams<{ workoutId: string }>();
+  const { calendarRepo } = useRepositories();
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState("");
   const [exercises, setExercises] = useState<DetailExercise[]>([]);
 
   useEffect(() => {
     if (!workoutId) return;
-    const repo = createCalendarRepository(supabase);
-    repo.getWorkoutSetDetail(workoutId).then(({ data }) => {
+    calendarRepo.getWorkoutSetDetail(workoutId).then(({ data }) => {
       if (data) {
         setDate(data.date);
         type Row = { order_index: number; exercises: { name: string } | null; sets: DetailSet[] | null };
@@ -69,7 +67,7 @@ export default function WorkoutDetailScreen() {
       }
       setLoading(false);
     });
-  }, [workoutId]);
+  }, [workoutId, calendarRepo]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>

@@ -40,9 +40,9 @@ function mapExerciseRow(row: RawRow): ExerciseRow {
 
 /**
  * Repositorio local de ejercicios y categorías — espeja createExerciseRepository()
- * método a método para el CRUD. Los métodos de solo lectura/analítica pesada
- * (getExerciseHistory, convertExerciseWeights, getExerciseStats) se quedan en
- * el repo remoto (fuera de alcance offline, ver plan Fase 4).
+ * método a método, CRUD y analítica incluidos (`getExerciseHistory`,
+ * `getExerciseStats`, `convertExerciseWeights`), para que la app funcione
+ * 100% sin cuenta (ver CLAUDE.md).
  */
 export function createLocalExerciseRepository(db: SqlExecutor) {
   return {
@@ -320,6 +320,142 @@ export function createLocalExerciseRepository(db: SqlExecutor) {
       });
       const row = await db.getFirstAsync<RawRow>(`SELECT * FROM exercises WHERE id = ?`, [id]);
       return { data: row ? mapExerciseRow(row) : null, error: null };
+    },
+
+    /**
+     * Historial completo de sesiones de un ejercicio, leído de las tablas
+     * locales — espeja `getExerciseHistory()` remoto (mismo shape de salida):
+     * un elemento del array por cada `workout_exercises` vivo que referencia
+     * el ejercicio (no por workout, por si hubiera más de uno el mismo día),
+     * con sus sets ordenados por `order_index`, sesiones ordenadas por fecha
+     * descendente.
+     */
+    async getExerciseHistory(exerciseId: string): Promise<{
+      data: {
+        workout_id: string;
+        date: string;
+        comment?: string;
+        sets: {
+          id: string;
+          weight?: number;
+          reps?: number;
+          distance?: number;
+          time_seconds?: number;
+          is_complete: boolean;
+          is_warmup: boolean;
+          comment?: string;
+          order_index: number;
+        }[];
+      }[];
+      error: RepoError | null;
+    }> {
+      const weRows = await db.getAllAsync<{ we_id: string; workout_id: string; date: string; comment: string | null }>(
+        `SELECT we.id as we_id, we.workout_id as workout_id, w.date as date, w.comment as comment
+         FROM workout_exercises we
+         JOIN workouts w ON w.id = we.workout_id AND w._deleted = 0
+         WHERE we.exercise_id = ? AND we._deleted = 0`,
+        [exerciseId]
+      );
+      if (weRows.length === 0) return { data: [], error: null };
+
+      const weIds = weRows.map((we) => we.we_id);
+      const placeholders = weIds.map(() => "?").join(",");
+      const setRows = await db.getAllAsync<RawRow>(
+        `SELECT id, workout_exercise_id, weight, reps, distance, time_seconds, is_complete, is_warmup, comment, order_index
+         FROM sets WHERE _deleted = 0 AND workout_exercise_id IN (${placeholders})`,
+        weIds
+      );
+
+      const setsByWE = new Map<string, RawRow[]>();
+      for (const s of setRows) {
+        const weId = s.workout_exercise_id as string;
+        if (!setsByWE.has(weId)) setsByWE.set(weId, []);
+        setsByWE.get(weId)!.push(s);
+      }
+
+      const sessions = weRows.map((we) => {
+        const sets = (setsByWE.get(we.we_id) ?? [])
+          .sort((a, b) => (a.order_index as number) - (b.order_index as number))
+          .map((s) => ({
+            id: s.id as string,
+            weight: (s.weight as number | null) ?? undefined,
+            reps: (s.reps as number | null) ?? undefined,
+            distance: (s.distance as number | null) ?? undefined,
+            time_seconds: (s.time_seconds as number | null) ?? undefined,
+            is_complete: toBool(s.is_complete),
+            is_warmup: toBool(s.is_warmup),
+            comment: (s.comment as string | null) ?? undefined,
+            order_index: s.order_index as number,
+          }));
+        return { workout_id: we.workout_id, date: we.date, comment: we.comment ?? undefined, sets };
+      });
+      sessions.sort((a, b) => b.date.localeCompare(a.date));
+
+      return { data: sessions, error: null };
+    },
+
+    /**
+     * Para todos los ejercicios del usuario: número de sesiones distintas en
+     * que aparecen y fecha de la última vez usados — espeja `getExerciseStats()`
+     * remoto, agregando en JS sobre `workout_exercises`/`workouts` locales.
+     */
+    async getExerciseStats(): Promise<{
+      data: Record<string, { workout_count: number; last_used: string | null }>;
+      error: RepoError | null;
+    }> {
+      const rows = await db.getAllAsync<{ exercise_id: string; workout_id: string; date: string }>(
+        `SELECT we.exercise_id as exercise_id, we.workout_id as workout_id, w.date as date
+         FROM workout_exercises we
+         JOIN workouts w ON w.id = we.workout_id AND w._deleted = 0
+         WHERE we._deleted = 0`
+      );
+
+      const workoutsByExercise = new Map<string, Set<string>>();
+      const lastUsedByExercise = new Map<string, string>();
+      for (const row of rows) {
+        if (!workoutsByExercise.has(row.exercise_id)) workoutsByExercise.set(row.exercise_id, new Set());
+        workoutsByExercise.get(row.exercise_id)!.add(row.workout_id);
+        const current = lastUsedByExercise.get(row.exercise_id);
+        if (!current || row.date > current) lastUsedByExercise.set(row.exercise_id, row.date);
+      }
+
+      const stats: Record<string, { workout_count: number; last_used: string | null }> = {};
+      for (const [exerciseId, workoutIds] of workoutsByExercise) {
+        stats[exerciseId] = {
+          workout_count: workoutIds.size,
+          last_used: lastUsedByExercise.get(exerciseId) ?? null,
+        };
+      }
+      return { data: stats, error: null };
+    },
+
+    /**
+     * Reescribe en bloque el peso de todos los sets registrados de un
+     * ejercicio, multiplicando por `factor` (p.ej. cambio kg↔lb) y redondeando
+     * a 2 decimales — espeja `convertExerciseWeights()` remoto: un `UPDATE` y
+     * un `pending_op` de update por set afectado, todo en una transacción.
+     */
+    async convertExerciseWeights(exerciseId: string, factor: number): Promise<{ error: RepoError | null }> {
+      await db.withTransactionAsync(async () => {
+        const ts = nowIso();
+        const sets = await db.getAllAsync<{ id: string; weight: number }>(
+          `SELECT s.id as id, s.weight as weight
+           FROM sets s
+           JOIN workout_exercises we ON we.id = s.workout_exercise_id AND we._deleted = 0
+           WHERE s._deleted = 0 AND we.exercise_id = ? AND s.weight IS NOT NULL`,
+          [exerciseId]
+        );
+        for (const s of sets) {
+          const newWeight = Math.round(s.weight * factor * 100) / 100;
+          await db.runAsync(`UPDATE sets SET weight = ?, updated_at = ?, _dirty = 1 WHERE id = ?`, [
+            newWeight,
+            ts,
+            s.id,
+          ]);
+          await enqueuePendingOp(db, "sets", s.id, "update", { weight: newWeight, updated_at: ts });
+        }
+      });
+      return { error: null };
     },
   };
 }

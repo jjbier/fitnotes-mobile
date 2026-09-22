@@ -63,8 +63,8 @@ function mapPredefinedSetRow(row: RawRow): PredefinedSetRow {
 
 /**
  * Repositorio local de rutinas — espeja createRoutineRepository() método a
- * método. getRoutineStats (analítica sobre historial de entrenamientos) se
- * queda en el repo remoto, fuera de alcance offline.
+ * método, incluido `getRoutineStats` (para que la app funcione 100% sin
+ * cuenta, ver CLAUDE.md).
  */
 export function createLocalRoutineRepository(db: SqlExecutor) {
   return {
@@ -575,6 +575,71 @@ export function createLocalRoutineRepository(db: SqlExecutor) {
         }
       });
       return { data: created, error: null };
+    },
+
+    /**
+     * Para cada rutina de `routineIds`: fecha del último entrenamiento y
+     * número de sesiones distintas que contienen alguno de los ejercicios de
+     * la rutina (en cualquiera de sus días) — espeja `getRoutineStats()`
+     * remoto, incluida su limitación conocida: cuenta cualquier entrenamiento
+     * que incluya alguno de esos ejercicios, no solo los registrados a través
+     * de "Registrar rutina" (ver `offline-sync.md`).
+     */
+    async getRoutineStats(
+      routineIds: string[]
+    ): Promise<{ data: { routineId: string; lastUsed: string | null; sessionCount: number }[] }> {
+      if (routineIds.length === 0) return { data: [] };
+
+      const placeholders = routineIds.map(() => "?").join(",");
+      const dayRows = await db.getAllAsync<{ id: string; routine_id: string }>(
+        `SELECT id, routine_id FROM routine_days WHERE routine_id IN (${placeholders}) AND _deleted = 0`,
+        routineIds
+      );
+      if (dayRows.length === 0) return { data: routineIds.map((id) => ({ routineId: id, lastUsed: null, sessionCount: 0 })) };
+
+      const dayToRoutine = new Map(dayRows.map((d) => [d.id, d.routine_id]));
+      const dayIds = [...dayToRoutine.keys()];
+      const dayPlaceholders = dayIds.map(() => "?").join(",");
+      const rdeRows = await db.getAllAsync<{ routine_day_id: string; exercise_id: string }>(
+        `SELECT routine_day_id, exercise_id FROM routine_day_exercises WHERE routine_day_id IN (${dayPlaceholders}) AND _deleted = 0`,
+        dayIds
+      );
+
+      const routineExercises = new Map<string, Set<string>>();
+      for (const rde of rdeRows) {
+        const routineId = dayToRoutine.get(rde.routine_day_id);
+        if (!routineId) continue;
+        if (!routineExercises.has(routineId)) routineExercises.set(routineId, new Set());
+        routineExercises.get(routineId)!.add(rde.exercise_id);
+      }
+
+      const weRows = await db.getAllAsync<{ exercise_id: string; workout_id: string }>(
+        `SELECT we.exercise_id as exercise_id, we.workout_id as workout_id
+         FROM workout_exercises we
+         JOIN workouts w ON w.id = we.workout_id AND w._deleted = 0
+         WHERE we._deleted = 0`
+      );
+      const workoutDate = await db.getAllAsync<{ id: string; date: string }>(
+        `SELECT id, date FROM workouts WHERE _deleted = 0`
+      );
+      const workoutDateById = new Map(workoutDate.map((w) => [w.id, w.date]));
+
+      const data = routineIds.map((routineId) => {
+        const exIds = routineExercises.get(routineId);
+        if (!exIds || exIds.size === 0) return { routineId, lastUsed: null, sessionCount: 0 };
+        const workoutIds = new Set<string>();
+        let lastUsed: string | null = null;
+        for (const we of weRows) {
+          if (exIds.has(we.exercise_id)) {
+            workoutIds.add(we.workout_id);
+            const date = workoutDateById.get(we.workout_id);
+            if (date && (!lastUsed || date > lastUsed)) lastUsed = date;
+          }
+        }
+        return { routineId, lastUsed, sessionCount: workoutIds.size };
+      });
+
+      return { data };
     },
   };
 }

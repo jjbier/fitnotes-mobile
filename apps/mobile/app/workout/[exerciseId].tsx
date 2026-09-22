@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
+import { useEffect, useRef, useState, useCallback, memo } from "react";
 import { SafeAreaView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, FlatList, ScrollView, Vibration, useWindowDimensions } from "react-native";
 import * as FileSystem from "expo-file-system";
 import { Audio } from "expo-av";
@@ -10,9 +10,7 @@ import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
 import DraggableFlatList, { ScaleDecorator, NestableScrollContainer, NestableDraggableFlatList, type RenderItemParams } from "react-native-draggable-flatlist";
 import { useWorkoutStore, useExerciseStore, usePreferencesStore, ExerciseType, calculate1RM, formatMinutesSeconds } from "@fitnotes/core";
-import { createProgressRepository, createExerciseRepository } from "@fitnotes/database";
 import type { WorkoutExercise } from "@fitnotes/core";
-import { supabase } from "../../lib/supabase";
 import { useRepositories } from "../../contexts/RepositoryContext";
 import type { Set as FitSet } from "@fitnotes/core";
 import LineChart from "../../components/LineChart";
@@ -58,9 +56,8 @@ const GROUP_COLORS = ["#6366f1", "#ec4899", "#f59e0b", "#10b981"];
  * automático al siguiente ejercicio del grupo al completar una serie). Incluye
  * temporizador de descanso manual con persistencia de la última duración usada,
  * vibración + sonido + haptics al terminar, y pestañas de Historial/Gráfico del
- * ejercicio. CRUD de series vía `useRepositories()` (local); historial y datos del
- * gráfico usan repos remotos ad-hoc (`createExerciseRepository`/`createProgressRepository`
- * sobre `supabase`), fuera del alcance offline por ser lecturas analíticas pesadas.
+ * ejercicio. Todo —series, historial y datos del gráfico— vía `useRepositories()`
+ * (local): funciona igual con cuenta o en modo invitado.
  */
 export default function TrainingScreen() {
   const { exerciseId } = useLocalSearchParams<{ exerciseId: string }>();
@@ -129,9 +126,7 @@ export default function TrainingScreen() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerSoundRef = useRef<Audio.Sound | null>(null);
 
-  const { workoutRepo: repo, progressRepo, userId } = useRepositories();
-  const remoteProgressRepo = useMemo(() => createProgressRepository(supabase), []);
-  const exerciseRepo = useMemo(() => createExerciseRepository(supabase), []);
+  const { workoutRepo: repo, progressRepo, exerciseRepo, userId } = useRepositories();
 
   const workoutExercise = workoutExercises.find((we) => we.exercise_id === exerciseId);
   const exerciseSets = (workoutExercise ? sets[workoutExercise.id] ?? [] : []).slice().sort((a, b) => a.order_index - b.order_index);
@@ -155,7 +150,7 @@ export default function TrainingScreen() {
     }
     if (tab === "chart" && !chartLoaded && !chartLoading2) {
       setChartLoading2(true);
-      remoteProgressRepo.getChartData(exerciseId ?? "").then((points) => {
+      progressRepo.getChartData(exerciseId ?? "").then((points) => {
         setChartPoints(points);
         setChartLoaded(true);
         setChartLoading2(false);

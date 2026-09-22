@@ -120,4 +120,46 @@ describe("localProgressRepository", () => {
     const result = await progressRepo.getBestSetsByExercise([]);
     expect(result).toEqual({});
   });
+
+  describe("getChartData", () => {
+    it("aggregates completed, non-warmup sets per date (max/total weight, reps, est1RM, weightByReps)", async () => {
+      await completeSet("ex-1", "2026-07-17", { weight: 80, reps: 8 });
+      await completeSet("ex-1", "2026-07-17", { weight: 90, reps: 5 });
+      await completeSet("ex-1", "2026-07-17", { weight: 40, reps: 20, is_warmup: true });
+      await completeSet("ex-1", "2026-07-18", { weight: 100, reps: 3 });
+
+      const points = await progressRepo.getChartData("ex-1");
+      expect(points.map((p) => p.date)).toEqual(["2026-07-17", "2026-07-18"]);
+
+      const day1 = points[0]!;
+      expect(day1.maxWeight).toBe(90);
+      expect(day1.totalVolume).toBe(80 * 8 + 90 * 5);
+      expect(day1.maxReps).toBe(8);
+      expect(day1.totalReps).toBe(13);
+      expect(day1.weightByReps).toEqual({ 8: 80, 5: 90 });
+      expect(day1.est1RM).toBeCloseTo(Math.max(80 * (36 / 29), 90 * (36 / 32)));
+
+      const day2 = points[1]!;
+      expect(day2.maxWeight).toBe(100);
+    });
+
+    it("returns an empty array for an exercise with no completed sets", async () => {
+      const points = await progressRepo.getChartData("ex-missing");
+      expect(points).toEqual([]);
+    });
+
+    it("computes speed/pace for sets with both distance and time", async () => {
+      const { data: workout } = await workoutRepo.createWorkout({ date: "2026-07-17" }, USER_ID);
+      const { data: we } = await workoutRepo.addExercise(
+        { workout_id: workout!.id, exercise_id: "ex-run", order_index: 0 },
+        USER_ID
+      );
+      const { data: set } = await workoutRepo.createSet({ workout_exercise_id: we!.id, order_index: 0 }, USER_ID);
+      await workoutRepo.updateSet(set!.id, { is_complete: true, distance: 5, time_seconds: 1800 });
+
+      const points = await progressRepo.getChartData("ex-run");
+      expect(points[0]!.maxSpeed).toBeCloseTo((5 / 1800) * 3600);
+      expect(points[0]!.bestPace).toBeCloseTo(1800 / 5);
+    });
+  });
 });

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { createNodeSqlExecutor } from "../../testing/nodeSqlExecutor.js";
 import { runLocalMigrations } from "../../migrations.js";
 import { createLocalExerciseRepository } from "../localExerciseRepository.js";
+import { createLocalWorkoutRepository } from "../localWorkoutRepository.js";
 import type { SqlExecutor } from "../../sqlExecutor.js";
 
 const USER_ID = "user-1";
@@ -9,11 +10,13 @@ const USER_ID = "user-1";
 describe("localExerciseRepository", () => {
   let db: SqlExecutor;
   let repo: ReturnType<typeof createLocalExerciseRepository>;
+  let workoutRepo: ReturnType<typeof createLocalWorkoutRepository>;
 
   beforeEach(async () => {
     db = createNodeSqlExecutor();
     await runLocalMigrations(db);
     repo = createLocalExerciseRepository(db);
+    workoutRepo = createLocalWorkoutRepository(db);
   });
 
   it("creates a category with a real UUID and queues an insert op", async () => {
@@ -143,5 +146,99 @@ describe("localExerciseRepository", () => {
 
     const { data } = await repo.getCategories();
     expect(data.map((c) => c.name)).toEqual(["B", "A"]);
+  });
+
+  describe("getExerciseHistory", () => {
+    it("returns sessions ordered by date descending, with sets ordered by order_index", async () => {
+      const { data: exercise } = await repo.createExercise({ name: "Press banca", type: "WEIGHT_REPS" }, USER_ID);
+      const exerciseId = exercise!.id;
+
+      const { data: w1 } = await workoutRepo.createWorkout({ date: "2026-07-17", comment: "Día 1" }, USER_ID);
+      const { data: we1 } = await workoutRepo.addExercise(
+        { workout_id: w1!.id, exercise_id: exerciseId, order_index: 0 },
+        USER_ID
+      );
+      const { data: set2 } = await workoutRepo.createSet({ workout_exercise_id: we1!.id, order_index: 1 }, USER_ID);
+      const { data: set1 } = await workoutRepo.createSet({ workout_exercise_id: we1!.id, order_index: 0 }, USER_ID);
+      await workoutRepo.updateSet(set1!.id, { weight: 80, reps: 8, is_complete: true });
+      await workoutRepo.updateSet(set2!.id, { weight: 82.5, reps: 6, is_complete: true });
+
+      const { data: w2 } = await workoutRepo.createWorkout({ date: "2026-07-18" }, USER_ID);
+      await workoutRepo.addExercise({ workout_id: w2!.id, exercise_id: exerciseId, order_index: 0 }, USER_ID);
+
+      const { data, error } = await repo.getExerciseHistory(exerciseId);
+      expect(error).toBeNull();
+      expect(data.map((s) => s.date)).toEqual(["2026-07-18", "2026-07-17"]);
+      expect(data[1]!.comment).toBe("Día 1");
+      expect(data[1]!.sets.map((s) => s.order_index)).toEqual([0, 1]);
+      expect(data[1]!.sets.map((s) => s.weight)).toEqual([80, 82.5]);
+      expect(data[1]!.sets[0]!.is_complete).toBe(true);
+    });
+
+    it("returns an empty array for an exercise with no sessions", async () => {
+      const { data: exercise } = await repo.createExercise({ name: "Sin uso", type: "WEIGHT_REPS" }, USER_ID);
+      const { data, error } = await repo.getExerciseHistory(exercise!.id);
+      expect(error).toBeNull();
+      expect(data).toEqual([]);
+    });
+
+    it("ignores tombstoned workouts", async () => {
+      const { data: exercise } = await repo.createExercise({ name: "Sentadilla", type: "WEIGHT_REPS" }, USER_ID);
+      const { data: w1 } = await workoutRepo.createWorkout({ date: "2026-07-17" }, USER_ID);
+      await workoutRepo.addExercise({ workout_id: w1!.id, exercise_id: exercise!.id, order_index: 0 }, USER_ID);
+      await workoutRepo.deleteWorkout(w1!.id);
+
+      const { data } = await repo.getExerciseHistory(exercise!.id);
+      expect(data).toEqual([]);
+    });
+  });
+
+  describe("getExerciseStats", () => {
+    it("counts distinct workouts per exercise and tracks the most recent date", async () => {
+      const { data: exercise } = await repo.createExercise({ name: "Press banca", type: "WEIGHT_REPS" }, USER_ID);
+      const { data: w1 } = await workoutRepo.createWorkout({ date: "2026-07-17" }, USER_ID);
+      await workoutRepo.addExercise({ workout_id: w1!.id, exercise_id: exercise!.id, order_index: 0 }, USER_ID);
+      const { data: w2 } = await workoutRepo.createWorkout({ date: "2026-07-19" }, USER_ID);
+      await workoutRepo.addExercise({ workout_id: w2!.id, exercise_id: exercise!.id, order_index: 0 }, USER_ID);
+
+      const { data, error } = await repo.getExerciseStats();
+      expect(error).toBeNull();
+      expect(data[exercise!.id]).toEqual({ workout_count: 2, last_used: "2026-07-19" });
+    });
+
+    it("omits exercises never used", async () => {
+      await repo.createExercise({ name: "Sin uso", type: "WEIGHT_REPS" }, USER_ID);
+      const { data } = await repo.getExerciseStats();
+      expect(data).toEqual({});
+    });
+  });
+
+  describe("convertExerciseWeights", () => {
+    it("multiplies the weight of every set of that exercise by the factor and queues update ops", async () => {
+      const { data: exercise } = await repo.createExercise({ name: "Press banca", type: "WEIGHT_REPS" }, USER_ID);
+      const { data: workout } = await workoutRepo.createWorkout({ date: "2026-07-17" }, USER_ID);
+      const { data: we } = await workoutRepo.addExercise(
+        { workout_id: workout!.id, exercise_id: exercise!.id, order_index: 0 },
+        USER_ID
+      );
+      const { data: set1 } = await workoutRepo.createSet({ workout_exercise_id: we!.id, order_index: 0 }, USER_ID);
+      await workoutRepo.updateSet(set1!.id, { weight: 100 });
+      const { data: set2 } = await workoutRepo.createSet({ workout_exercise_id: we!.id, order_index: 1 }, USER_ID);
+      // no weight set on set2
+
+      const { error } = await repo.convertExerciseWeights(exercise!.id, 2.20462);
+
+      const { data: history } = await repo.getExerciseHistory(exercise!.id);
+      expect(error).toBeNull();
+      const sets = history[0]!.sets;
+      expect(sets.find((s) => s.id === set1!.id)!.weight).toBe(220.46);
+      expect(sets.find((s) => s.id === set2!.id)!.weight).toBeUndefined();
+
+      const ops = await db.getAllAsync<{ row_id: string }>(
+        "SELECT row_id FROM pending_ops WHERE table_name = 'sets' AND op_type = 'update'"
+      );
+      // set1 gets one update op from the initial `updateSet({ weight: 100 })` plus one from `convertExerciseWeights`; set2 never had its weight touched.
+      expect(ops.map((o) => o.row_id)).toEqual([set1!.id, set1!.id]);
+    });
   });
 });

@@ -1,10 +1,8 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, TextInput, Modal, Alert, ActivityIndicator } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useRoutineStore } from "@fitnotes/core";
-import { createRoutineRepository } from "@fitnotes/database";
-import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../lib/theme";
 import { useSyncStatus } from "../../contexts/SyncContext";
 import { useRepositories } from "../../contexts/RepositoryContext";
@@ -13,7 +11,7 @@ import { useRepositories } from "../../contexts/RepositoryContext";
  * Tab "Rutinas" (nombre de archivo `tools.tsx` por herencia histórica, pero
  * la pantalla es el listado de rutinas): crear, editar, copiar y eliminar
  * rutinas de entrenamiento, con estadísticas de uso (última vez usada, nº de
- * sesiones) resueltas contra el repo remoto. Las acciones de edición/copia/
+ * sesiones) resueltas contra el repo local. Las acciones de edición/copia/
  * borrado se presentan en un menú modal propio en vez de `Alert.alert`,
  * porque Android descarta en silencio un 4º botón nativo (Cancelar/Editar/
  * Copiar/Eliminar no caben en el límite de 3). Soporta apertura directa del
@@ -50,24 +48,23 @@ export default function RoutinesScreen() {
   const [routineStats, setRoutineStats] = useState<Record<string, { lastUsed: string | null; sessionCount: number }>>({});
 
   const { routineRepo: repo, userId } = useRepositories();
-  const remoteRoutineRepo = useMemo(() => createRoutineRepository(supabase), []);
   const { refetchSignal } = useSyncStatus();
 
-  /** Carga las rutinas (repo local) y sus estadísticas de uso (repo remoto) y las vuelca al store. */
+  /** Carga las rutinas y sus estadísticas de uso, todo del repo local, y las vuelca al store. */
   const load = useCallback(async () => {
     setLoading(true);
     const { data } = await repo.getRoutines();
     if (data) {
       loadRoutines(data.map((r) => ({ id: r.id, name: r.name, notes: r.notes ?? undefined })));
       const ids = data.map((r) => r.id);
-      const { data: stats } = await remoteRoutineRepo.getRoutineStats(ids);
+      const { data: stats } = await repo.getRoutineStats(ids);
       const statsMap: Record<string, { lastUsed: string | null; sessionCount: number }> = {};
       for (const s of stats) statsMap[s.routineId] = { lastUsed: s.lastUsed, sessionCount: s.sessionCount };
       setRoutineStats(statsMap);
     }
     setLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repo, remoteRoutineRepo]);
+  }, [repo]);
 
   useEffect(() => {
     load().then(() => {

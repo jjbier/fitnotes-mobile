@@ -1,5 +1,7 @@
+import { calculate1RM } from "@fitnotes/core";
 import type { SqlExecutor } from "../sqlExecutor.js";
 import type { Database } from "../../supabase/types.js";
+import type { ChartPoint } from "../../repositories/progressRepository.js";
 import { type RawRow, type RepoError } from "./shared.js";
 
 type PersonalRecordRow = Database["public"]["Tables"]["personal_records"]["Row"];
@@ -46,8 +48,10 @@ function mapPersonalRecordRow(row: RawRow): PersonalRecordRow {
  * localmente (sets/workout_exercises/workouts/personal_records), sin
  * agregados propios de Postgres. Las filas de personal_records se escriben
  * desde localWorkoutRepository.updateSet (ver maybeRecordPersonalRecord),
- * réplica del trigger SQL. El resto de progressRepository (getExerciseStats,
- * getExerciseHistory, getRoutineStats, getChartData, convertExerciseWeights)
+ * réplica del trigger SQL. También espeja `getChartData` (para que la
+ * pantalla de historial del ejercicio funcione sin cuenta, ver CLAUDE.md).
+ * El resto de progressRepository (getExerciseStats, getExerciseHistory —ver
+ * localExerciseRepository—, getRoutineStats, convertExerciseWeights)
  * se queda remote-only — analíticas fuera de alcance offline (ver offline-sync.md).
  */
 export function createLocalProgressRepository(db: SqlExecutor) {
@@ -134,6 +138,89 @@ export function createLocalProgressRepository(db: SqlExecutor) {
         if ((row.time_seconds ?? 0) > result[row.exercise_id]!.maxTime) result[row.exercise_id]!.maxTime = row.time_seconds ?? 0;
       }
       return result;
+    },
+
+    /**
+     * Serie temporal de {@link ChartPoint} para un ejercicio, leída de las
+     * tablas locales — espeja `getChartData()` remoto método a método (mismas
+     * fórmulas: 1RM estimado vía {@link calculate1RM}, velocidad/ritmo para
+     * ejercicios de distancia+tiempo, mejor peso por número de reps),
+     * agregando en JS por fecha de entrenamiento ya que SQLite local no tiene
+     * los agregados de Postgres. Ordenado por fecha ascendente.
+     */
+    async getChartData(exerciseId: string): Promise<ChartPoint[]> {
+      const weRows = await db.getAllAsync<{ we_id: string; date: string }>(
+        `SELECT we.id as we_id, w.date as date
+         FROM workout_exercises we
+         JOIN workouts w ON w.id = we.workout_id AND w._deleted = 0
+         WHERE we.exercise_id = ? AND we._deleted = 0`,
+        [exerciseId]
+      );
+      if (weRows.length === 0) return [];
+
+      const dateByWeId: Record<string, string> = {};
+      for (const we of weRows) dateByWeId[we.we_id] = we.date;
+
+      const weIds = weRows.map((we) => we.we_id);
+      const placeholders = weIds.map(() => "?").join(",");
+      const setRows = await db.getAllAsync<{
+        workout_exercise_id: string;
+        weight: number | null;
+        reps: number | null;
+        distance: number | null;
+        time_seconds: number | null;
+      }>(
+        `SELECT workout_exercise_id, weight, reps, distance, time_seconds
+         FROM sets
+         WHERE _deleted = 0 AND is_complete = 1 AND is_warmup = 0 AND workout_exercise_id IN (${placeholders})`,
+        weIds
+      );
+      if (setRows.length === 0) return [];
+
+      type DateAgg = Omit<ChartPoint, "date">;
+      const byDate: Record<string, DateAgg> = {};
+
+      for (const s of setRows) {
+        const date = dateByWeId[s.workout_exercise_id];
+        if (!date) continue;
+        const w = s.weight ?? 0;
+        const r = s.reps ?? 0;
+        const dist = s.distance ?? 0;
+        const time = s.time_seconds ?? 0;
+        if (!byDate[date]) {
+          byDate[date] = {
+            maxWeight: 0, totalVolume: 0, maxReps: 0, totalReps: 0, est1RM: 0,
+            maxDistance: 0, maxTime: 0, totalDistance: 0, totalTime: 0,
+            maxSpeed: 0, bestPace: 0, weightByReps: {},
+          };
+        }
+        const entry = byDate[date]!;
+        if (w > entry.maxWeight) entry.maxWeight = w;
+        entry.totalVolume += w * r;
+        if (r > entry.maxReps) entry.maxReps = r;
+        entry.totalReps += r;
+        entry.totalDistance += dist;
+        entry.totalTime += time;
+        if (dist > entry.maxDistance) entry.maxDistance = dist;
+        if (time > entry.maxTime) entry.maxTime = time;
+        if (w > 0 && r > 0 && r < 37) {
+          const orm = calculate1RM(w, r);
+          if (orm > entry.est1RM) entry.est1RM = orm;
+          if (entry.weightByReps[r] == null || w > entry.weightByReps[r]!) {
+            entry.weightByReps[r] = w;
+          }
+        }
+        if (dist > 0 && time > 0) {
+          const speed = (dist / time) * 3600;
+          if (speed > entry.maxSpeed) entry.maxSpeed = speed;
+          const pace = time / dist;
+          if (entry.bestPace === 0 || pace < entry.bestPace) entry.bestPace = pace;
+        }
+      }
+
+      return Object.entries(byDate)
+        .map(([date, vals]) => ({ date, ...vals }))
+        .sort((a, b) => a.date.localeCompare(b.date));
     },
   };
 }

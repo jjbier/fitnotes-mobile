@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { createNodeSqlExecutor } from "../../testing/nodeSqlExecutor.js";
 import { runLocalMigrations } from "../../migrations.js";
 import { createLocalRoutineRepository } from "../localRoutineRepository.js";
+import { createLocalWorkoutRepository } from "../localWorkoutRepository.js";
 import type { SqlExecutor } from "../../sqlExecutor.js";
 
 const USER_ID = "user-1";
@@ -9,11 +10,13 @@ const USER_ID = "user-1";
 describe("localRoutineRepository", () => {
   let db: SqlExecutor;
   let repo: ReturnType<typeof createLocalRoutineRepository>;
+  let workoutRepo: ReturnType<typeof createLocalWorkoutRepository>;
 
   beforeEach(async () => {
     db = createNodeSqlExecutor();
     await runLocalMigrations(db);
     repo = createLocalRoutineRepository(db);
+    workoutRepo = createLocalWorkoutRepository(db);
   });
 
   it("creates a routine with a real UUID and queues an insert op", async () => {
@@ -122,5 +125,32 @@ describe("localRoutineRepository", () => {
 
     const { data: days } = await repo.getDays(routine!.id);
     expect(days.map((d) => d.name)).toEqual(["D2", "D1"]);
+  });
+
+  describe("getRoutineStats", () => {
+    it("counts distinct workout sessions containing any of the routine's exercises and tracks the latest date", async () => {
+      const { data: routine } = await repo.createRoutine({ name: "Push" }, USER_ID);
+      const { data: day } = await repo.createDay({ routine_id: routine!.id, name: "Día 1", order_index: 0 }, USER_ID);
+      await repo.addExercise({ routine_day_id: day!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+
+      const { data: w1 } = await workoutRepo.createWorkout({ date: "2026-07-17" }, USER_ID);
+      await workoutRepo.addExercise({ workout_id: w1!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+      const { data: w2 } = await workoutRepo.createWorkout({ date: "2026-07-19" }, USER_ID);
+      await workoutRepo.addExercise({ workout_id: w2!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+
+      const { data } = await repo.getRoutineStats([routine!.id]);
+      expect(data).toEqual([{ routineId: routine!.id, lastUsed: "2026-07-19", sessionCount: 2 }]);
+    });
+
+    it("returns zero stats for a routine with no days or never used", async () => {
+      const { data: routine } = await repo.createRoutine({ name: "Sin días" }, USER_ID);
+      const { data } = await repo.getRoutineStats([routine!.id]);
+      expect(data).toEqual([{ routineId: routine!.id, lastUsed: null, sessionCount: 0 }]);
+    });
+
+    it("returns an empty array for an empty input", async () => {
+      const { data } = await repo.getRoutineStats([]);
+      expect(data).toEqual([]);
+    });
   });
 });

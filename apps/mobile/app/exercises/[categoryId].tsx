@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   SafeAreaView, ScrollView, Text, View, TouchableOpacity,
   TextInput, ActivityIndicator, Alert,
@@ -7,8 +7,6 @@ import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useExerciseStore, useWorkoutStore, filterExercises, ExerciseType, formatLastUsedLabel } from "@fitnotes/core";
-import { createExerciseRepository } from "@fitnotes/database";
-import { supabase } from "../../lib/supabase";
 import type { Category, Exercise } from "@fitnotes/core";
 import { useTheme } from "../../lib/theme";
 import { useRepositories } from "../../contexts/RepositoryContext";
@@ -19,9 +17,8 @@ import ExerciseFormModal, { type ExerciseFormPatch } from "../../components/Exer
  * lista, busca, crea, edita (incluida gestión de cambio de tipo y de unidad de peso con
  * conversión histórica opcional), elimina y marca como favorito. Al tocar un ejercicio,
  * navega a añadirlo al entrenamiento activo si hay uno en curso, o a su historial en caso
- * contrario. CRUD vía `useRepositories()` (local); las estadísticas por ejercicio
- * (sesiones/última vez) y la conversión de pesos históricos usan un repo remoto ad-hoc
- * (`createExerciseRepository(supabase)`) por quedar fuera del alcance offline.
+ * contrario. Todo vía `useRepositories()` (local), incluidas las estadísticas por
+ * ejercicio (sesiones/última vez) y la conversión de pesos históricos.
  */
 export default function ExerciseCategoryScreen() {
   const { categoryId } = useLocalSearchParams<{ categoryId: string }>();
@@ -50,7 +47,6 @@ export default function ExerciseCategoryScreen() {
   const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
 
   const { exerciseRepo: repo, userId } = useRepositories();
-  const remoteExerciseRepo = useMemo(() => createExerciseRepository(supabase), []);
   const isFavorites = categoryId === "favorites";
   const category = categories.find((c) => c.id === categoryId);
 
@@ -63,7 +59,7 @@ export default function ExerciseCategoryScreen() {
     async function load() {
       // If store already has data, just load stats
       if (exercises.length > 0) {
-        const statsRes = await remoteExerciseRepo.getExerciseStats();
+        const statsRes = await repo.getExerciseStats();
         if (statsRes.data) setExerciseStats(statsRes.data);
         return;
       }
@@ -71,7 +67,7 @@ export default function ExerciseCategoryScreen() {
       const [catRes, exRes, statsRes] = await Promise.all([
         repo.getCategories(),
         repo.getExercises(),
-        remoteExerciseRepo.getExerciseStats(),
+        repo.getExerciseStats(),
       ]);
       if (catRes.data && exRes.data) {
         loadExercises(
@@ -149,7 +145,7 @@ export default function ExerciseCategoryScreen() {
         default_chart: (data.default_chart ?? "weight") as "weight" | "volume" | "reps",
       });
       if (opts.convertFactor) {
-        await remoteExerciseRepo.convertExerciseWeights(editingExercise.id, opts.convertFactor);
+        await repo.convertExerciseWeights(editingExercise.id, opts.convertFactor);
       }
     } else {
       const { data, error } = await repo.createExercise(patch, userId);
