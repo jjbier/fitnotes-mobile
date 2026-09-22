@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Dimensions, PanResponder, SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator, Modal, TextInput } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { formatWorkoutDate, labelWorkoutByTime, useExerciseStore, usePreferencesStore, ExerciseType } from "@fitnotes/core";
 import { supabase } from "../../lib/supabase";
@@ -33,6 +34,7 @@ type DaySummary = { id: string; date: string; comment: string | null; exercises:
 export default function CalendarScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const { t } = useTranslation();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -226,7 +228,7 @@ export default function CalendarScreen() {
           id: data.id,
           date: data.date,
           comment: data.comment ?? null,
-          exercises: wes.map((we) => ({ id: we.exercise_id, name: we.exercises?.name ?? "Desconocido" })),
+          exercises: wes.map((we) => ({ id: we.exercise_id, name: we.exercises?.name ?? t("progress:unknownExercise") })),
         });
       }
       setDaySummaryLoading(false);
@@ -266,7 +268,7 @@ export default function CalendarScreen() {
         type WeRow = { order_index: number; exercises: { name: string } | null; sets: SetRow[] | null };
         const wes = ((data.workout_exercises as WeRow[] | null) ?? []).slice().sort((a, b) => a.order_index - b.order_index);
         const detail = wes.map((we) => ({
-          exerciseName: we.exercises?.name ?? "Desconocido",
+          exerciseName: we.exercises?.name ?? t("progress:unknownExercise"),
           sets: (we.sets ?? [])
             .filter((s) => s.is_complete && !s.is_warmup)
             .slice().sort((a, b) => a.order_index - b.order_index)
@@ -336,9 +338,13 @@ export default function CalendarScreen() {
   const firstDow = weekStart === 1 ? (rawFirstDow + 6) % 7 : rawFirstDow;
   const monthName = new Date(year, month - 1, 1).toLocaleDateString("es", { month: "long", year: "numeric" });
 
+  const [mon, tue, wed, thu, fri, sat, sun] = [
+    t("calendar:daysShort.mon"), t("calendar:daysShort.tue"), t("calendar:daysShort.wed"), t("calendar:daysShort.thu"),
+    t("calendar:daysShort.fri"), t("calendar:daysShort.sat"), t("calendar:daysShort.sun"),
+  ];
   const DAYS = weekStart === 1
-    ? ["Lu", "Ma", "Mi", "Ju", "Vi", "Sa", "Do"]
-    : ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"];
+    ? [mon, tue, wed, thu, fri, sat, sun]
+    : [sun, mon, tue, wed, thu, fri, sat];
 
   const activeFilterCount = (selectedCatIds.size > 0 ? 1 : 0) + (filteredExDates !== null ? 1 : 0);
   const isFiltered = activeFilterDates !== null;
@@ -347,7 +353,7 @@ export default function CalendarScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       {/* Header */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 8 }}>
-        <Text style={{ flex: 1, fontSize: 20, fontWeight: "700", color: theme.text }}>Calendario</Text>
+        <Text style={{ flex: 1, fontSize: 20, fontWeight: "700", color: theme.text }}>{t("calendar:title")}</Text>
         {filterLoading && <ActivityIndicator size="small" color={theme.primary} />}
         <TouchableOpacity
           onPress={() => setShowFilters(true)}
@@ -355,26 +361,26 @@ export default function CalendarScreen() {
         >
           <Ionicons name="filter-outline" size={14} color={activeFilterCount > 0 ? "#fff" : theme.textSecondary} />
           <Text style={{ fontSize: 12, fontWeight: "500", color: activeFilterCount > 0 ? "#fff" : theme.textSecondary }} numberOfLines={1}>
-            Filtros{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+            {t("calendar:filtersLabel")}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
           </Text>
         </TouchableOpacity>
         {activeFilterCount > 0 && (
           <TouchableOpacity onPress={clearFilters}>
-            <Text style={{ fontSize: 12, color: theme.textMuted }}>Limpiar</Text>
+            <Text style={{ fontSize: 12, color: theme.textMuted }}>{t("calendar:clearFiltersButton")}</Text>
           </TouchableOpacity>
         )}
         {!listView && (
           <>
             <TouchableOpacity
               onPress={toggleShowCategoryDots}
-              accessibilityLabel={showCategoryDots ? "Mostrar indicador único" : "Mostrar puntos de categoría"}
+              accessibilityLabel={showCategoryDots ? t("calendar:showSingleIndicatorLabel") : t("calendar:showCategoryDotsLabel")}
               style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: showCategoryDots ? theme.surface : "transparent" }}
             >
               <Ionicons name={showCategoryDots ? "ellipsis-horizontal" : "ellipse"} size={14} color={theme.textSecondary} />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={toggleShowDayPanel}
-              accessibilityLabel={showDayPanel ? "Ocultar panel del día" : "Mostrar panel del día"}
+              accessibilityLabel={showDayPanel ? t("calendar:hideDayPanelLabel") : t("calendar:showDayPanelLabel")}
               style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: showDayPanel ? theme.surface : "transparent" }}
             >
               <Ionicons name={showDayPanel ? "chevron-down" : "chevron-up"} size={14} color={theme.textSecondary} />
@@ -382,14 +388,14 @@ export default function CalendarScreen() {
           </>
         )}
         <TouchableOpacity onPress={() => setListView((v) => !v)} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: listView ? theme.primary : "transparent" }}>
-          <Text style={{ fontSize: 12, fontWeight: "500", color: listView ? "#fff" : theme.text }}>{listView ? "Mes" : "Lista"}</Text>
+          <Text style={{ fontSize: 12, fontWeight: "500", color: listView ? "#fff" : theme.text }}>{listView ? t("calendar:monthViewButton") : t("calendar:listViewButton")}</Text>
         </TouchableOpacity>
       </View>
 
       {listView ? (
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, gap: 8 }}>
           {history.length === 0 ? (
-            <Text style={{ color: theme.textMuted, fontSize: 13, textAlign: "center", paddingTop: 32 }}>Sin entrenamientos aún.</Text>
+            <Text style={{ color: theme.textMuted, fontSize: 13, textAlign: "center", paddingTop: 32 }}>{t("calendar:noWorkoutsYetMessage")}</Text>
           ) : (
             history.map((w) => {
               const isExpanded = expandedHistoryId === w.id;
@@ -425,7 +431,7 @@ export default function CalendarScreen() {
                       {historyDetailLoading === w.id ? (
                         <ActivityIndicator size="small" color={theme.primary} />
                       ) : (historyDetail[w.id]?.length ?? 0) === 0 ? (
-                        <Text style={{ fontSize: 12, color: theme.textMuted }}>Sin ejercicios registrados.</Text>
+                        <Text style={{ fontSize: 12, color: theme.textMuted }}>{t("calendar:noExercisesLoggedHistory")}</Text>
                       ) : (
                         historyDetail[w.id]!.map((ex, i) => (
                           <View key={i}>
@@ -456,7 +462,7 @@ export default function CalendarScreen() {
                 <View style={{ flex: 1, alignItems: "center" }}>
                   <Text style={{ fontSize: 15, fontWeight: "600", color: theme.text }}>{monthName}</Text>
                   <Text style={{ fontSize: 11, color: theme.textMuted }}>
-                    {workoutDates.size} entrenamiento{workoutDates.size !== 1 ? "s" : ""}
+                    {t("calendar:workoutsCount", { count: workoutDates.size })}
                   </Text>
                 </View>
                 <TouchableOpacity onPress={nextMonth} style={{ padding: 8 }}>
@@ -538,12 +544,12 @@ export default function CalendarScreen() {
                 <Text style={{ fontSize: 13, fontWeight: "600", color: theme.text }}>{formatWorkoutDate(selectedDate)}</Text>
                 {workoutDates.has(selectedDate) && !dayWorkoutsMulti && (
                   <TouchableOpacity onPress={() => router.push({ pathname: "/(tabs)", params: { date: selectedDate } })}>
-                    <Text style={{ fontSize: 12, color: theme.primary, fontWeight: "600" }}>Ver →</Text>
+                    <Text style={{ fontSize: 12, color: theme.primary, fontWeight: "600" }}>{t("calendar:viewLink")}</Text>
                   </TouchableOpacity>
                 )}
               </View>
               {!workoutDates.has(selectedDate) ? (
-                <Text style={{ fontSize: 12, color: theme.textMuted }}>Sin entrenamiento este día</Text>
+                <Text style={{ fontSize: 12, color: theme.textMuted }}>{t("calendar:noWorkoutThisDayMessage")}</Text>
               ) : daySummaryLoading ? (
                 <ActivityIndicator size="small" color={theme.primary} style={{ marginTop: 8, alignSelf: "flex-start" }} />
               ) : dayWorkoutsMulti ? (
@@ -593,7 +599,7 @@ export default function CalendarScreen() {
                     </TouchableOpacity>
                   ))}
                   {daySummary.exercises.length === 0 && (
-                    <Text style={{ fontSize: 12, color: theme.textMuted }}>Sin ejercicios registrados</Text>
+                    <Text style={{ fontSize: 12, color: theme.textMuted }}>{t("calendar:noExercisesLoggedPanel")}</Text>
                   )}
                 </View>
               ) : null}
@@ -606,7 +612,7 @@ export default function CalendarScreen() {
       <Modal visible={showFilters} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowFilters(false)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
           <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: theme.borderLight }}>
-            <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: theme.text }}>Filtros</Text>
+            <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: theme.text }}>{t("calendar:filtersLabel")}</Text>
             <TouchableOpacity onPress={() => setShowFilters(false)}>
               <Ionicons name="close" size={22} color={theme.textSecondary} />
             </TouchableOpacity>
@@ -616,7 +622,7 @@ export default function CalendarScreen() {
             <View style={{ gap: 8 }}>
               <View style={{ flexDirection: "row", alignItems: "center" }}>
                 <Text style={{ flex: 1, fontSize: 12, fontWeight: "700", color: theme.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                  Categorías musculares
+                  {t("calendar:categoriesFilterTitle")}
                 </Text>
                 <View style={{ flexDirection: "row", borderRadius: 8, borderWidth: 1, borderColor: theme.border, overflow: "hidden" }}>
                   {(["any", "all"] as const).map((mode) => (
@@ -626,14 +632,14 @@ export default function CalendarScreen() {
                       style={{ paddingHorizontal: 10, paddingVertical: 4, backgroundColor: catMatchMode === mode ? theme.primary : "transparent" }}
                     >
                       <Text style={{ fontSize: 11, fontWeight: "600", color: catMatchMode === mode ? "#fff" : theme.textSecondary }}>
-                        {mode === "any" ? "Cualquiera" : "Todas"}
+                        {mode === "any" ? t("calendar:matchModeAny") : t("calendar:matchModeAll")}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
               </View>
               {storeCategories.length === 0 ? (
-                <Text style={{ fontSize: 12, color: theme.textMuted }}>Sin categorías disponibles</Text>
+                <Text style={{ fontSize: 12, color: theme.textMuted }}>{t("calendar:noCategoriesAvailableMessage")}</Text>
               ) : (
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {storeCategories.map((cat) => {
@@ -658,7 +664,7 @@ export default function CalendarScreen() {
             {/* Exercise + conditions filter */}
             <View style={{ gap: 8 }}>
               <Text style={{ fontSize: 12, fontWeight: "700", color: theme.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                Por ejercicio
+                {t("calendar:exerciseFilterTitle")}
               </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                 {storeExercises.map((ex) => (
@@ -674,23 +680,23 @@ export default function CalendarScreen() {
               {filterExId && (
                 <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
                   <View style={{ flex: 1, gap: 4 }}>
-                    <Text style={{ fontSize: 11, color: theme.textMuted }}>Peso mín. (kg)</Text>
+                    <Text style={{ fontSize: 11, color: theme.textMuted }}>{t("calendar:minWeightLabel")}</Text>
                     <TextInput
                       value={filterMinWeight}
                       onChangeText={setFilterMinWeight}
                       keyboardType="decimal-pad"
-                      placeholder="Ej. 100"
+                      placeholder={t("calendar:minWeightPlaceholder")}
                       placeholderTextColor={theme.textDisabled}
                       style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: theme.text }}
                     />
                   </View>
                   <View style={{ flex: 1, gap: 4 }}>
-                    <Text style={{ fontSize: 11, color: theme.textMuted }}>Reps mín.</Text>
+                    <Text style={{ fontSize: 11, color: theme.textMuted }}>{t("calendar:minRepsLabel")}</Text>
                     <TextInput
                       value={filterMinReps}
                       onChangeText={setFilterMinReps}
                       keyboardType="number-pad"
-                      placeholder="Ej. 5"
+                      placeholder={t("calendar:minRepsPlaceholder")}
                       placeholderTextColor={theme.textDisabled}
                       style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: theme.text }}
                     />
@@ -705,7 +711,7 @@ export default function CalendarScreen() {
               style={{ backgroundColor: theme.primary, borderRadius: 12, paddingVertical: 12, alignItems: "center", opacity: filterLoading ? 0.6 : 1 }}
             >
               <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>
-                {filterLoading ? "Aplicando…" : "Aplicar filtro"}
+                {filterLoading ? t("calendar:applyingFilterButton") : t("calendar:applyFilterButton")}
               </Text>
             </TouchableOpacity>
           </ScrollView>
