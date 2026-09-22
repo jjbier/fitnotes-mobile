@@ -21,7 +21,7 @@ import {
   claimGuestIdentity,
   setActiveIdentity,
 } from "@fitnotes/database";
-import { useThemeModeStore, type ThemeMode } from "../lib/theme";
+import { useThemeModeStore, useTheme, type ThemeMode } from "../lib/theme";
 import type { Session } from "@supabase/supabase-js";
 import { RepositoryProvider, useRepositories } from "../contexts/RepositoryContext";
 import { getLocalDb } from "../lib/db/client";
@@ -152,6 +152,7 @@ export default function RootLayout() {
 function AppContent() {
   const router = useRouter();
   const segments = useSegments();
+  const theme = useTheme();
   const [initialized, setInitialized] = useState(false);
   const { userId, isGuest, refreshIdentity, wipeAndSetIdentity } = useRepositories();
 
@@ -365,7 +366,13 @@ function AppContent() {
 
   return (
     <SyncContext.Provider value={{ status: syncStatus, pendingCount, lastSyncAt, refetchSignal }}>
-      <Stack>
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: theme.background },
+          headerTintColor: theme.text,
+          headerShadowVisible: false,
+        }}
+      >
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

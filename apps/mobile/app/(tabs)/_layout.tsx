@@ -1,7 +1,7 @@
-import { useColorScheme } from "react-native";
 import { Tabs } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../../lib/theme";
 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -9,8 +9,13 @@ type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
  * Layout raíz del grupo `(tabs)`: declara el navegador de 6 tabs (Hoy,
  * Calendario, Ejercicios, Progreso, Rutinas, Configuración) con iconos
  * Ionicons (outline/filled según foco) y colores adaptados a modo claro/oscuro
- * vía `useColorScheme`. No contiene lógica de datos ni de identidad — esa vive
- * en el `_layout.tsx` raíz que envuelve a este grupo.
+ * vía `useTheme()` (resuelve la preferencia de tema de la app — "Claro"/
+ * "Oscuro"/"Sistema" en Configuración — no el color scheme crudo del SO;
+ * hasta 2026-09-22 usaba `useColorScheme()` directamente, así que un tema
+ * elegido a mano en la app que no coincidiera con el del sistema operativo
+ * dejaba la barra de tabs/cabecera nativa en el color equivocado). No
+ * contiene lógica de datos ni de identidad — esa vive en el `_layout.tsx`
+ * raíz que envuelve a este grupo.
  *
  * Todas las tabs salvo `exercises` (2026-09-22) ocultan la cabecera nativa
  * (`headerShown: false`) porque su pantalla ya dibuja su propio título
@@ -21,8 +26,7 @@ type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
  * usa el de la tab (traducido con `t()`), y su cabecera se deja visible.
  */
 export default function TabLayout() {
-  const scheme = useColorScheme();
-  const isDark = scheme === "dark";
+  const theme = useTheme();
   const { t } = useTranslation();
 
   const TABS: {
@@ -43,17 +47,17 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: isDark ? "#818cf8" : "#6366f1",
-        tabBarInactiveTintColor: isDark ? "#64748b" : "#94a3b8",
+        tabBarActiveTintColor: theme.primary,
+        tabBarInactiveTintColor: theme.textMuted,
         tabBarStyle: {
-          backgroundColor: isDark ? "#0f172a" : "#ffffff",
+          backgroundColor: theme.background,
           borderTopWidth: 1,
-          borderTopColor: isDark ? "#334155" : "#e2e8f0",
+          borderTopColor: theme.border,
           paddingBottom: 4,
           height: 60,
         },
-        headerStyle: { backgroundColor: isDark ? "#0f172a" : "#ffffff" },
-        headerTintColor: isDark ? "#f1f5f9" : "#0f172a",
+        headerStyle: { backgroundColor: theme.background },
+        headerTintColor: theme.text,
         headerShadowVisible: false,
       }}
     >
