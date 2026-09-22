@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { SafeAreaView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, KeyboardAvoidingView, Platform, ScrollView, FlatList } from "react-native";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { NestableScrollContainer, NestableDraggableFlatList, ScaleDecorator } from "react-native-draggable-flatlist";
 import type { RenderItemParams } from "react-native-draggable-flatlist";
@@ -22,6 +23,7 @@ type LocalPS = { localId: string; weight: string; reps: string; distance: string
  */
 export default function RoutineDetailScreen() {
   const theme = useTheme();
+  const { t } = useTranslation();
   const { id: routineId } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
   const router = useRouter();
@@ -141,7 +143,7 @@ export default function RoutineDetailScreen() {
   async function handleAddDay() {
     if (!newDayName.trim() || !routineId) return;
     const { data, error } = await routineRepo.createDay({ routine_id: routineId, name: newDayName.trim(), order_index: days.length }, userId);
-    if (error || !data) { Alert.alert("Error", error?.message ?? "Ha ocurrido un error"); return; }
+    if (error || !data) { Alert.alert(t("routines:alerts.errorTitle"), error?.message ?? t("routines:alerts.genericErrorMessage")); return; }
     addRoutineDay({ id: data.id, routine_id: data.routine_id, name: data.name, order_index: data.order_index });
     loadRoutineDayExercises(data.id, []);
     setNewDayName("");
@@ -150,9 +152,9 @@ export default function RoutineDetailScreen() {
 
   async function handleDeleteDay(dayId: string, name: string) {
     if (!routineId) return;
-    Alert.alert("Eliminar día", `¿Eliminar "${name}" y todos sus ejercicios?`, [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Eliminar", style: "destructive", onPress: async () => {
+    Alert.alert(t("routines:alerts.deleteDayTitle"), t("routines:alerts.deleteDayMessage", { name }), [
+      { text: t("common:cancel"), style: "cancel" },
+      { text: t("common:delete"), style: "destructive", onPress: async () => {
         await routineRepo.deleteDay(dayId);
         deleteRoutineDay(routineId, dayId);
       }},
@@ -167,7 +169,7 @@ export default function RoutineDetailScreen() {
   async function handleRenameDay(dayId: string, name: string) {
     if (!name.trim()) return;
     const { error } = await routineRepo.updateDay(dayId, { name: name.trim() });
-    if (error) { Alert.alert("Error", error.message); return; }
+    if (error) { Alert.alert(t("routines:alerts.errorTitle"), error.message); return; }
     updateRoutineDayStore(dayId, { name: name.trim() });
   }
 
@@ -208,9 +210,9 @@ export default function RoutineDetailScreen() {
     const dayExs = (routineDayExercises[dayId] ?? []).slice().sort((a, b) => a.order_index - b.order_index);
 
     if (rde.group_id) {
-      Alert.alert("Superset", rde.group_name ?? "Superset", [
+      Alert.alert(t("routines:supersetDefaultLabel"), rde.group_name ?? t("routines:supersetDefaultLabel"), [
         {
-          text: "Renombrar grupo",
+          text: t("routines:alerts.renameGroupOption"),
           onPress: () => {
             setRenamingGroup({ dayId, groupId: rde.group_id! });
             setRenameGroupText(rde.group_name ?? "");
@@ -218,7 +220,7 @@ export default function RoutineDetailScreen() {
           },
         },
         {
-          text: "Quitar del grupo",
+          text: t("routines:alerts.removeFromGroupOption"),
           style: "destructive",
           onPress: async () => {
             const members = dayExs.filter((e) => e.group_id === rde.group_id);
@@ -228,7 +230,7 @@ export default function RoutineDetailScreen() {
             ));
           },
         },
-        { text: "Cancelar", style: "cancel" },
+        { text: t("common:cancel"), style: "cancel" },
       ]);
       return;
     } else {
@@ -236,7 +238,7 @@ export default function RoutineDetailScreen() {
       const idx = dayExs.findIndex((e) => e.id === rde.id);
       const next = dayExs[idx + 1];
       if (!next) {
-        Alert.alert("Sin ejercicio siguiente", "Selecciona un ejercicio que no sea el último para crear un superset.");
+        Alert.alert(t("routines:alerts.noNextExerciseTitle"), t("routines:alerts.noNextExerciseMessage"));
         return;
       }
       // Si el siguiente ya pertenece a un grupo, unirse a ese grupo; si no, crear uno nuevo
@@ -260,7 +262,7 @@ export default function RoutineDetailScreen() {
     const results = await routineRepo.reorderDays(updates);
     if (results.some((r) => r.error)) {
       reorderDaysStore(routineId, prevOrder);
-      Alert.alert("Error", "No se pudo guardar el orden. Inténtalo de nuevo.");
+      Alert.alert(t("routines:alerts.errorTitle"), t("routines:alerts.reorderErrorMessage"));
     }
   }
 
@@ -272,7 +274,7 @@ export default function RoutineDetailScreen() {
     const results = await routineRepo.reorderExercises(updates);
     if (results.some((r) => r.error)) {
       reorderExercisesStore(dayId, prevOrder);
-      Alert.alert("Error", "No se pudo guardar el orden. Inténtalo de nuevo.");
+      Alert.alert(t("routines:alerts.errorTitle"), t("routines:alerts.reorderErrorMessage"));
     }
   }
 
@@ -346,7 +348,7 @@ export default function RoutineDetailScreen() {
       order_index: i,
     }));
     const { error } = await routineRepo.savePredefinedSets(psRdeId, sets, userId);
-    if (error) { Alert.alert("Error", error.message); setPsSaving(false); return; }
+    if (error) { Alert.alert(t("routines:alerts.errorTitle"), error.message); setPsSaving(false); return; }
     savePredefinedSetsStore(psRdeId, sets.map((s, i) => ({
       id: `local-${i}`, routine_day_exercise_id: psRdeId, ...s, order_index: i,
     })));
@@ -377,7 +379,7 @@ export default function RoutineDetailScreen() {
     const allDayExs = (routineDayExercises[dayId] ?? []).slice().sort((a, b) => a.order_index - b.order_index);
     const dayExs = allDayExs.filter((rde) => selectedIds.includes(rde.exercise_id));
     if (dayExs.length === 0) {
-      Alert.alert("Sin ejercicios", "Añade ejercicios al día antes de registrar.");
+      Alert.alert(t("routines:alerts.noExercisesTitle"), t("routines:alerts.noExercisesMessage"));
       return;
     }
 
@@ -389,7 +391,7 @@ export default function RoutineDetailScreen() {
       userId
     );
     if (wError || !workout) {
-      Alert.alert("Error", wError?.message ?? "No se pudo crear el entrenamiento");
+      Alert.alert(t("routines:alerts.errorTitle"), wError?.message ?? t("routines:alerts.workoutCreateErrorMessage"));
       setLoggingDayId(null);
       return;
     }
@@ -464,8 +466,8 @@ export default function RoutineDetailScreen() {
     addWorkoutToHistory({ id: workout.id, date: workout.date });
 
     setLoggingDayId(null);
-    Alert.alert("¡Listo!", "Entrenamiento registrado desde la rutina.", [
-      { text: "Ver entrenamiento", onPress: () => router.replace("/(tabs)") },
+    Alert.alert(t("routines:alerts.successTitle"), t("routines:alerts.successMessage"), [
+      { text: t("routines:alerts.viewWorkoutButton"), onPress: () => router.replace("/(tabs)") },
     ]);
   }
 
@@ -486,7 +488,7 @@ export default function RoutineDetailScreen() {
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 2, paddingLeft: 11 }}>
                 <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: theme.primary }} />
                 <Text style={{ fontSize: 10, fontWeight: "600", color: theme.primary }}>
-                  {rde.group_name ?? "Superset"}
+                  {rde.group_name ?? t("routines:supersetDefaultLabel")}
                 </Text>
               </View>
             )}
@@ -571,7 +573,7 @@ export default function RoutineDetailScreen() {
                 <Ionicons name="pencil-outline" size={14} color={theme.textMuted} />
               </TouchableOpacity>
             )}
-            {!editMode && <Text style={{ fontSize: 12, color: theme.textMuted }}>{dayExs.length} ejercicios</Text>}
+            {!editMode && <Text style={{ fontSize: 12, color: theme.textMuted }}>{t("routines:exercisesCount", { count: dayExs.length })}</Text>}
             {editMode && (
               <TouchableOpacity onPress={() => handleDeleteDay(day.id, day.name)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="trash-outline" size={14} color={theme.danger} />
@@ -585,7 +587,7 @@ export default function RoutineDetailScreen() {
               >
                 {isLoggingThis && <ActivityIndicator size="small" color="#fff" />}
                 <Text style={{ fontSize: 11, fontWeight: "600", color: "#fff" }}>
-                  {isLoggingThis ? "Registrando…" : "Registrar"}
+                  {isLoggingThis ? t("routines:loggingButton") : t("routines:logButton")}
                 </Text>
               </TouchableOpacity>
             )}
@@ -609,7 +611,7 @@ export default function RoutineDetailScreen() {
                 style={{ borderWidth: 1, borderColor: theme.border, borderStyle: "dashed", borderRadius: 8, paddingVertical: 8, alignItems: "center", marginTop: 4, flexDirection: "row", justifyContent: "center", gap: 6 }}
               >
                 <Ionicons name="add-circle-outline" size={14} color={theme.primary} />
-                <Text style={{ fontSize: 12, color: theme.primary, fontWeight: "500" }}>Añadir ejercicio</Text>
+                <Text style={{ fontSize: 12, color: theme.primary, fontWeight: "500" }}>{t("routines:addExerciseButton")}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -625,14 +627,14 @@ export default function RoutineDetailScreen() {
       {/* Edit toggle */}
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, gap: 8 }}>
         {!editMode && (
-          <Text style={{ fontSize: 12, color: theme.textMuted }}>Pulsa Editar para gestionar días y ejercicios</Text>
+          <Text style={{ fontSize: 12, color: theme.textMuted }}>{t("routines:editHint")}</Text>
         )}
         <TouchableOpacity
           onPress={() => setEditMode((v) => !v)}
           style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: theme.primary }}
         >
           <Ionicons name={editMode ? "checkmark" : "create-outline"} size={15} color="#fff" />
-          <Text style={{ fontSize: 13, fontWeight: "600", color: "#fff" }}>{editMode ? "Listo" : "Editar"}</Text>
+          <Text style={{ fontSize: 13, fontWeight: "600", color: "#fff" }}>{editMode ? t("routines:doneButton") : t("routines:editButton")}</Text>
         </TouchableOpacity>
       </View>
 
@@ -651,13 +653,13 @@ export default function RoutineDetailScreen() {
           {days.length === 0 ? (
             <View style={{ borderWidth: 1, borderColor: theme.border, borderStyle: "dashed", borderRadius: 16, padding: 32, alignItems: "center", gap: 12 }}>
               <Ionicons name="calendar-outline" size={36} color={theme.textMuted} />
-              <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>Sin días aún</Text>
-              <Text style={{ fontSize: 12, color: theme.textMuted, textAlign: "center" }}>Pulsa el botón Editar (arriba a la derecha) y luego + Añadir día.</Text>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>{t("routines:emptyDaysTitle")}</Text>
+              <Text style={{ fontSize: 12, color: theme.textMuted, textAlign: "center" }}>{t("routines:emptyDaysSubtitle")}</Text>
               <TouchableOpacity
                 onPress={() => setEditMode(true)}
                 style={{ backgroundColor: theme.primary, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 }}
               >
-                <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>Empezar a editar</Text>
+                <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>{t("routines:startEditingButton")}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -676,7 +678,7 @@ export default function RoutineDetailScreen() {
               <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
                 <TextInput
                   style={{ flex: 1, borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: theme.text, backgroundColor: theme.inputBg }}
-                  placeholder="Nombre del día (ej. Empuje)"
+                  placeholder={t("routines:addDayPlaceholder")}
                   placeholderTextColor={theme.textMuted}
                   value={newDayName}
                   onChangeText={setNewDayName}
@@ -684,12 +686,12 @@ export default function RoutineDetailScreen() {
                   onSubmitEditing={handleAddDay}
                 />
                 <TouchableOpacity onPress={handleAddDay} style={{ backgroundColor: theme.primary, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, alignItems: "center", justifyContent: "center" }}>
-                  <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>Añadir</Text>
+                  <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>{t("routines:addButton")}</Text>
                 </TouchableOpacity>
               </View>
             ) : (
               <TouchableOpacity onPress={() => setShowDayInput(true)} style={{ borderWidth: 1, borderColor: theme.border, borderStyle: "dashed", borderRadius: 16, paddingVertical: 14, alignItems: "center", marginTop: 4 }}>
-                <Text style={{ fontSize: 13, color: theme.textMuted }}>+ Añadir día</Text>
+                <Text style={{ fontSize: 13, color: theme.textMuted }}>{t("routines:addDayButton")}</Text>
               </TouchableOpacity>
             )
           )}
@@ -702,7 +704,7 @@ export default function RoutineDetailScreen() {
           <SafeAreaView style={{ flex: 1, backgroundColor: theme.surfaceCard }}>
             <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.borderLight }}>
               <Text style={{ flex: 1, fontSize: 16, fontWeight: "700", color: theme.text }}>
-                {exerciseMap[psExerciseId]?.name ?? "Series predefinidas"}
+                {exerciseMap[psExerciseId]?.name ?? t("routines:predefinedSetsDefaultTitle")}
               </Text>
               <TouchableOpacity onPress={() => setPsRdeId(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close" size={22} color={theme.textSecondary} />
@@ -711,7 +713,7 @@ export default function RoutineDetailScreen() {
 
             <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
               <Text style={{ fontSize: 12, color: theme.textMuted }}>
-                Deja un campo vacío para que copie el valor del último entrenamiento registrado.
+                {t("routines:predefinedSetsHint")}
               </Text>
 
               {psLoading ? (
@@ -724,10 +726,10 @@ export default function RoutineDetailScreen() {
                     return (
                       <View style={{ flexDirection: "row", gap: 6, paddingHorizontal: 4 }}>
                         <Text style={{ width: 24, fontSize: 11, color: theme.textMuted }}>#</Text>
-                        {fields.weight && <Text style={{ flex: 1, fontSize: 11, color: theme.textMuted, textAlign: "center" }}>Peso (kg)</Text>}
-                        {fields.reps && <Text style={{ flex: 1, fontSize: 11, color: theme.textMuted, textAlign: "center" }}>Reps</Text>}
-                        {fields.distance && <Text style={{ flex: 1, fontSize: 11, color: theme.textMuted, textAlign: "center" }}>Dist (m)</Text>}
-                        {fields.time && <Text style={{ flex: 1, fontSize: 11, color: theme.textMuted, textAlign: "center" }}>Tiempo (s)</Text>}
+                        {fields.weight && <Text style={{ flex: 1, fontSize: 11, color: theme.textMuted, textAlign: "center" }}>{t("routines:fieldHeaders.weight")}</Text>}
+                        {fields.reps && <Text style={{ flex: 1, fontSize: 11, color: theme.textMuted, textAlign: "center" }}>{t("routines:fieldHeaders.reps")}</Text>}
+                        {fields.distance && <Text style={{ flex: 1, fontSize: 11, color: theme.textMuted, textAlign: "center" }}>{t("routines:fieldHeaders.distance")}</Text>}
+                        {fields.time && <Text style={{ flex: 1, fontSize: 11, color: theme.textMuted, textAlign: "center" }}>{t("routines:fieldHeaders.time")}</Text>}
                         <View style={{ width: 24 }} />
                       </View>
                     );
@@ -778,7 +780,7 @@ export default function RoutineDetailScreen() {
                     onPress={psAddRow}
                     style={{ borderWidth: 1, borderColor: theme.border, borderStyle: "dashed", borderRadius: 10, paddingVertical: 10, alignItems: "center", marginTop: 4 }}
                   >
-                    <Text style={{ fontSize: 13, color: theme.primary, fontWeight: "600" }}>+ Añadir serie</Text>
+                    <Text style={{ fontSize: 13, color: theme.primary, fontWeight: "600" }}>{t("routines:addSetButton")}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -786,7 +788,7 @@ export default function RoutineDetailScreen() {
                     disabled={psSaving}
                     style={{ backgroundColor: theme.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: psSaving ? 0.6 : 1, marginTop: 8 }}
                   >
-                    <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>{psSaving ? "Guardando…" : "Guardar"}</Text>
+                    <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>{psSaving ? t("routines:savingButton") : t("routines:saveButton")}</Text>
                   </TouchableOpacity>
                 </>
               )}
@@ -799,7 +801,7 @@ export default function RoutineDetailScreen() {
       <Modal visible={selectLogDayId !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSelectLogDayId(null)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: theme.surfaceCard }}>
           <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: theme.borderLight }}>
-            <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: theme.text }}>Seleccionar ejercicios</Text>
+            <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: theme.text }}>{t("routines:selectExercisesTitle")}</Text>
             <TouchableOpacity onPress={() => setSelectLogDayId(null)}>
               <Ionicons name="close" size={22} color={theme.textSecondary} />
             </TouchableOpacity>
@@ -836,7 +838,7 @@ export default function RoutineDetailScreen() {
               style={{ flex: 1, borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingVertical: 13, alignItems: "center" }}
             >
               <Text style={{ fontSize: 14, color: theme.textSecondary }}>
-                {selectedExerciseIds.length === (routineDayExercises[selectLogDayId ?? ""] ?? []).length ? "Deseleccionar todo" : "Seleccionar todo"}
+                {selectedExerciseIds.length === (routineDayExercises[selectLogDayId ?? ""] ?? []).length ? t("routines:deselectAllButton") : t("routines:selectAllButton")}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -850,7 +852,7 @@ export default function RoutineDetailScreen() {
               style={{ flex: 1, backgroundColor: selectedExerciseIds.length === 0 ? theme.border : theme.primary, borderRadius: 12, paddingVertical: 13, alignItems: "center" }}
             >
               <Text style={{ fontSize: 14, fontWeight: "600", color: selectedExerciseIds.length === 0 ? theme.textMuted : "#fff" }}>
-                Registrar {selectedExerciseIds.length} ejercicio{selectedExerciseIds.length !== 1 ? "s" : ""}
+                {t("routines:logExercisesCount", { count: selectedExerciseIds.length })}
               </Text>
             </TouchableOpacity>
           </View>
@@ -861,12 +863,12 @@ export default function RoutineDetailScreen() {
       <Modal visible={showRenameDay} animationType="fade" transparent onRequestClose={() => setShowRenameDay(false)}>
         <View style={{ flex: 1, backgroundColor: theme.overlay, justifyContent: "center", paddingHorizontal: 32 }}>
           <View style={{ backgroundColor: theme.surfaceCard, borderRadius: 16, padding: 20, gap: 16 }}>
-            <Text style={{ fontSize: 16, fontWeight: "600", color: theme.text }}>Renombrar día</Text>
+            <Text style={{ fontSize: 16, fontWeight: "600", color: theme.text }}>{t("routines:renameDayTitle")}</Text>
             <TextInput
               style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, color: theme.text, backgroundColor: theme.inputBg }}
               value={renameDayText}
               onChangeText={setRenameDayText}
-              placeholder="Nombre del día"
+              placeholder={t("routines:dayNamePlaceholder")}
               placeholderTextColor={theme.textDisabled}
               autoFocus
               returnKeyType="done"
@@ -877,7 +879,7 @@ export default function RoutineDetailScreen() {
             />
             <View style={{ flexDirection: "row", gap: 10 }}>
               <TouchableOpacity onPress={() => setShowRenameDay(false)} style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: theme.border, alignItems: "center" }}>
-                <Text style={{ fontSize: 14, color: theme.textSecondary }}>Cancelar</Text>
+                <Text style={{ fontSize: 14, color: theme.textSecondary }}>{t("common:cancel")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => {
@@ -886,7 +888,7 @@ export default function RoutineDetailScreen() {
                 }}
                 style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: theme.primary, alignItems: "center" }}
               >
-                <Text style={{ fontSize: 14, fontWeight: "600", color: "#fff" }}>Guardar</Text>
+                <Text style={{ fontSize: 14, fontWeight: "600", color: "#fff" }}>{t("routines:saveButton")}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -899,7 +901,7 @@ export default function RoutineDetailScreen() {
           {/* Header */}
           <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.borderLight }}>
             <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: theme.text }}>
-              Añadir ejercicios
+              {t("routines:addExercisesTitle")}
               {exPickerSelected.size > 0 && (
                 <Text style={{ fontSize: 14, color: theme.primary, fontWeight: "400" }}> ({exPickerSelected.size})</Text>
               )}
@@ -961,7 +963,7 @@ export default function RoutineDetailScreen() {
               style={{ backgroundColor: exPickerSelected.size === 0 ? theme.border : theme.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center" }}
             >
               <Text style={{ fontSize: 15, fontWeight: "600", color: exPickerSelected.size === 0 ? theme.textMuted : "#fff" }}>
-                {exPickerSelected.size === 0 ? "Selecciona ejercicios" : `Añadir ${exPickerSelected.size} ejercicio${exPickerSelected.size !== 1 ? "s" : ""}`}
+                {exPickerSelected.size === 0 ? t("routines:selectExercisesPlaceholderButton") : t("routines:addExercisesCount", { count: exPickerSelected.size })}
               </Text>
             </TouchableOpacity>
           </View>
@@ -972,12 +974,12 @@ export default function RoutineDetailScreen() {
       <Modal visible={showRenameGroup} animationType="fade" transparent onRequestClose={() => setShowRenameGroup(false)}>
         <View style={{ flex: 1, backgroundColor: theme.overlay, justifyContent: "center", paddingHorizontal: 32 }}>
           <View style={{ backgroundColor: theme.surfaceCard, borderRadius: 16, padding: 20, gap: 16 }}>
-            <Text style={{ fontSize: 16, fontWeight: "600", color: theme.text }}>Nombre del superset</Text>
+            <Text style={{ fontSize: 16, fontWeight: "600", color: theme.text }}>{t("routines:renameSupersetTitle")}</Text>
             <TextInput
               style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, color: theme.text, backgroundColor: theme.inputBg }}
               value={renameGroupText}
               onChangeText={setRenameGroupText}
-              placeholder="Ej. Pecho + Tríceps"
+              placeholder={t("routines:supersetNamePlaceholder")}
               placeholderTextColor={theme.textDisabled}
               autoFocus
               returnKeyType="done"
@@ -988,7 +990,7 @@ export default function RoutineDetailScreen() {
             />
             <View style={{ flexDirection: "row", gap: 10 }}>
               <TouchableOpacity onPress={() => setShowRenameGroup(false)} style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: theme.border, alignItems: "center" }}>
-                <Text style={{ fontSize: 14, color: theme.textSecondary }}>Cancelar</Text>
+                <Text style={{ fontSize: 14, color: theme.textSecondary }}>{t("common:cancel")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => {
@@ -997,7 +999,7 @@ export default function RoutineDetailScreen() {
                 }}
                 style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: theme.primary, alignItems: "center" }}
               >
-                <Text style={{ fontSize: 14, fontWeight: "600", color: "#fff" }}>Guardar</Text>
+                <Text style={{ fontSize: 14, fontWeight: "600", color: "#fff" }}>{t("routines:saveButton")}</Text>
               </TouchableOpacity>
             </View>
           </View>

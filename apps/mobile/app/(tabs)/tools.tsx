@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, TextInput, Modal, Alert, ActivityIndicator } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { useRoutineStore } from "@fitnotes/core";
 import { useTheme } from "../../lib/theme";
@@ -21,6 +22,7 @@ import { useRepositories } from "../../contexts/RepositoryContext";
 export default function RoutinesScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const { t } = useTranslation();
   const { create } = useLocalSearchParams<{ create?: string }>();
   const routines = useRoutineStore((s) => s.routines);
   const isLoading = useRoutineStore((s) => s.isLoading);
@@ -89,9 +91,9 @@ export default function RoutinesScreen() {
 
   /** Pide confirmación y elimina la rutina junto con todos sus días. */
   function confirmDelete(id: string, name: string) {
-    Alert.alert("Eliminar rutina", `¿Eliminar "${name}" y todos sus días?`, [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Eliminar", style: "destructive", onPress: async () => {
+    Alert.alert(t("routines:alerts.deleteRoutineTitle"), t("routines:alerts.deleteRoutineMessage", { name }), [
+      { text: t("common:cancel"), style: "cancel" },
+      { text: t("common:delete"), style: "destructive", onPress: async () => {
         await repo.deleteRoutine(id);
         deleteRoutine(id);
       }},
@@ -100,9 +102,9 @@ export default function RoutinesScreen() {
 
   /** Valida y crea una rutina nueva vacía (sin días/ejercicios), cerrando el modal de creación. */
   async function handleCreate() {
-    if (!newName.trim()) { Alert.alert("Error", "El nombre es obligatorio"); return; }
+    if (!newName.trim()) { Alert.alert(t("routines:alerts.errorTitle"), t("routines:alerts.nameRequiredMessage")); return; }
     const { data, error } = await repo.createRoutine({ name: newName.trim(), notes: newNotes.trim() }, userId);
-    if (error || !data) { Alert.alert("Error", error?.message ?? "Error al crear"); return; }
+    if (error || !data) { Alert.alert(t("routines:alerts.errorTitle"), error?.message ?? t("routines:alerts.createErrorMessage")); return; }
     createRoutine({ id: data.id, name: data.name, notes: data.notes ?? undefined });
     setNewName("");
     setNewNotes("");
@@ -114,7 +116,7 @@ export default function RoutinesScreen() {
     if (!editSource || !editName.trim()) return;
     setEditSaving(true);
     const { error } = await repo.updateRoutine(editSource.id, { name: editName.trim(), notes: editNotes.trim() });
-    if (error) { Alert.alert("Error", error.message); setEditSaving(false); return; }
+    if (error) { Alert.alert(t("routines:alerts.errorTitle"), error.message); setEditSaving(false); return; }
     updateRoutine(editSource.id, { name: editName.trim(), notes: editNotes.trim() || undefined });
     setEditSaving(false);
     setEditSource(null);
@@ -125,7 +127,7 @@ export default function RoutinesScreen() {
     if (!copySource || !copyName.trim()) return;
     setCopying(true);
     const { data, error } = await repo.copyRoutine(copySource.id, copyName.trim(), userId);
-    if (error || !data) { Alert.alert("Error", error?.message ?? "Error al copiar"); setCopying(false); return; }
+    if (error || !data) { Alert.alert(t("routines:alerts.errorTitle"), error?.message ?? t("routines:alerts.copyErrorMessage")); setCopying(false); return; }
     createRoutine({ id: data.id, name: data.name, notes: data.notes ?? undefined });
     setCopying(false);
     setCopySource(null);
@@ -139,14 +141,14 @@ export default function RoutinesScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100, gap: 10 }}>
-          <Text style={{ fontSize: 22, fontWeight: "700", color: theme.text, marginBottom: 4 }}>Rutinas</Text>
+          <Text style={{ fontSize: 22, fontWeight: "700", color: theme.text, marginBottom: 4 }}>{t("routines:title")}</Text>
 
           {routines.length === 0 ? (
             <View style={{ borderWidth: 1, borderColor: theme.border, borderStyle: "dashed", borderRadius: 16, padding: 32, alignItems: "center", gap: 8 }}>
               <Ionicons name="clipboard-outline" size={36} color={theme.textMuted} />
-              <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>Sin rutinas aún</Text>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>{t("routines:emptyTitle")}</Text>
               <Text style={{ fontSize: 12, color: theme.textMuted, textAlign: "center" }}>
-                Pulsa el botón + para crear tu primera rutina.
+                {t("routines:emptySubtitle")}
               </Text>
             </View>
           ) : (
@@ -163,10 +165,10 @@ export default function RoutinesScreen() {
                     const s = routineStats[r.id];
                     if (!s) return null;
                     const parts: string[] = [];
-                    if (s.sessionCount > 0) parts.push(`${s.sessionCount} sesión${s.sessionCount !== 1 ? "es" : ""}`);
+                    if (s.sessionCount > 0) parts.push(t("progress:sessionsCount", { count: s.sessionCount }));
                     if (s.lastUsed) {
                       const days = Math.floor((Date.now() - new Date(s.lastUsed).getTime()) / 86400000);
-                      parts.push(days === 0 ? "hoy" : days === 1 ? "ayer" : `hace ${days} días`);
+                      parts.push(days === 0 ? t("routines:relativeDays.today") : days === 1 ? t("routines:relativeDays.yesterday") : t("routines:relativeDays.daysAgo", { count: days }));
                     }
                     if (parts.length === 0) return null;
                     return <Text style={{ fontSize: 11, color: theme.primary, marginTop: 3 }}>{parts.join(" · ")}</Text>;
@@ -176,7 +178,7 @@ export default function RoutinesScreen() {
                   testID={`routine-menu-${r.name}`}
                   onPress={() => openMenu(r.id, r.name, r.notes ?? "")}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 4 }}
-                  accessibilityLabel={`Opciones de ${r.name}`}
+                  accessibilityLabel={t("routines:optionsLabel", { name: r.name })}
                 >
                   <Ionicons name="ellipsis-vertical" size={18} color={theme.textMuted} />
                 </TouchableOpacity>
@@ -191,7 +193,7 @@ export default function RoutinesScreen() {
       <TouchableOpacity
         testID="routine-fab-add"
         onPress={() => setShowCreate(true)}
-        accessibilityLabel="Nueva rutina"
+        accessibilityLabel={t("routines:newRoutineLabel")}
         style={{ position: "absolute", bottom: 32, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: theme.primary, alignItems: "center", justifyContent: "center", shadowColor: theme.primary, shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 }}
       >
         <Ionicons name="add" size={28} color="white" />
@@ -226,19 +228,19 @@ export default function RoutinesScreen() {
               style={{ paddingVertical: 16, paddingHorizontal: 24, flexDirection: "row", alignItems: "center", gap: 12 }}
             >
               <Ionicons name="create-outline" size={20} color={theme.text} />
-              <Text style={{ fontSize: 15, color: theme.text }}>Editar</Text>
+              <Text style={{ fontSize: 15, color: theme.text }}>{t("routines:editMenuOption")}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => {
                 if (!menuTarget) return;
                 setCopySource(menuTarget);
-                setCopyName(`Copia de ${menuTarget.name}`);
+                setCopyName(t("routines:copyNamePrefix", { name: menuTarget.name }));
                 setMenuTarget(null);
               }}
               style={{ paddingVertical: 16, paddingHorizontal: 24, flexDirection: "row", alignItems: "center", gap: 12 }}
             >
               <Ionicons name="copy-outline" size={20} color={theme.text} />
-              <Text style={{ fontSize: 15, color: theme.text }}>Copiar</Text>
+              <Text style={{ fontSize: 15, color: theme.text }}>{t("routines:copyMenuOption")}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => {
@@ -250,14 +252,14 @@ export default function RoutinesScreen() {
               style={{ paddingVertical: 16, paddingHorizontal: 24, flexDirection: "row", alignItems: "center", gap: 12 }}
             >
               <Ionicons name="trash-outline" size={20} color={theme.danger} />
-              <Text style={{ fontSize: 15, color: theme.danger }}>Eliminar</Text>
+              <Text style={{ fontSize: 15, color: theme.danger }}>{t("common:delete")}</Text>
             </TouchableOpacity>
             <View style={{ height: 1, backgroundColor: theme.borderLight, marginVertical: 4 }} />
             <TouchableOpacity
               onPress={() => setMenuTarget(null)}
               style={{ paddingVertical: 16, paddingHorizontal: 24, alignItems: "center" }}
             >
-              <Text style={{ fontSize: 15, fontWeight: "600", color: theme.textMuted }}>Cancelar</Text>
+              <Text style={{ fontSize: 15, fontWeight: "600", color: theme.textMuted }}>{t("common:cancel")}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -267,10 +269,10 @@ export default function RoutinesScreen() {
       <Modal visible={editSource !== null} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setEditSource(null)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
           <View style={{ padding: 20, gap: 16 }}>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>Editar rutina</Text>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>{t("routines:editModal.heading")}</Text>
             <TextInput
               style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: theme.text, backgroundColor: theme.inputBg }}
-              placeholder="Nombre de la rutina"
+              placeholder={t("routines:editModal.namePlaceholder")}
               placeholderTextColor={theme.textMuted}
               value={editName}
               onChangeText={setEditName}
@@ -279,7 +281,7 @@ export default function RoutinesScreen() {
             />
             <TextInput
               style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, height: 80, textAlignVertical: "top", color: theme.text, backgroundColor: theme.inputBg }}
-              placeholder="Notas (opcional)"
+              placeholder={t("routines:editModal.notesPlaceholder")}
               placeholderTextColor={theme.textMuted}
               value={editNotes}
               onChangeText={setEditNotes}
@@ -287,7 +289,7 @@ export default function RoutinesScreen() {
             />
             <View style={{ flexDirection: "row", gap: 8 }}>
               <TouchableOpacity onPress={() => setEditSource(null)} style={{ flex: 1, borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingVertical: 12, alignItems: "center" }}>
-                <Text style={{ fontSize: 14, fontWeight: "500", color: theme.text }}>Cancelar</Text>
+                <Text style={{ fontSize: 14, fontWeight: "500", color: theme.text }}>{t("common:cancel")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleEdit}
@@ -296,7 +298,7 @@ export default function RoutinesScreen() {
               >
                 {editSaving
                   ? <ActivityIndicator size="small" color="#fff" />
-                  : <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Guardar</Text>
+                  : <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>{t("routines:saveButton")}</Text>
                 }
               </TouchableOpacity>
             </View>
@@ -308,11 +310,11 @@ export default function RoutinesScreen() {
       <Modal visible={copySource !== null} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setCopySource(null)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
           <View style={{ padding: 20, gap: 16 }}>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>Copiar rutina</Text>
-            <Text style={{ fontSize: 13, color: theme.textSecondary }}>Se copiarán todos los días, ejercicios y series predefinidas.</Text>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>{t("routines:copyModal.heading")}</Text>
+            <Text style={{ fontSize: 13, color: theme.textSecondary }}>{t("routines:copyModal.subtitle")}</Text>
             <TextInput
               style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: theme.text, backgroundColor: theme.inputBg }}
-              placeholder="Nombre de la nueva rutina"
+              placeholder={t("routines:copyModal.namePlaceholder")}
               placeholderTextColor={theme.textMuted}
               value={copyName}
               onChangeText={setCopyName}
@@ -321,7 +323,7 @@ export default function RoutinesScreen() {
             />
             <View style={{ flexDirection: "row", gap: 8 }}>
               <TouchableOpacity onPress={() => setCopySource(null)} style={{ flex: 1, borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingVertical: 12, alignItems: "center" }}>
-                <Text style={{ fontSize: 14, fontWeight: "500", color: theme.text }}>Cancelar</Text>
+                <Text style={{ fontSize: 14, fontWeight: "500", color: theme.text }}>{t("common:cancel")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleCopy}
@@ -330,7 +332,7 @@ export default function RoutinesScreen() {
               >
                 {copying
                   ? <ActivityIndicator size="small" color="#fff" />
-                  : <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Copiar</Text>
+                  : <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>{t("routines:copyModal.saveButton")}</Text>
                 }
               </TouchableOpacity>
             </View>
@@ -342,11 +344,11 @@ export default function RoutinesScreen() {
       <Modal visible={showCreate} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setShowCreate(false)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
           <View style={{ padding: 20, gap: 16 }}>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>Nueva rutina</Text>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>{t("routines:createModal.heading")}</Text>
             <TextInput
               testID="routine-name-input"
               style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: theme.text, backgroundColor: theme.inputBg }}
-              placeholder="Nombre de la rutina"
+              placeholder={t("routines:createModal.namePlaceholder")}
               placeholderTextColor={theme.textMuted}
               value={newName}
               onChangeText={setNewName}
@@ -354,7 +356,7 @@ export default function RoutinesScreen() {
             />
             <TextInput
               style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, height: 80, textAlignVertical: "top", color: theme.text, backgroundColor: theme.inputBg }}
-              placeholder="Notas (opcional)"
+              placeholder={t("routines:createModal.notesPlaceholder")}
               placeholderTextColor={theme.textMuted}
               value={newNotes}
               onChangeText={setNewNotes}
@@ -362,10 +364,10 @@ export default function RoutinesScreen() {
             />
             <View style={{ flexDirection: "row", gap: 8 }}>
               <TouchableOpacity onPress={() => setShowCreate(false)} style={{ flex: 1, borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingVertical: 12, alignItems: "center" }}>
-                <Text style={{ fontSize: 14, fontWeight: "500", color: theme.text }}>Cancelar</Text>
+                <Text style={{ fontSize: 14, fontWeight: "500", color: theme.text }}>{t("common:cancel")}</Text>
               </TouchableOpacity>
               <TouchableOpacity testID="routine-create-submit" onPress={handleCreate} style={{ flex: 1, backgroundColor: theme.primary, borderRadius: 12, paddingVertical: 12, alignItems: "center" }}>
-                <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Crear</Text>
+                <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>{t("routines:createModal.createButton")}</Text>
               </TouchableOpacity>
             </View>
           </View>
