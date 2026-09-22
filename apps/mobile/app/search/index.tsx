@@ -6,25 +6,12 @@ import {
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
-import { useExerciseStore, ExerciseType, formatShortDate, formatDaysAgo } from "@fitnotes/core";
+import { useExerciseStore, formatShortDate, formatDaysAgo } from "@fitnotes/core";
 import { useTheme } from "../../lib/theme";
 import { dateLocale } from "../../lib/i18n";
 import { useRepositories } from "../../contexts/RepositoryContext";
 
 type LastWorkout = { date: string; maxWeight: number; maxReps: number; setCount: number };
-
-const TYPE_LABELS: Partial<Record<ExerciseType, string>> = {
-  [ExerciseType.WEIGHT_REPS]: "Peso+Reps",
-  [ExerciseType.REPS_ONLY]: "Reps",
-  [ExerciseType.WEIGHT_ONLY]: "Peso",
-  [ExerciseType.TIME_ONLY]: "Tiempo",
-  [ExerciseType.DISTANCE_TIME]: "Distancia+Tiempo",
-  [ExerciseType.WEIGHT_DISTANCE]: "Peso+Distancia",
-  [ExerciseType.WEIGHT_TIME]: "Peso+Tiempo",
-  [ExerciseType.REPS_DISTANCE]: "Reps+Distancia",
-  [ExerciseType.REPS_TIME]: "Reps+Tiempo",
-  [ExerciseType.DISTANCE_ONLY]: "Distancia",
-};
 
 /**
  * Búsqueda global de ejercicios: filtra por nombre sobre la lista ya cargada en
@@ -35,7 +22,7 @@ const TYPE_LABELS: Partial<Record<ExerciseType, string>> = {
  */
 export default function SearchScreen() {
   const colors = useTheme();
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const exercises = useExerciseStore((s) => s.exercises);
   const categories = useExerciseStore((s) => s.categories);
@@ -91,7 +78,7 @@ export default function SearchScreen() {
           <TextInput
             ref={inputRef}
             style={{ flex: 1, fontSize: 15, paddingVertical: 9, color: colors.text }}
-            placeholder="Buscar ejercicio…"
+            placeholder={t("search:searchPlaceholder")}
             placeholderTextColor={colors.textMuted}
             value={query}
             onChangeText={setQuery}
@@ -121,14 +108,14 @@ export default function SearchScreen() {
             <View style={{ padding: 40, alignItems: "center", gap: 8 }}>
               <Ionicons name="search-outline" size={36} color={colors.textDisabled} />
               <Text style={{ fontSize: 14, color: colors.textMuted, textAlign: "center" }}>
-                {query ? `Sin resultados para "${query}"` : "Sin ejercicios"}
+                {query ? t("search:noResultsFor", { query }) : t("search:noExercises")}
               </Text>
             </View>
           }
           ListHeaderComponent={
             sorted.length > 0 ? (
               <Text style={{ fontSize: 12, color: colors.textMuted, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 }}>
-                {sorted.length} ejercicio{sorted.length !== 1 ? "s" : ""}
+                {t("routines:exercisesCount", { count: sorted.length })}
               </Text>
             ) : null
           }
@@ -147,7 +134,7 @@ export default function SearchScreen() {
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     {cat && <Text style={{ fontSize: 11, color: colors.textSecondary }}>{cat}</Text>}
                     {cat && <Text style={{ fontSize: 11, color: colors.border }}>·</Text>}
-                    <Text style={{ fontSize: 11, color: colors.textMuted }}>{TYPE_LABELS[ex.type] ?? ex.type}</Text>
+                    <Text style={{ fontSize: 11, color: colors.textMuted }}>{t(`exercises:types.${ex.type}`)}</Text>
                   </View>
                   {lw ? (
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
@@ -156,14 +143,14 @@ export default function SearchScreen() {
                       {lw.setCount > 0 && (
                         <>
                           <Text style={{ fontSize: 11, color: colors.border }}>·</Text>
-                          <Text style={{ fontSize: 11, color: colors.textSecondary }}>{lw.setCount} serie{lw.setCount !== 1 ? "s" : ""}</Text>
+                          <Text style={{ fontSize: 11, color: colors.textSecondary }}>{t("progress:setsCount", { count: lw.setCount })}</Text>
                           {lw.maxWeight > 0 && <Text style={{ fontSize: 11, color: colors.textSecondary }}>· {lw.maxWeight}kg</Text>}
                           {lw.maxWeight === 0 && lw.maxReps > 0 && <Text style={{ fontSize: 11, color: colors.textSecondary }}>· {lw.maxReps} reps</Text>}
                         </>
                       )}
                     </View>
                   ) : (
-                    <Text style={{ fontSize: 11, color: colors.textDisabled, marginTop: 2 }}>Sin registros</Text>
+                    <Text style={{ fontSize: 11, color: colors.textDisabled, marginTop: 2 }}>{t("search:noRecordsLabel")}</Text>
                   )}
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={colors.textDisabled} />

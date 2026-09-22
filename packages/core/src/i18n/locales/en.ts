@@ -1001,4 +1001,10 @@ export const en = {
       closeButton: "Close",
     },
   },
+  search: {
+    searchPlaceholder: "Search exercise…",
+    noResultsFor: "No results for \"{{query}}\"",
+    noExercises: "No exercises",
+    noRecordsLabel: "No records",
+  },
 };

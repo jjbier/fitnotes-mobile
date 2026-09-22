@@ -1003,4 +1003,10 @@ export const es = {
       closeButton: "Cerrar",
     },
   },
+  search: {
+    searchPlaceholder: "Buscar ejercicio…",
+    noResultsFor: "Sin resultados para \"{{query}}\"",
+    noExercises: "Sin ejercicios",
+    noRecordsLabel: "Sin registros",
+  },
 };
