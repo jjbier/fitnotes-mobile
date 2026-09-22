@@ -373,8 +373,7 @@ function AppContent() {
           name="workout/[exerciseId]"
           options={{
             presentation: "fullScreenModal",
-            headerTitle: "Training",
-            headerBackTitle: "Back",
+            headerShown: false,
           }}
         />
         <Stack.Screen name="exercises/[categoryId]" options={{ headerTitle: "Exercises" }} />
