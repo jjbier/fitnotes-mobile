@@ -1,12 +1,15 @@
 /**
  * Selector de fecha para mobile: un campo tipo botón que, al tocarlo, abre el
  * `DateTimePicker` nativo del sistema en modo "date" y formatea la fecha
- * elegida en español.
+ * elegida en el idioma activo (`i18n.language`, 2026-09-22 — antes siempre
+ * en español).
  */
 import { useState } from "react";
 import { TouchableOpacity, Text, View } from "react-native";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
+import { intlLocale } from "../lib/i18n";
 
 /**
  * Props de `DateInput`.
@@ -30,6 +33,7 @@ interface Props {
  */
 export default function DateInput({ value, onChange, placeholder = "Seleccionar fecha", clearable = false }: Props) {
   const [show, setShow] = useState(false);
+  const { i18n } = useTranslation();
 
   const parsedDate = value ? new Date(value + "T12:00:00") : new Date();
 
@@ -40,7 +44,7 @@ export default function DateInput({ value, onChange, placeholder = "Seleccionar 
   }
 
   const displayText = value
-    ? new Date(value + "T12:00:00").toLocaleDateString("es-ES", {
+    ? new Date(value + "T12:00:00").toLocaleDateString(intlLocale(i18n.language), {
         day: "numeric", month: "long", year: "numeric",
       })
     : placeholder;
@@ -71,7 +75,7 @@ export default function DateInput({ value, onChange, placeholder = "Seleccionar 
           mode="date"
           display="default"
           onChange={handleChange}
-          locale="es-ES"
+          locale={intlLocale(i18n.language)}
         />
       )}
     </>

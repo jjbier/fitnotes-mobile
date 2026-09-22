@@ -5,6 +5,7 @@ import { useProgressStore, useExerciseStore, calculate1RM, ExerciseType, getWeek
 import { useRouter, useFocusEffect } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../../lib/theme";
+import { intlLocale } from "../../lib/i18n";
 import { useSyncStatus } from "../../contexts/SyncContext";
 import { useRepositories } from "../../contexts/RepositoryContext";
 
@@ -22,7 +23,7 @@ import { useRepositories } from "../../contexts/RepositoryContext";
 export default function ProgressScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const personalRecords = useProgressStore((s) => s.personalRecords);
   const isLoading = useProgressStore((s) => s.isLoading);
   const loadPersonalRecords = useProgressStore((s) => s.loadPersonalRecords);
@@ -208,7 +209,7 @@ export default function ProgressScreen() {
                       <Text style={{ width: 80, fontSize: 10, color: theme.textMuted, fontWeight: "600", textAlign: "right" }}>{t("progress:est1RMColumnHeaderMobile")}</Text>
                     </View>
                     {prs.map((pr) => {
-                      const dateStr = pr.achieved_at ? new Date(pr.achieved_at).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "2-digit" }) : null;
+                      const dateStr = pr.achieved_at ? new Date(pr.achieved_at).toLocaleDateString(intlLocale(i18n.language), { day: "numeric", month: "short", year: "2-digit" }) : null;
                       return (
                       <View key={pr.id} style={{ paddingHorizontal: 4, paddingVertical: 4 }}>
                         <View style={{ flexDirection: "row", alignItems: "center" }}>

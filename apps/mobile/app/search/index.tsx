@@ -4,9 +4,11 @@ import {
   TextInput, TouchableOpacity, View,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { useExerciseStore, ExerciseType, formatShortDate, formatDaysAgo } from "@fitnotes/core";
 import { useTheme } from "../../lib/theme";
+import { dateLocale } from "../../lib/i18n";
 import { useRepositories } from "../../contexts/RepositoryContext";
 
 type LastWorkout = { date: string; maxWeight: number; maxReps: number; setCount: number };
@@ -33,6 +35,7 @@ const TYPE_LABELS: Partial<Record<ExerciseType, string>> = {
  */
 export default function SearchScreen() {
   const colors = useTheme();
+  const { i18n } = useTranslation();
   const router = useRouter();
   const exercises = useExerciseStore((s) => s.exercises);
   const categories = useExerciseStore((s) => s.categories);
@@ -149,7 +152,7 @@ export default function SearchScreen() {
                   {lw ? (
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
                       <Ionicons name="time-outline" size={11} color={colors.primary} />
-                      <Text style={{ fontSize: 11, color: colors.primary }}>{formatDaysAgo(lw.date)} · {formatShortDate(lw.date)}</Text>
+                      <Text style={{ fontSize: 11, color: colors.primary }}>{formatDaysAgo(lw.date, dateLocale(i18n.language))} · {formatShortDate(lw.date, dateLocale(i18n.language))}</Text>
                       {lw.setCount > 0 && (
                         <>
                           <Text style={{ fontSize: 11, color: colors.border }}>·</Text>

@@ -12,6 +12,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useExerciseStore, useWorkoutStore, usePreferencesStore, filterExercises, ExerciseType, formatLastUsedLabel } from "@fitnotes/core";
 import type { Category, Exercise } from "@fitnotes/core";
 import { useTheme } from "../../lib/theme";
+import { dateLocale } from "../../lib/i18n";
 import { useSyncStatus } from "../../contexts/SyncContext";
 import { useRepositories } from "../../contexts/RepositoryContext";
 import ExerciseFormModal, { type ExerciseFormPatch } from "../../components/ExerciseFormModal";
@@ -625,10 +626,10 @@ const ExerciseRow = memo(function ExerciseRow({
   onDelete: () => void;
   onToggleFavorite: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const category = categories.find((c) => c.id === ex.category_id);
   const statsLine = stats
-    ? `${t("exercises:usageStats", { count: stats.workout_count })}${stats.last_used ? ` · ${formatLastUsedLabel(stats.last_used)}` : ""}`
+    ? `${t("exercises:usageStats", { count: stats.workout_count })}${stats.last_used ? ` · ${formatLastUsedLabel(stats.last_used, dateLocale(i18n.language))}` : ""}`
     : null;
 
   return (

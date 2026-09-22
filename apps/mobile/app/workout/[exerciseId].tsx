@@ -4,6 +4,7 @@ import * as FileSystem from "expo-file-system";
 import { Audio } from "expo-av";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../../lib/theme";
+import { intlLocale } from "../../lib/i18n";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -62,7 +63,7 @@ const GROUP_COLORS = ["#6366f1", "#ec4899", "#f59e0b", "#10b981"];
 export default function TrainingScreen() {
   const { exerciseId } = useLocalSearchParams<{ exerciseId: string }>();
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const exercises = useExerciseStore((s) => s.exercises);
   const exercise = exercises.find((e) => e.id === exerciseId);
@@ -947,7 +948,7 @@ export default function TrainingScreen() {
                 return (
                   <View key={session.workout_id} style={{ backgroundColor: "#f8fafc", borderRadius: 14, borderWidth: 1, borderColor: "#f1f5f9", padding: 14, gap: 6 }}>
                     <Text style={{ fontSize: 12, fontWeight: "700", color: "#64748b", marginBottom: 4, textTransform: "capitalize" }}>
-                      {new Date(session.date + "T00:00:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
+                      {new Date(session.date + "T00:00:00").toLocaleDateString(intlLocale(i18n.language), { weekday: "long", day: "numeric", month: "long" })}
                     </Text>
                     {visible.length === 0 ? (
                       <Text style={{ fontSize: 12, color: "#cbd5e1" }}>{t("workout:noSetsLabel")}</Text>
@@ -995,7 +996,7 @@ export default function TrainingScreen() {
             <View style={{ backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: "#f1f5f9", padding: 16 }}>
               <LineChart
                 data={chartPoints.map((p) => ({
-                  label: new Date(p.date + "T00:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short" }),
+                  label: new Date(p.date + "T00:00:00").toLocaleDateString(intlLocale(i18n.language), { day: "numeric", month: "short" }),
                   value: chartMetric === "weight" ? p.maxWeight : chartMetric === "volume" ? p.totalVolume : p.maxReps,
                 }))}
                 width={width - 64}

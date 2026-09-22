@@ -6,6 +6,10 @@ import {
   todayISO,
   daysBetween,
   labelWorkoutByTime,
+  formatFullDate,
+  formatLastUsedLabel,
+  formatShortDate,
+  formatDaysAgo,
 } from "../utils/dateUtils.js";
 import type { Workout } from "../types/index.js";
 
@@ -162,5 +166,61 @@ describe("labelWorkoutByTime", () => {
     expect(labelWorkoutByTime("2026-07-17T23:30:00")).toBe("Noche");
     expect(labelWorkoutByTime("2026-07-17T00:00:00")).toBe("Noche");
     expect(labelWorkoutByTime("2026-07-17T04:59:00")).toBe("Noche");
+  });
+
+  it("returns the English labels for locale \"en\"", () => {
+    expect(labelWorkoutByTime(null, "en")).toBe("No time");
+    expect(labelWorkoutByTime("not-a-date", "en")).toBe("No time");
+    expect(labelWorkoutByTime("2026-07-17T08:00:00", "en")).toBe("Morning");
+    expect(labelWorkoutByTime("2026-07-17T15:00:00", "en")).toBe("Afternoon");
+    expect(labelWorkoutByTime("2026-07-17T22:00:00", "en")).toBe("Evening");
+  });
+});
+
+// ─── locale param on Intl-backed formatters (2026-09-22) ──────────────────────
+
+describe("formatFullDate", () => {
+  it("defaults to Spanish", () => {
+    expect(formatFullDate("2026-07-17")).toBe(new Date(2026, 6, 17).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" }));
+  });
+
+  it("formats in English for locale \"en\"", () => {
+    expect(formatFullDate("2026-07-17", "en")).toBe(new Date(2026, 6, 17).toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long", year: "numeric" }));
+  });
+});
+
+describe("formatLastUsedLabel", () => {
+  it('returns "Hoy"/"Today" for the current date depending on locale', () => {
+    const today = todayISO();
+    expect(formatLastUsedLabel(today)).toBe("Hoy");
+    expect(formatLastUsedLabel(today, "en")).toBe("Today");
+  });
+
+  it("returns a relative label in the requested language for 1 and <7 days", () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 3);
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    expect(formatLastUsedLabel(iso)).toBe("Hace 3 días");
+    expect(formatLastUsedLabel(iso, "en")).toBe("3 days ago");
+  });
+
+  it("falls back to a localized short date for 7+ days", () => {
+    expect(formatLastUsedLabel("2020-01-01")).toBe(new Date(2020, 0, 1).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" }));
+    expect(formatLastUsedLabel("2020-01-01", "en")).toBe(new Date(2020, 0, 1).toLocaleDateString("en-US", { day: "2-digit", month: "2-digit", year: "numeric" }));
+  });
+});
+
+describe("formatShortDate", () => {
+  it("formats in Spanish by default and English for locale \"en\"", () => {
+    expect(formatShortDate("2026-07-17")).toBe(new Date(2026, 6, 17, 12).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" }));
+    expect(formatShortDate("2026-07-17", "en")).toBe(new Date(2026, 6, 17, 12).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }));
+  });
+});
+
+describe("formatDaysAgo", () => {
+  it('returns "hoy"/"today" for the current date depending on locale', () => {
+    const today = todayISO();
+    expect(formatDaysAgo(today)).toBe("hoy");
+    expect(formatDaysAgo(today, "en")).toBe("today");
   });
 });

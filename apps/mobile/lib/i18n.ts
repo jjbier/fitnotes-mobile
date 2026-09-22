@@ -28,3 +28,20 @@ if (!i18next.isInitialized) {
 }
 
 export default i18next;
+
+/**
+ * Normaliza `i18n.language` (puede venir como `"es"`, `"es-ES"`, `"en-US"`…
+ * según la fuente) al `DateLocale` (`"es" | "en"`) que espera `packages/core`
+ * para sus funciones de fecha con `locale` opcional (`formatFullDate`,
+ * `formatShortDate`, `formatDaysAgo`, `formatLastUsedLabel`,
+ * `labelWorkoutByTime`) — ver `dateUtils.ts` para por qué no se usa
+ * directamente ahí (paquete puro, sin `react-i18next`).
+ */
+export function dateLocale(language: string): "es" | "en" {
+  return language.toLowerCase().startsWith("en") ? "en" : "es";
+}
+
+/** Tag BCP 47 (`"es-ES"`/`"en-US"`) para pasar directamente a un `toLocaleDateString`/`toLocaleTimeString` inline en un componente, a partir de `i18n.language`. */
+export function intlLocale(language: string): string {
+  return dateLocale(language) === "en" ? "en-US" : "es-ES";
+}

@@ -1,8 +1,13 @@
 /**
- * Utilidades de fecha en español (nunca en inglés — ver bug conocido de
- * `formatWorkoutDate`) para fechas de entrenamiento en formato ISO
+ * Utilidades de fecha para fechas de entrenamiento en formato ISO
  * (YYYY-MM-DD): formateo largo/corto/relativo, rango de semana y
- * agrupación por mes.
+ * agrupación por mes. `formatWorkoutDate`/`groupWorkoutsByMonth` siguen
+ * siempre en español con arrays hardcodeados (nunca `Intl`/`toLocaleDateString`
+ * — Hermes/RN puede tener soporte ICU incompleto, ver `architecture.md`) — no
+ * están pensados para bilingüe. El resto de funciones sí aceptan un parámetro
+ * `locale: "es" | "en"` (2026-09-22) que se pasa a `toLocaleDateString`
+ * (`es-ES`/`en-US`) y a las pocas palabras sueltas que llevan ("Hoy"/"Today",
+ * etc.) — el caller (pantalla en `apps/mobile`) le pasa `i18n.language`.
  */
 import type { Workout } from "../types/index.js";
 
@@ -15,6 +20,14 @@ const MONTHS = [
 /** Formatea una fecha local (no UTC) como ISO YYYY-MM-DD. */
 function toLocalISODate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Idiomas soportados por las funciones de este módulo que dependen de `Intl`/`toLocaleDateString` (no `formatWorkoutDate`, ver arriba). */
+export type DateLocale = "es" | "en";
+
+/** Tag BCP 47 pasado a `toLocaleDateString`/`toLocaleTimeString` para un {@link DateLocale}. */
+function intlTag(locale: DateLocale): string {
+  return locale === "en" ? "en-US" : "es-ES";
 }
 
 /** Format a workout date string (YYYY-MM-DD) for display. */
@@ -75,36 +88,50 @@ export function daysBetween(a: string, b: string): number {
   );
 }
 
-/** Formats a date string (YYYY-MM-DD) as "lunes, 7 de julio de 2026". */
-export function formatFullDate(dateStr: string): string {
+/** Formats a date string (YYYY-MM-DD) as "lunes, 7 de julio de 2026" (or the English equivalent for `locale: "en"`). */
+export function formatFullDate(dateStr: string, locale: DateLocale = "es"): string {
   const date = new Date(dateStr + "T00:00:00");
-  return date.toLocaleDateString("es-ES", {
+  return date.toLocaleDateString(intlTag(locale), {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
 }
 
-/** Formats a date string as "Hoy" / "Ayer" / "Hace N días" / "dd/mm/yyyy". */
-export function formatLastUsedLabel(dateStr: string): string {
+/** Formats a date string as "Hoy" / "Ayer" / "Hace N días" / "dd/mm/yyyy" (or the English equivalent for `locale: "en"`). */
+export function formatLastUsedLabel(dateStr: string, locale: DateLocale = "es"): string {
   const date = new Date(dateStr + "T00:00:00");
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const diffDays = Math.round((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return "Hoy";
-  if (diffDays === 1) return "Ayer";
-  if (diffDays < 7) return `Hace ${diffDays} días`;
-  return date.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" });
+  if (locale === "en") {
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays} days ago`;
+  } else {
+    if (diffDays === 0) return "Hoy";
+    if (diffDays === 1) return "Ayer";
+    if (diffDays < 7) return `Hace ${diffDays} días`;
+  }
+  return date.toLocaleDateString(intlTag(locale), { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-/** Formats an ISO date string as a short date, e.g. "7 jul 2026". */
-export function formatShortDate(iso: string): string {
-  return new Date(iso + "T12:00:00").toLocaleDateString("es-ES", {
+/** Formats an ISO date string as a short date, e.g. "7 jul 2026" (or the English equivalent for `locale: "en"`). */
+export function formatShortDate(iso: string, locale: DateLocale = "es"): string {
+  return new Date(iso + "T12:00:00").toLocaleDateString(intlTag(locale), {
     day: "numeric", month: "short", year: "numeric",
   });
 }
 
-/** Formats an ISO date string as a relative label: "hoy" / "ayer" / "hace N días" / "hace N sem" / "hace N mes" / "hace N año". */
-export function formatDaysAgo(iso: string): string {
+/** Formats an ISO date string as a relative label: "hoy" / "ayer" / "hace N días" / "hace N sem" / "hace N mes" / "hace N año" (or the English equivalent for `locale: "en"`). */
+export function formatDaysAgo(iso: string, locale: DateLocale = "es"): string {
   const diff = Math.floor((Date.now() - new Date(iso + "T12:00:00").getTime()) / 86400000);
+  if (locale === "en") {
+    if (diff === 0) return "today";
+    if (diff === 1) return "yesterday";
+    if (diff < 7) return `${diff} days ago`;
+    if (diff < 30) return `${Math.floor(diff / 7)} wk ago`;
+    if (diff < 365) return `${Math.floor(diff / 30)} mo ago`;
+    return `${Math.floor(diff / 365)} yr ago`;
+  }
   if (diff === 0) return "hoy";
   if (diff === 1) return "ayer";
   if (diff < 7) return `hace ${diff} días`;
@@ -118,13 +145,20 @@ export function formatDaysAgo(iso: string): string {
  * hora local) para distinguir de un vistazo varios entrenamientos del mismo día — ver
  * docs/implementation-plan-multi-workout-per-day.md, Fase 7. "Sin hora" si no hay
  * `start_time` o no es parseable (workouts creados antes de que se empezara a rellenar
- * de forma fiable, o filas sincronizadas sin ese dato).
+ * de forma fiable, o filas sincronizadas sin ese dato). Acepta `locale` para la etiqueta
+ * en inglés cuando el idioma activo es `"en"`.
  */
-export function labelWorkoutByTime(startTime?: string | null): string {
-  if (!startTime) return "Sin hora";
+export function labelWorkoutByTime(startTime?: string | null, locale: DateLocale = "es"): string {
+  const noTime = locale === "en" ? "No time" : "Sin hora";
+  if (!startTime) return noTime;
   const date = new Date(startTime);
-  if (Number.isNaN(date.getTime())) return "Sin hora";
+  if (Number.isNaN(date.getTime())) return noTime;
   const hour = date.getHours();
+  if (locale === "en") {
+    if (hour >= 5 && hour < 14) return "Morning";
+    if (hour >= 14 && hour < 21) return "Afternoon";
+    return "Evening";
+  }
   if (hour >= 5 && hour < 14) return "Mañana";
   if (hour >= 14 && hour < 21) return "Tarde";
   return "Noche";

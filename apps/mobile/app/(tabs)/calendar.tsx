@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { formatWorkoutDate, labelWorkoutByTime, useExerciseStore, usePreferencesStore, ExerciseType } from "@fitnotes/core";
 import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../lib/theme";
+import { dateLocale, intlLocale } from "../../lib/i18n";
 import { useSyncStatus } from "../../contexts/SyncContext";
 import { useRepositories } from "../../contexts/RepositoryContext";
 
@@ -34,7 +35,7 @@ type DaySummary = { id: string; date: string; comment: string | null; exercises:
 export default function CalendarScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -336,7 +337,7 @@ export default function CalendarScreen() {
   const daysInMonth = new Date(year, month, 0).getDate();
   const rawFirstDow = new Date(year, month - 1, 1).getDay();
   const firstDow = weekStart === 1 ? (rawFirstDow + 6) % 7 : rawFirstDow;
-  const monthName = new Date(year, month - 1, 1).toLocaleDateString("es", { month: "long", year: "numeric" });
+  const monthName = new Date(year, month - 1, 1).toLocaleDateString(intlLocale(i18n.language), { month: "long", year: "numeric" });
 
   const [mon, tue, wed, thu, fri, sat, sun] = [
     t("calendar:daysShort.mon"), t("calendar:daysShort.tue"), t("calendar:daysShort.wed"), t("calendar:daysShort.thu"),
@@ -556,7 +557,7 @@ export default function CalendarScreen() {
                 <View style={{ gap: 6, marginTop: 2 }}>
                   {dayWorkoutsMulti.map((w) => {
                     const time = w.start_time && !Number.isNaN(new Date(w.start_time).getTime())
-                      ? new Date(w.start_time).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })
+                      ? new Date(w.start_time).toLocaleTimeString(intlLocale(i18n.language), { hour: "2-digit", minute: "2-digit" })
                       : "";
                     return (
                       <TouchableOpacity
@@ -565,7 +566,7 @@ export default function CalendarScreen() {
                         style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: theme.borderLight, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 }}
                       >
                         <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
-                          <Text style={{ fontSize: 13, fontWeight: "600", color: theme.text }}>{labelWorkoutByTime(w.start_time)}</Text>
+                          <Text style={{ fontSize: 13, fontWeight: "600", color: theme.text }}>{labelWorkoutByTime(w.start_time, dateLocale(i18n.language))}</Text>
                           {time !== "" && <Text style={{ fontSize: 11, color: theme.textMuted }}>{time}</Text>}
                         </View>
                         {w.comment ? (

@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { useExerciseStore, useWorkoutStore, filterExercises, ExerciseType, formatLastUsedLabel } from "@fitnotes/core";
 import type { Category, Exercise } from "@fitnotes/core";
 import { useTheme } from "../../lib/theme";
+import { dateLocale } from "../../lib/i18n";
 import { useRepositories } from "../../contexts/RepositoryContext";
 import ExerciseFormModal, { type ExerciseFormPatch } from "../../components/ExerciseFormModal";
 
@@ -25,7 +26,7 @@ export default function ExerciseCategoryScreen() {
   const navigation = useNavigation();
   const router = useRouter();
   const theme = useTheme();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const categories = useExerciseStore((s) => s.categories);
   const exercises = useExerciseStore((s) => s.exercises);
@@ -229,7 +230,7 @@ export default function ExerciseCategoryScreen() {
             sorted.map((ex) => {
               const stats = exerciseStats[ex.id];
               const statsLine = stats
-                ? `${t("exercises:usageStats", { count: stats.workout_count })}${stats.last_used ? ` · ${formatLastUsedLabel(stats.last_used)}` : ""}`
+                ? `${t("exercises:usageStats", { count: stats.workout_count })}${stats.last_used ? ` · ${formatLastUsedLabel(stats.last_used, dateLocale(i18n.language))}` : ""}`
                 : null;
               return (
                 <TouchableOpacity

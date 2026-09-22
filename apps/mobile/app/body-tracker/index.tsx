@@ -11,6 +11,7 @@ import { NestableScrollContainer, NestableDraggableFlatList, ScaleDecorator, typ
 import LineChart, { type ChartDataPoint } from "../../components/LineChart";
 import DateInput from "../../components/DateInput";
 import { useTheme } from "../../lib/theme";
+import { intlLocale } from "../../lib/i18n";
 import { useRepositories } from "../../contexts/RepositoryContext";
 
 /**
@@ -50,7 +51,7 @@ const PRESET_UNITS = ["kg", "lbs", "cm", "in", "%"];
 export default function BodyTrackerScreen() {
   const router = useRouter();
   const theme = useTheme();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { width } = useWindowDimensions();
   const [tab, setTab] = useState<"track" | "history" | "chart">("track");
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
@@ -443,7 +444,7 @@ export default function BodyTrackerScreen() {
                         </Text>
                         <Text style={{ fontSize: 12, color: theme.textMuted }}>
                           {latest
-                            ? new Date(latest.recorded_at).toLocaleDateString("es-ES")
+                            ? new Date(latest.recorded_at).toLocaleDateString(intlLocale(i18n.language))
                             : t("bodyTracker:noEntriesLabel")}
                         </Text>
                         {(() => {
@@ -535,7 +536,7 @@ export default function BodyTrackerScreen() {
               groupedHistory.map((group) => (
                 <View key={group.date} style={{ gap: 6 }}>
                   <Text style={{ fontSize: 12, fontWeight: "700", color: theme.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                    {new Date(`${group.date}T12:00:00`).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}
+                    {new Date(`${group.date}T12:00:00`).toLocaleDateString(intlLocale(i18n.language), { day: "numeric", month: "short", year: "numeric" })}
                   </Text>
                   {group.entries.map((entry) => {
                     const m = measurementById(entry.measurement_id);
@@ -601,7 +602,7 @@ export default function BodyTrackerScreen() {
           ) : (() => {
             const selectedM = measurements.find((m) => m.id === chartMeasurementId);
             const chartData: ChartDataPoint[] = chartEntries.map((e) => ({
-              label: new Date(e.recorded_at).toLocaleDateString("es-ES", { day: "numeric", month: "short" }),
+              label: new Date(e.recorded_at).toLocaleDateString(intlLocale(i18n.language), { day: "numeric", month: "short" }),
               value: e.value,
             }));
             const vals = chartEntries.map((e) => e.value);
@@ -628,7 +629,7 @@ export default function BodyTrackerScreen() {
                     <View style={{ backgroundColor: theme.surfaceMuted, borderRadius: 12, borderWidth: 1, borderColor: theme.borderLight, padding: 12, gap: 6 }}>
                       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                         <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>
-                          {new Date(tappedChartDate + "T00:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}
+                          {new Date(tappedChartDate + "T00:00:00").toLocaleDateString(intlLocale(i18n.language), { day: "numeric", month: "long", year: "numeric" })}
                         </Text>
                         <TouchableOpacity onPress={() => setTappedChartDate(null)}>
                           <Ionicons name="close" size={16} color={theme.textMuted} />

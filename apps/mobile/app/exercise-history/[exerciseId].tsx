@@ -14,6 +14,7 @@ import { ExerciseType, useExerciseStore, usePreferencesStore, calculate1RM, esti
 import type { ChartPoint } from "@fitnotes/database";
 import LineChart, { type ChartDataPoint } from "../../components/LineChart";
 import DateInput from "../../components/DateInput";
+import { intlLocale, dateLocale } from "../../lib/i18n";
 import { useRepositories } from "../../contexts/RepositoryContext";
 
 type SetRow = {
@@ -38,10 +39,10 @@ type Session = {
 type Metric = "weight" | "volume" | "reps" | "totalReps" | "est1rm" | "distance" | "totalDistance" | "time" | "totalTime" | "speed" | "pace" | "weightByReps" | "repMaxProgression";
 type HistoryTab = "history" | "chart" | "stats";
 
-/** Formatea una fecha ISO como "día mes" corto en español (ej. "3 jul"), usado en las etiquetas del eje del gráfico. */
-function formatDateShort(dateStr: string): string {
+/** Formatea una fecha ISO como "día mes" corto (ej. "3 jul" / "Jul 3" según `locale`), usado en las etiquetas del eje del gráfico. */
+function formatDateShort(dateStr: string, locale: string): string {
   const date = new Date(dateStr + "T00:00:00");
-  return date.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+  return date.toLocaleDateString(locale, { day: "numeric", month: "short" });
 }
 
 /** Convierte una fecha a "YYYY-MM-DD" en hora local (evita el desfase de un día de `toISOString`, que usa UTC). */
@@ -79,7 +80,7 @@ const ALL_METRICS: { key: Metric; label: string; types: ExerciseType[] | "all" }
 export default function ExerciseHistoryScreen() {
   const colors = useTheme();
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { width } = useWindowDimensions();
   const { exerciseId, name, type, weightUnit } = useLocalSearchParams<{
     exerciseId: string; name: string; type: string; weightUnit: string;
@@ -352,13 +353,13 @@ export default function ExerciseHistoryScreen() {
   const rawChartData: ChartDataPoint[] = isSpecialMetric
     ? chartPoints
         .map((p) => ({
-          label: formatDateShort(p.date),
+          label: formatDateShort(p.date, intlLocale(i18n.language)),
           value: metric === "weightByReps"
             ? p.weightByReps[repTarget]
             : (p.est1RM > 0 ? estimateRepMax(p.est1RM, repTarget) : undefined),
         }))
         .filter((p): p is ChartDataPoint => p.value != null && p.value > 0)
-    : chartPoints.map((p) => ({ label: formatDateShort(p.date), value: metricValue(p) }));
+    : chartPoints.map((p) => ({ label: formatDateShort(p.date, intlLocale(i18n.language)), value: metricValue(p) }));
 
   /** Calcula la recta de tendencia (regresión lineal por mínimos cuadrados) sobre los valores del gráfico, si "Tendencia" está activada. */
   const trendValues = showTrend && rawChartData.length >= 2
@@ -483,7 +484,7 @@ export default function ExerciseHistoryScreen() {
                 <View style={{ backgroundColor: "#f8fafc", paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
                   <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                     <Text style={{ fontSize: 13, fontWeight: "600", color: "#0f172a", textTransform: "capitalize", flex: 1 }}>
-                      {formatFullDate(session.date)}
+                      {formatFullDate(session.date, dateLocale(i18n.language))}
                     </Text>
                     {(() => {
                       const vol = visibleSets.filter((s) => s.is_complete && !s.is_warmup).reduce((acc, s) => acc + (s.weight && s.reps ? s.weight * s.reps : 0), 0);
