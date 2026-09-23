@@ -64,6 +64,7 @@ export default function TrainingScreen() {
   const { exerciseId } = useLocalSearchParams<{ exerciseId: string }>();
   const router = useRouter();
   const { t, i18n } = useTranslation();
+  const theme = useTheme();
 
   const exercises = useExerciseStore((s) => s.exercises);
   const exercise = exercises.find((e) => e.id === exerciseId);
@@ -497,31 +498,31 @@ export default function TrainingScreen() {
   const weightIncrement = exercise?.weight_increment ?? globalWeightIncrement;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       {/* Header */}
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderColor: theme.borderLight }}>
         <TouchableOpacity onPress={() => router.back()} accessibilityLabel={t("common:close")}>
-          <Ionicons name="close" size={24} color="#0f172a" />
+          <Ionicons name="close" size={24} color={theme.text} />
         </TouchableOpacity>
         <View style={{ alignItems: "center" }}>
-          <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>{exercise?.name ?? t("workout:exerciseFallbackName")}</Text>
-          <Text style={{ fontSize: 11, color: "#94a3b8" }}>{t(`exercises:types.${exerciseType}`)}</Text>
+          <Text style={{ fontSize: 16, fontWeight: "600", color: theme.text }}>{exercise?.name ?? t("workout:exerciseFallbackName")}</Text>
+          <Text style={{ fontSize: 11, color: theme.textMuted }}>{t(`exercises:types.${exerciseType}`)}</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
           <TouchableOpacity onPress={handleGroupMenu} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={t("workout:supersetIconLabel")}>
-            <Ionicons name="link-outline" size={20} color={workoutExercise?.group_id ? "#6366f1" : "#64748b"} />
+            <Ionicons name="link-outline" size={20} color={workoutExercise?.group_id ? theme.primary : theme.textSecondary} />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => router.push("/calculators" as never)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={t("workout:calculatorsLabel")}>
-            <Ionicons name="calculator-outline" size={20} color="#64748b" />
+            <Ionicons name="calculator-outline" size={20} color={theme.textSecondary} />
           </TouchableOpacity>
           <TouchableOpacity onPress={handleRemoveExercise} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={t("workout:removeExerciseLabel")}>
-            <Ionicons name="trash-outline" size={20} color="#ef4444" />
+            <Ionicons name="trash-outline" size={20} color={theme.danger} />
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Exercise navigation strip — draggable */}
-      <View style={{ borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
+      <View style={{ borderBottomWidth: 1, borderBottomColor: theme.borderLight }}>
         <DraggableFlatList
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -565,16 +566,16 @@ export default function TrainingScreen() {
                     delayLongPress={200}
                     style={{
                       paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20,
-                      backgroundColor: isActive ? "#818cf8" : isCurrent ? "#6366f1" : "#f1f5f9",
+                      backgroundColor: isActive ? "#818cf8" : isCurrent ? theme.primary : theme.borderLight,
                       borderWidth: groupColor && !isCurrent ? 2 : 0,
                       borderColor: groupColor ?? "transparent",
                     }}
                   >
-                    <Text style={{ fontSize: 12, fontWeight: "600", color: isCurrent || isActive ? "#fff" : "#64748b" }} numberOfLines={1}>
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: isCurrent || isActive ? "#fff" : theme.textSecondary }} numberOfLines={1}>
                       {ex?.name ?? "—"}
                     </Text>
                     {totalCount > 0 && (
-                      <Text style={{ fontSize: 9, fontWeight: "600", textAlign: "center", color: isCurrent ? "#ffffffb0" : completedCount === totalCount ? "#22c55e" : "#94a3b8", marginTop: 1 }}>
+                      <Text style={{ fontSize: 9, fontWeight: "600", textAlign: "center", color: isCurrent ? "#ffffffb0" : completedCount === totalCount ? theme.success : theme.textMuted, marginTop: 1 }}>
                         {completedCount}/{totalCount}
                       </Text>
                     )}
@@ -586,24 +587,24 @@ export default function TrainingScreen() {
           ListFooterComponent={
             <TouchableOpacity
               onPress={() => { setAddSearch(""); setShowAddExercise(true); }}
-              style={{ marginLeft: 4, width: 30, height: 30, borderRadius: 15, backgroundColor: "#f1f5f9", alignItems: "center", justifyContent: "center" }}
+              style={{ marginLeft: 4, width: 30, height: 30, borderRadius: 15, backgroundColor: theme.borderLight, alignItems: "center", justifyContent: "center" }}
             >
-              <Ionicons name="add" size={18} color="#6366f1" />
+              <Ionicons name="add" size={18} color={theme.primary} />
             </TouchableOpacity>
           }
         />
       </View>
 
       {/* Workout tabs */}
-      <View style={{ flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#f1f5f9", backgroundColor: "#fff" }}>
+      <View style={{ flexDirection: "row", borderBottomWidth: 1, borderBottomColor: theme.borderLight, backgroundColor: theme.background }}>
         {([["sets", "barbell-outline", t("workout:tabs.sets")], ["history", "time-outline", t("workout:tabs.history")], ["chart", "trending-up-outline", t("workout:tabs.chart")]] as const).map(([key, icon, label]) => (
           <TouchableOpacity
             key={key}
             onPress={() => handleWorkoutTabChange(key)}
-            style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingVertical: 10, borderBottomWidth: 2, borderColor: workoutTab === key ? "#6366f1" : "transparent" }}
+            style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingVertical: 10, borderBottomWidth: 2, borderColor: workoutTab === key ? theme.primary : "transparent" }}
           >
-            <Ionicons name={icon} size={14} color={workoutTab === key ? "#6366f1" : "#94a3b8"} />
-            <Text style={{ fontSize: 12, fontWeight: "600", color: workoutTab === key ? "#6366f1" : "#94a3b8" }}>{label}</Text>
+            <Ionicons name={icon} size={14} color={workoutTab === key ? theme.primary : theme.textMuted} />
+            <Text style={{ fontSize: 12, fontWeight: "600", color: workoutTab === key ? theme.primary : theme.textMuted }}>{label}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -611,20 +612,20 @@ export default function TrainingScreen() {
       {workoutTab === "sets" && <>
       {/* Rest Timer */}
       {showRestTimer && (
-      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#f8fafc", gap: 8, backgroundColor: timerActive ? "#f0f0ff" : timerFinished ? "#f0fff4" : "#fafafa" }}>
-        <Ionicons name="timer-outline" size={16} color={timerActive ? "#6366f1" : timerFinished ? "#22c55e" : "#94a3b8"} />
+      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.borderLight, gap: 8, backgroundColor: timerActive ? theme.timerActiveBg : timerFinished ? theme.timerFinishedBg : theme.backgroundAlt }}>
+        <Ionicons name="timer-outline" size={16} color={timerActive ? theme.primary : timerFinished ? theme.success : theme.textMuted} />
         <TouchableOpacity onPress={() => handleChangeDuration(-15)} disabled={timerRunning} style={{ padding: 4, opacity: timerRunning ? 0.4 : 1 }} accessibilityLabel={t("workout:restTimer.subtractLabel")}>
-          <Ionicons name="remove-circle-outline" size={20} color="#64748b" />
+          <Ionicons name="remove-circle-outline" size={20} color={theme.textSecondary} />
         </TouchableOpacity>
-        <Text style={{ fontSize: 18, fontWeight: "700", color: timerActive ? "#6366f1" : timerFinished ? "#22c55e" : "#0f172a", minWidth: 52, textAlign: "center" }}>
+        <Text style={{ fontSize: 18, fontWeight: "700", color: timerActive ? theme.primary : timerFinished ? theme.success : theme.text, minWidth: 52, textAlign: "center" }}>
           {formatMinutesSeconds(timerRemaining)}
         </Text>
         <TouchableOpacity onPress={() => handleChangeDuration(15)} disabled={timerRunning} style={{ padding: 4, opacity: timerRunning ? 0.4 : 1 }} accessibilityLabel={t("workout:restTimer.addLabel")}>
-          <Ionicons name="add-circle-outline" size={20} color="#64748b" />
+          <Ionicons name="add-circle-outline" size={20} color={theme.textSecondary} />
         </TouchableOpacity>
         <TouchableOpacity
           onPress={handleTimerToggle}
-          style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#6366f1", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }}
+          style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: theme.primary, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }}
         >
           <Ionicons name={timerActive ? "pause" : timerFinished ? "refresh" : "play"} size={14} color="#fff" />
           <Text style={{ fontSize: 12, fontWeight: "600", color: "#fff" }}>
@@ -632,7 +633,7 @@ export default function TrainingScreen() {
           </Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={handleTimerReset} style={{ padding: 4 }} accessibilityLabel={t("workout:restTimer.resetLabel")}>
-          <Ionicons name="refresh-outline" size={18} color="#94a3b8" />
+          <Ionicons name="refresh-outline" size={18} color={theme.textMuted} />
         </TouchableOpacity>
       </View>
       )}
@@ -642,12 +643,12 @@ export default function TrainingScreen() {
         <>
           <TouchableOpacity
             onPress={() => setShowLastSession((v) => !v)}
-            style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#f1f5f9", gap: 8, backgroundColor: "#fafafa" }}
+            style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: theme.borderLight, gap: 8, backgroundColor: theme.backgroundAlt }}
           >
             {trackPersonalRecords && exercisePR && (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "#fef3c7", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
-                <Ionicons name="trophy-outline" size={11} color="#d97706" />
-                <Text style={{ fontSize: 11, fontWeight: "700", color: "#d97706" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: theme.warmupBadge, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
+                <Ionicons name="trophy-outline" size={11} color={theme.warmupText} />
+                <Text style={{ fontSize: 11, fontWeight: "700", color: theme.warmupText }}>
                   {exercisePR.weight}{weightUnit} ×{exercisePR.reps}
                 </Text>
               </View>
@@ -657,9 +658,9 @@ export default function TrainingScreen() {
               if (lastMax > 0 && showWeight) {
                 const suggested = parseFloat((lastMax + weightIncrement).toFixed(2));
                 return (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "#f0fdf4", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
-                    <Ionicons name="trending-up-outline" size={11} color="#16a34a" />
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: "#16a34a" }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: theme.successBg, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
+                    <Ionicons name="trending-up-outline" size={11} color={theme.success} />
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: theme.success }}>
                       →{suggested}{weightUnit}
                     </Text>
                   </View>
@@ -669,19 +670,19 @@ export default function TrainingScreen() {
             })()}
             {lastSessionSets.length > 0 && (
               <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <Ionicons name="time-outline" size={11} color="#94a3b8" />
-                <Text style={{ fontSize: 11, color: "#64748b", flex: 1 }} numberOfLines={1}>
+                <Ionicons name="time-outline" size={11} color={theme.textMuted} />
+                <Text style={{ fontSize: 11, color: theme.textSecondary, flex: 1 }} numberOfLines={1}>
                   {lastSessionSets.map(formatLastSet).join("  ")}
                 </Text>
               </View>
             )}
-            <Ionicons name={showLastSession ? "chevron-up" : "chevron-down"} size={13} color="#94a3b8" />
+            <Ionicons name={showLastSession ? "chevron-up" : "chevron-down"} size={13} color={theme.textMuted} />
           </TouchableOpacity>
           {showLastSession && (
-            <View style={{ paddingHorizontal: 16, paddingVertical: 10, backgroundColor: "#f8fafc", borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
-              <Text style={{ fontSize: 10, fontWeight: "700", color: "#94a3b8", letterSpacing: 0.5, marginBottom: 6 }}>{t("workout:lastSessionHeading")}</Text>
+            <View style={{ paddingHorizontal: 16, paddingVertical: 10, backgroundColor: theme.backgroundAlt, borderBottomWidth: 1, borderBottomColor: theme.borderLight }}>
+              <Text style={{ fontSize: 10, fontWeight: "700", color: theme.textMuted, letterSpacing: 0.5, marginBottom: 6 }}>{t("workout:lastSessionHeading")}</Text>
               {lastSessionSets.map((s, i) => (
-                <Text key={i} style={{ fontSize: 13, color: "#475569", paddingVertical: 1 }}>
+                <Text key={i} style={{ fontSize: 13, color: theme.textSecondary, paddingVertical: 1 }}>
                   {i + 1}.  {formatLastSet(s)}
                 </Text>
               ))}
@@ -694,13 +695,13 @@ export default function TrainingScreen() {
       {exercise?.notes && (
         <TouchableOpacity
           onPress={() => setShowNotes((v) => !v)}
-          style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#f1f5f9", gap: 8, backgroundColor: "#fffbeb" }}
+          style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: theme.borderLight, gap: 8, backgroundColor: theme.warningBg }}
         >
-          <Ionicons name="document-text-outline" size={13} color="#d97706" />
-          <Text style={{ fontSize: 11, color: "#92400e", flex: 1 }} numberOfLines={showNotes ? undefined : 1}>
+          <Ionicons name="document-text-outline" size={13} color={theme.warmupText} />
+          <Text style={{ fontSize: 11, color: theme.warmupText, flex: 1 }} numberOfLines={showNotes ? undefined : 1}>
             {exercise.notes}
           </Text>
-          <Ionicons name={showNotes ? "chevron-up" : "chevron-down"} size={13} color="#d97706" />
+          <Ionicons name={showNotes ? "chevron-up" : "chevron-down"} size={13} color={theme.warmupText} />
         </TouchableOpacity>
       )}
 
@@ -709,11 +710,11 @@ export default function TrainingScreen() {
         {/* Column headers */}
         {exerciseSets.length > 0 && (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 4, marginBottom: 4 }}>
-            <Text style={{ width: 24, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>#</Text>
-            {showWeight && <Text style={{ width: 80, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>{weightUnit}</Text>}
-            {showReps && <Text style={{ width: 72, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>reps</Text>}
-            {showDistance && <Text style={{ width: 80, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>km</Text>}
-            {showTime && <Text style={{ width: 72, fontSize: 11, color: "#94a3b8", textAlign: "center" }}>sec</Text>}
+            <Text style={{ width: 24, fontSize: 11, color: theme.textMuted, textAlign: "center" }}>#</Text>
+            {showWeight && <Text style={{ width: 80, fontSize: 11, color: theme.textMuted, textAlign: "center" }}>{weightUnit}</Text>}
+            {showReps && <Text style={{ width: 72, fontSize: 11, color: theme.textMuted, textAlign: "center" }}>reps</Text>}
+            {showDistance && <Text style={{ width: 80, fontSize: 11, color: theme.textMuted, textAlign: "center" }}>km</Text>}
+            {showTime && <Text style={{ width: 72, fontSize: 11, color: theme.textMuted, textAlign: "center" }}>sec</Text>}
             <View style={{ flex: 1 }} />
             {markSetsComplete && exerciseSets.some((s) => !s.is_complete) && (
               <TouchableOpacity
@@ -726,18 +727,18 @@ export default function TrainingScreen() {
                 }}
                 hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               >
-                <Text style={{ fontSize: 10, fontWeight: "600", color: "#6366f1" }}>{t("workout:markAllCompleteButton")}</Text>
+                <Text style={{ fontSize: 10, fontWeight: "600", color: theme.primary }}>{t("workout:markAllCompleteButton")}</Text>
               </TouchableOpacity>
             )}
-            <Text style={{ fontSize: 11, color: "#cbd5e1", width: 16 }}>≡</Text>
+            <Text style={{ fontSize: 11, color: theme.textDisabled, width: 16 }}>≡</Text>
           </View>
         )}
 
         {/* Sets list — draggable */}
         {exerciseSets.length === 0 ? (
           <View style={{ paddingVertical: 40, alignItems: "center", gap: 8 }}>
-            <Ionicons name="barbell-outline" size={32} color="#94a3b8" />
-            <Text style={{ fontSize: 13, color: "#94a3b8" }}>{t("workout:emptySetsMessage")}</Text>
+            <Ionicons name="barbell-outline" size={32} color={theme.textMuted} />
+            <Text style={{ fontSize: 13, color: theme.textMuted }}>{t("workout:emptySetsMessage")}</Text>
           </View>
         ) : (
           <NestableDraggableFlatList
@@ -751,15 +752,15 @@ export default function TrainingScreen() {
                 <ScaleDecorator activeScale={0.97}>
                   <View style={{ gap: 2, marginBottom: 8 }}>
                     <View
-                      style={{ flexDirection: "row", alignItems: "center", gap: 8, borderWidth: s.id === selectedSetId ? 1.5 : 1, borderColor: s.id === selectedSetId ? "#6366f1" : s.is_complete ? "#6366f120" : "#f1f5f9", borderRadius: 12, backgroundColor: isActive ? "#f8fafc" : s.is_complete ? "#6366f108" : "#fff", paddingHorizontal: 10, paddingVertical: 8 }}
+                      style={{ flexDirection: "row", alignItems: "center", gap: 8, borderWidth: s.id === selectedSetId ? 1.5 : 1, borderColor: s.id === selectedSetId ? theme.primary : s.is_complete ? theme.primary + "20" : theme.borderLight, borderRadius: 12, backgroundColor: isActive ? theme.backgroundAlt : s.is_complete ? theme.primary + "08" : theme.surfaceCard, paddingHorizontal: 10, paddingVertical: 8 }}
                     >
                       {/* Set number — long press to toggle warmup */}
                       <TouchableOpacity
                         onLongPress={() => handleToggleWarmup(s)}
                         delayLongPress={400}
-                        style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: s.is_warmup ? "#fef3c7" : "#f1f5f9", alignItems: "center", justifyContent: "center" }}
+                        style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: s.is_warmup ? theme.warmupBadge : theme.borderLight, alignItems: "center", justifyContent: "center" }}
                       >
-                        <Text style={{ fontSize: 11, fontWeight: "600", color: s.is_warmup ? "#d97706" : "#64748b" }}>
+                        <Text style={{ fontSize: 11, fontWeight: "600", color: s.is_warmup ? theme.warmupText : theme.textSecondary }}>
                           {s.is_warmup ? "W" : idx + 1}
                         </Text>
                       </TouchableOpacity>
@@ -768,10 +769,10 @@ export default function TrainingScreen() {
                       {showWeight && (
                         <View style={{ flexDirection: "row", alignItems: "center", marginRight: 10 }}>
                           <TouchableOpacity onPress={() => handleIncrementField(s, "weight", -weightIncrement)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
-                            <Text style={{ fontSize: 18, fontWeight: "500", color: "#64748b", paddingHorizontal: 4 }}>−</Text>
+                            <Text style={{ fontSize: 18, fontWeight: "500", color: theme.textSecondary, paddingHorizontal: 4 }}>−</Text>
                           </TouchableOpacity>
                           <TextInput
-                            style={{ width: 52, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingVertical: 6, paddingHorizontal: 4, fontSize: 14, fontWeight: "500", textAlign: "center" }}
+                            style={{ width: 52, borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 4, fontSize: 14, fontWeight: "500", textAlign: "center" }}
                             keyboardType="decimal-pad"
                             value={numericDrafts[`${s.id}:weight`] ?? (s.weight !== undefined ? String(s.weight) : "")}
                             onChangeText={(v) => {
@@ -780,10 +781,10 @@ export default function TrainingScreen() {
                             }}
                             onBlur={() => setNumericDrafts((prev) => { const next = { ...prev }; delete next[`${s.id}:weight`]; return next; })}
                             placeholder="—"
-                            placeholderTextColor="#cbd5e1"
+                            placeholderTextColor={theme.textDisabled}
                           />
                           <TouchableOpacity onPress={() => handleIncrementField(s, "weight", weightIncrement)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
-                            <Text style={{ fontSize: 18, fontWeight: "500", color: "#64748b", paddingHorizontal: 4 }}>+</Text>
+                            <Text style={{ fontSize: 18, fontWeight: "500", color: theme.textSecondary, paddingHorizontal: 4 }}>+</Text>
                           </TouchableOpacity>
                         </View>
                       )}
@@ -792,18 +793,18 @@ export default function TrainingScreen() {
                       {showReps && (
                         <View style={{ flexDirection: "row", alignItems: "center", marginRight: 10 }}>
                           <TouchableOpacity onPress={() => handleIncrementField(s, "reps", -1)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
-                            <Text style={{ fontSize: 18, fontWeight: "500", color: "#64748b", paddingHorizontal: 4 }}>−</Text>
+                            <Text style={{ fontSize: 18, fontWeight: "500", color: theme.textSecondary, paddingHorizontal: 4 }}>−</Text>
                           </TouchableOpacity>
                           <TextInput
-                            style={{ width: 44, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingVertical: 6, paddingHorizontal: 4, fontSize: 14, fontWeight: "500", textAlign: "center" }}
+                            style={{ width: 44, borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 4, fontSize: 14, fontWeight: "500", textAlign: "center" }}
                             keyboardType="number-pad"
                             value={s.reps !== undefined ? String(s.reps) : ""}
                             onChangeText={(v) => handleUpdateField(s.id, "reps", v)}
                             placeholder="—"
-                            placeholderTextColor="#cbd5e1"
+                            placeholderTextColor={theme.textDisabled}
                           />
                           <TouchableOpacity onPress={() => handleIncrementField(s, "reps", 1)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
-                            <Text style={{ fontSize: 18, fontWeight: "500", color: "#64748b", paddingHorizontal: 4 }}>+</Text>
+                            <Text style={{ fontSize: 18, fontWeight: "500", color: theme.textSecondary, paddingHorizontal: 4 }}>+</Text>
                           </TouchableOpacity>
                         </View>
                       )}
@@ -812,10 +813,10 @@ export default function TrainingScreen() {
                       {showDistance && (
                         <View style={{ flexDirection: "row", alignItems: "center", marginRight: 10 }}>
                           <TouchableOpacity onPress={() => handleIncrementField(s, "distance", -0.1)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
-                            <Text style={{ fontSize: 18, fontWeight: "500", color: "#64748b", paddingHorizontal: 4 }}>−</Text>
+                            <Text style={{ fontSize: 18, fontWeight: "500", color: theme.textSecondary, paddingHorizontal: 4 }}>−</Text>
                           </TouchableOpacity>
                           <TextInput
-                            style={{ width: 52, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingVertical: 6, paddingHorizontal: 4, fontSize: 14, fontWeight: "500", textAlign: "center" }}
+                            style={{ width: 52, borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 4, fontSize: 14, fontWeight: "500", textAlign: "center" }}
                             keyboardType="decimal-pad"
                             value={numericDrafts[`${s.id}:distance`] ?? (s.distance !== undefined ? String(s.distance) : "")}
                             onChangeText={(v) => {
@@ -824,10 +825,10 @@ export default function TrainingScreen() {
                             }}
                             onBlur={() => setNumericDrafts((prev) => { const next = { ...prev }; delete next[`${s.id}:distance`]; return next; })}
                             placeholder="—"
-                            placeholderTextColor="#cbd5e1"
+                            placeholderTextColor={theme.textDisabled}
                           />
                           <TouchableOpacity onPress={() => handleIncrementField(s, "distance", 0.1)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
-                            <Text style={{ fontSize: 18, fontWeight: "500", color: "#64748b", paddingHorizontal: 4 }}>+</Text>
+                            <Text style={{ fontSize: 18, fontWeight: "500", color: theme.textSecondary, paddingHorizontal: 4 }}>+</Text>
                           </TouchableOpacity>
                         </View>
                       )}
@@ -836,18 +837,18 @@ export default function TrainingScreen() {
                       {showTime && (
                         <View style={{ flexDirection: "row", alignItems: "center" }}>
                           <TouchableOpacity onPress={() => handleIncrementField(s, "time_seconds", -5)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
-                            <Text style={{ fontSize: 18, fontWeight: "500", color: "#64748b", paddingHorizontal: 4 }}>−</Text>
+                            <Text style={{ fontSize: 18, fontWeight: "500", color: theme.textSecondary, paddingHorizontal: 4 }}>−</Text>
                           </TouchableOpacity>
                           <TextInput
-                            style={{ width: 44, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingVertical: 6, paddingHorizontal: 4, fontSize: 14, fontWeight: "500", textAlign: "center" }}
+                            style={{ width: 44, borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 4, fontSize: 14, fontWeight: "500", textAlign: "center" }}
                             keyboardType="number-pad"
                             value={s.time_seconds !== undefined ? String(s.time_seconds) : ""}
                             onChangeText={(v) => handleUpdateField(s.id, "time_seconds", v)}
                             placeholder="—"
-                            placeholderTextColor="#cbd5e1"
+                            placeholderTextColor={theme.textDisabled}
                           />
                           <TouchableOpacity onPress={() => handleIncrementField(s, "time_seconds", 5)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
-                            <Text style={{ fontSize: 18, fontWeight: "500", color: "#64748b", paddingHorizontal: 4 }}>+</Text>
+                            <Text style={{ fontSize: 18, fontWeight: "500", color: theme.textSecondary, paddingHorizontal: 4 }}>+</Text>
                           </TouchableOpacity>
                         </View>
                       )}
@@ -856,7 +857,7 @@ export default function TrainingScreen() {
 
                       {/* Per-set PR trophy */}
                       {trackPersonalRecords && s.weight != null && s.reps != null && prByReps[s.reps] != null && s.weight >= prByReps[s.reps]! && (
-                        <Ionicons name="trophy" size={13} color="#d97706" />
+                        <Ionicons name="trophy" size={13} color={theme.warmupText} />
                       )}
 
                       {/* Comment */}
@@ -865,12 +866,12 @@ export default function TrainingScreen() {
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         accessibilityLabel={s.comment ? t("workout:editCommentLabel") : t("workout:addCommentLabel")}
                       >
-                        <Ionicons name={s.comment ? "chatbubble" : "chatbubble-outline"} size={14} color={s.comment ? "#6366f1" : "#cbd5e1"} />
+                        <Ionicons name={s.comment ? "chatbubble" : "chatbubble-outline"} size={14} color={s.comment ? theme.primary : theme.textDisabled} />
                       </TouchableOpacity>
 
                       {/* Delete */}
                       <TouchableOpacity onPress={() => handleDeleteSet(s.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={t("workout:deleteSetLabel")}>
-                        <Ionicons name="trash-outline" size={14} color="#ef4444" />
+                        <Ionicons name="trash-outline" size={14} color={theme.danger} />
                       </TouchableOpacity>
 
                       {/* Complete */}
@@ -878,7 +879,7 @@ export default function TrainingScreen() {
                         <TouchableOpacity
                           onPress={() => handleToggleComplete(s.id, s.is_complete)}
                           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                          style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: s.is_complete ? "#6366f1" : "#cbd5e1", backgroundColor: s.is_complete ? "#6366f1" : "transparent", alignItems: "center", justifyContent: "center" }}
+                          style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: s.is_complete ? theme.primary : theme.textDisabled, backgroundColor: s.is_complete ? theme.primary : "transparent", alignItems: "center", justifyContent: "center" }}
                           accessibilityLabel={s.is_complete ? t("workout:markIncompleteLabel") : t("workout:markCompleteLabel")}
                         >
                           {s.is_complete && <Ionicons name="checkmark" size={11} color="white" />}
@@ -887,23 +888,23 @@ export default function TrainingScreen() {
 
                       {/* Drag handle */}
                       <TouchableOpacity onLongPress={drag} delayLongPress={150} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={t("workout:reorderSetLabel")}>
-                        <Ionicons name="reorder-two-outline" size={18} color="#cbd5e1" />
+                        <Ionicons name="reorder-two-outline" size={18} color={theme.textDisabled} />
                       </TouchableOpacity>
                     </View>
                     {(() => {
                       if (!showWeight || !showReps || !s.weight || !s.reps || s.reps >= 37) return null;
                       const orm = calculate1RM(s.weight, s.reps);
                       return (
-                        <Text style={{ fontSize: 10, color: "#94a3b8", paddingLeft: 36, marginTop: -2 }}>
+                        <Text style={{ fontSize: 10, color: theme.textMuted, paddingLeft: 36, marginTop: -2 }}>
                           ~1RM {orm % 1 === 0 ? orm : orm.toFixed(1)} {weightUnit}
                         </Text>
                       );
                     })()}
                     {commentingSetId === s.id && (
                       <TextInput
-                        style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, fontSize: 13, color: "#0f172a", backgroundColor: "#fafafa" }}
+                        style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, fontSize: 13, color: theme.text, backgroundColor: theme.backgroundAlt }}
                         placeholder={t("workout:setCommentPlaceholder")}
-                        placeholderTextColor="#94a3b8"
+                        placeholderTextColor={theme.textMuted}
                         value={s.comment ?? ""}
                         onChangeText={(v) => handleUpdateField(s.id, "comment", v)}
                         multiline
@@ -922,10 +923,10 @@ export default function TrainingScreen() {
           <TouchableOpacity
             onPress={handleAddSet}
             disabled={saving}
-            style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 14, paddingVertical: 14, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 6 }}
+            style={{ borderWidth: 1, borderColor: theme.border, borderStyle: "dashed", borderRadius: 14, paddingVertical: 14, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 6 }}
           >
-            {saving ? <ActivityIndicator size="small" color="#6366f1" /> : <Ionicons name="add-circle-outline" size={18} color="#6366f1" />}
-            <Text style={{ fontSize: 14, fontWeight: "500", color: "#6366f1" }}>{saving ? t("workout:addingButton") : t("workout:addSetButton")}</Text>
+            {saving ? <ActivityIndicator size="small" color={theme.primary} /> : <Ionicons name="add-circle-outline" size={18} color={theme.primary} />}
+            <Text style={{ fontSize: 14, fontWeight: "500", color: theme.primary }}>{saving ? t("workout:addingButton") : t("workout:addSetButton")}</Text>
           </TouchableOpacity>
         )}
       </NestableScrollContainer>
@@ -934,27 +935,27 @@ export default function TrainingScreen() {
       {/* History tab */}
       {workoutTab === "history" && (
         historyLoading ? (
-          <ActivityIndicator style={{ flex: 1, marginTop: 48 }} color="#6366f1" />
+          <ActivityIndicator style={{ flex: 1, marginTop: 48 }} color={theme.primary} />
         ) : (
           <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
             {historySessions.length === 0 ? (
               <View style={{ alignItems: "center", paddingVertical: 48 }}>
-                <Ionicons name="time-outline" size={40} color="#cbd5e1" />
-                <Text style={{ fontSize: 14, color: "#94a3b8", marginTop: 12 }}>{t("workout:noHistoryMessage")}</Text>
+                <Ionicons name="time-outline" size={40} color={theme.textDisabled} />
+                <Text style={{ fontSize: 14, color: theme.textMuted, marginTop: 12 }}>{t("workout:noHistoryMessage")}</Text>
               </View>
             ) : (
               historySessions.map((session) => {
                 const visible = session.sets.filter((s) => !s.is_warmup).sort((a, b) => a.order_index - b.order_index);
                 return (
-                  <View key={session.workout_id} style={{ backgroundColor: "#f8fafc", borderRadius: 14, borderWidth: 1, borderColor: "#f1f5f9", padding: 14, gap: 6 }}>
-                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#64748b", marginBottom: 4, textTransform: "capitalize" }}>
+                  <View key={session.workout_id} style={{ backgroundColor: theme.backgroundAlt, borderRadius: 14, borderWidth: 1, borderColor: theme.borderLight, padding: 14, gap: 6 }}>
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: theme.textSecondary, marginBottom: 4, textTransform: "capitalize" }}>
                       {new Date(session.date + "T00:00:00").toLocaleDateString(intlLocale(i18n.language), { weekday: "long", day: "numeric", month: "long" })}
                     </Text>
                     {visible.length === 0 ? (
-                      <Text style={{ fontSize: 12, color: "#cbd5e1" }}>{t("workout:noSetsLabel")}</Text>
+                      <Text style={{ fontSize: 12, color: theme.textDisabled }}>{t("workout:noSetsLabel")}</Text>
                     ) : (
                       visible.map((s, i) => (
-                        <Text key={i} style={{ fontSize: 13, color: "#0f172a" }}>
+                        <Text key={i} style={{ fontSize: 13, color: theme.text }}>
                           {i + 1}.{"  "}{formatLastSet(s as LastSet)}
                         </Text>
                       ))
@@ -970,11 +971,11 @@ export default function TrainingScreen() {
       {/* Chart tab */}
       {workoutTab === "chart" && (
         chartLoading2 ? (
-          <ActivityIndicator style={{ flex: 1, marginTop: 48 }} color="#6366f1" />
+          <ActivityIndicator style={{ flex: 1, marginTop: 48 }} color={theme.primary} />
         ) : chartPoints.length === 0 ? (
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}>
-            <Ionicons name="trending-up-outline" size={40} color="#cbd5e1" />
-            <Text style={{ fontSize: 14, color: "#94a3b8", marginTop: 12, textAlign: "center" }}>
+            <Ionicons name="trending-up-outline" size={40} color={theme.textDisabled} />
+            <Text style={{ fontSize: 14, color: theme.textMuted, marginTop: 12, textAlign: "center" }}>
               {t("workout:chartEmptyMessage")}
             </Text>
           </View>
@@ -987,13 +988,13 @@ export default function TrainingScreen() {
                   <TouchableOpacity
                     key={key}
                     onPress={() => setChartMetric(key)}
-                    style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, borderColor: chartMetric === key ? "#6366f1" : "#e2e8f0", backgroundColor: chartMetric === key ? "#6366f1" : "transparent" }}
+                    style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, borderColor: chartMetric === key ? theme.primary : theme.border, backgroundColor: chartMetric === key ? theme.primary : "transparent" }}
                   >
-                    <Text style={{ fontSize: 12, fontWeight: "600", color: chartMetric === key ? "#fff" : "#64748b" }}>{label}</Text>
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: chartMetric === key ? "#fff" : theme.textSecondary }}>{label}</Text>
                   </TouchableOpacity>
                 ))}
             </View>
-            <View style={{ backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: "#f1f5f9", padding: 16 }}>
+            <View style={{ backgroundColor: theme.surfaceCard, borderRadius: 16, borderWidth: 1, borderColor: theme.borderLight, padding: 16 }}>
               <LineChart
                 data={chartPoints.map((p) => ({
                   label: new Date(p.date + "T00:00:00").toLocaleDateString(intlLocale(i18n.language), { day: "numeric", month: "short" }),
@@ -1016,9 +1017,9 @@ export default function TrainingScreen() {
                     { label: t("workout:chartStats.latest"), value: `${latest % 1 === 0 ? latest : latest.toFixed(1)}` },
                     { label: t("workout:chartStats.progression"), value: `${trend >= 0 ? "+" : ""}${trend.toFixed(1)}%` },
                   ].map((stat) => (
-                    <View key={stat.label} style={{ flex: 1, backgroundColor: "#f8fafc", borderRadius: 12, borderWidth: 1, borderColor: "#f1f5f9", padding: 12, alignItems: "center", gap: 4 }}>
-                      <Text style={{ fontSize: 10, fontWeight: "600", color: "#94a3b8", textTransform: "uppercase" }}>{stat.label}</Text>
-                      <Text style={{ fontSize: 14, fontWeight: "700", color: "#0f172a" }}>{stat.value}</Text>
+                    <View key={stat.label} style={{ flex: 1, backgroundColor: theme.backgroundAlt, borderRadius: 12, borderWidth: 1, borderColor: theme.borderLight, padding: 12, alignItems: "center", gap: 4 }}>
+                      <Text style={{ fontSize: 10, fontWeight: "600", color: theme.textMuted, textTransform: "uppercase" }}>{stat.label}</Text>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: theme.text }}>{stat.value}</Text>
                     </View>
                   ))}
                 </View>
@@ -1030,9 +1031,9 @@ export default function TrainingScreen() {
 
       {/* Group (superset) menu modal */}
       <Modal visible={showGroupMenu} animationType="fade" transparent onRequestClose={() => setShowGroupMenu(false)}>
-        <TouchableOpacity activeOpacity={1} onPress={() => setShowGroupMenu(false)} style={{ flex: 1, backgroundColor: "#00000060", justifyContent: "center", paddingHorizontal: 32 }}>
-          <View onStartShouldSetResponder={() => true} style={{ backgroundColor: "#fff", borderRadius: 16, paddingVertical: 8, gap: 2 }}>
-            <Text style={{ fontSize: 13, fontWeight: "600", color: "#94a3b8", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 }} numberOfLines={2}>
+        <TouchableOpacity activeOpacity={1} onPress={() => setShowGroupMenu(false)} style={{ flex: 1, backgroundColor: theme.overlay, justifyContent: "center", paddingHorizontal: 32 }}>
+          <View onStartShouldSetResponder={() => true} style={{ backgroundColor: theme.surfaceCard, borderRadius: 16, paddingVertical: 8, gap: 2 }}>
+            <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textMuted, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 }} numberOfLines={2}>
               {workoutExercise?.group_id ? (workoutExercise.group_name || t("routines:supersetDefaultLabel")) : t("workout:groupMenu.ungroupedTitle")}
             </Text>
             {workoutExercise?.group_id ? (
@@ -1045,7 +1046,7 @@ export default function TrainingScreen() {
                   }}
                   style={{ paddingVertical: 14, paddingHorizontal: 16 }}
                 >
-                  <Text style={{ fontSize: 15, color: "#0f172a" }}>{t("routines:alerts.renameGroupOption")}</Text>
+                  <Text style={{ fontSize: 15, color: theme.text }}>{t("routines:alerts.renameGroupOption")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => {
@@ -1054,7 +1055,7 @@ export default function TrainingScreen() {
                   }}
                   style={{ paddingVertical: 14, paddingHorizontal: 16 }}
                 >
-                  <Text style={{ fontSize: 15, color: "#ef4444" }}>{t("routines:alerts.removeFromGroupOption")}</Text>
+                  <Text style={{ fontSize: 15, color: theme.danger }}>{t("routines:alerts.removeFromGroupOption")}</Text>
                 </TouchableOpacity>
               </>
             ) : (
@@ -1073,7 +1074,7 @@ export default function TrainingScreen() {
                         }}
                         style={{ paddingVertical: 14, paddingHorizontal: 16 }}
                       >
-                        <Text style={{ fontSize: 15, color: "#0f172a" }}>{t("workout:groupMenu.joinNextButton")}</Text>
+                        <Text style={{ fontSize: 15, color: theme.text }}>{t("workout:groupMenu.joinNextButton")}</Text>
                       </TouchableOpacity>
                     )}
                     {hasPrev && (
@@ -1084,16 +1085,16 @@ export default function TrainingScreen() {
                         }}
                         style={{ paddingVertical: 14, paddingHorizontal: 16 }}
                       >
-                        <Text style={{ fontSize: 15, color: "#0f172a" }}>{t("workout:groupMenu.joinPrevButton")}</Text>
+                        <Text style={{ fontSize: 15, color: theme.text }}>{t("workout:groupMenu.joinPrevButton")}</Text>
                       </TouchableOpacity>
                     )}
                   </>
                 );
               })()
             )}
-            <View style={{ height: 1, backgroundColor: "#f1f5f9", marginTop: 4, marginHorizontal: 16 }} />
+            <View style={{ height: 1, backgroundColor: theme.borderLight, marginTop: 4, marginHorizontal: 16 }} />
             <TouchableOpacity onPress={() => setShowGroupMenu(false)} style={{ paddingVertical: 14, paddingHorizontal: 16 }}>
-              <Text style={{ fontSize: 15, fontWeight: "600", color: "#6366f1", textAlign: "center" }}>{t("common:cancel")}</Text>
+              <Text style={{ fontSize: 15, fontWeight: "600", color: theme.primary, textAlign: "center" }}>{t("common:cancel")}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -1101,15 +1102,15 @@ export default function TrainingScreen() {
 
       {/* Rename group modal */}
       <Modal visible={showRenameGroup} animationType="fade" transparent onRequestClose={() => setShowRenameGroup(false)}>
-        <View style={{ flex: 1, backgroundColor: "#00000060", justifyContent: "center", paddingHorizontal: 32 }}>
-          <View style={{ backgroundColor: "#fff", borderRadius: 16, padding: 20, gap: 16 }}>
-            <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>{t("routines:renameSupersetTitle")}</Text>
+        <View style={{ flex: 1, backgroundColor: theme.overlay, justifyContent: "center", paddingHorizontal: 32 }}>
+          <View style={{ backgroundColor: theme.surfaceCard, borderRadius: 16, padding: 20, gap: 16 }}>
+            <Text style={{ fontSize: 16, fontWeight: "600", color: theme.text }}>{t("routines:renameSupersetTitle")}</Text>
             <TextInput
-              style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15 }}
+              style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15 }}
               value={renameGroupText}
               onChangeText={setRenameGroupText}
               placeholder={t("routines:supersetNamePlaceholder")}
-              placeholderTextColor="#cbd5e1"
+              placeholderTextColor={theme.textDisabled}
               autoFocus
               returnKeyType="done"
               onSubmitEditing={() => {
@@ -1121,8 +1122,8 @@ export default function TrainingScreen() {
               }}
             />
             <View style={{ flexDirection: "row", gap: 10 }}>
-              <TouchableOpacity onPress={() => setShowRenameGroup(false)} style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: "#e2e8f0", alignItems: "center" }}>
-                <Text style={{ fontSize: 14, color: "#64748b" }}>{t("common:cancel")}</Text>
+              <TouchableOpacity onPress={() => setShowRenameGroup(false)} style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: theme.border, alignItems: "center" }}>
+                <Text style={{ fontSize: 14, color: theme.textSecondary }}>{t("common:cancel")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => {
@@ -1132,7 +1133,7 @@ export default function TrainingScreen() {
                   }
                   setShowRenameGroup(false);
                 }}
-                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: "#6366f1", alignItems: "center" }}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: theme.primary, alignItems: "center" }}
               >
                 <Text style={{ fontSize: 14, fontWeight: "600", color: "#fff" }}>{t("routines:saveButton")}</Text>
               </TouchableOpacity>
@@ -1143,10 +1144,10 @@ export default function TrainingScreen() {
 
       {/* Add exercise modal */}
       <Modal visible={showAddExercise} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowAddExercise(false)}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderColor: "#f1f5f9", gap: 12 }}>
-            <View style={{ flex: 1, flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, paddingHorizontal: 12, gap: 8, backgroundColor: "#f8fafc" }}>
-              <Ionicons name="search" size={16} color="#94a3b8" />
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderColor: theme.borderLight, gap: 12 }}>
+            <View style={{ flex: 1, flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingHorizontal: 12, gap: 8, backgroundColor: theme.backgroundAlt }}>
+              <Ionicons name="search" size={16} color={theme.textMuted} />
               <TextInput
                 style={{ flex: 1, paddingVertical: 10, fontSize: 14 }}
                 placeholder={t("workout:addExerciseModal.searchPlaceholder")}
@@ -1157,7 +1158,7 @@ export default function TrainingScreen() {
               />
             </View>
             <TouchableOpacity onPress={() => setShowAddExercise(false)}>
-              <Ionicons name="close" size={24} color="#64748b" />
+              <Ionicons name="close" size={24} color={theme.textSecondary} />
             </TouchableOpacity>
           </View>
           <FlatList
@@ -1171,8 +1172,8 @@ export default function TrainingScreen() {
             keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
               <View style={{ paddingVertical: 40, alignItems: "center", gap: 8 }}>
-                <Ionicons name="barbell-outline" size={32} color="#cbd5e1" />
-                <Text style={{ fontSize: 14, color: "#94a3b8" }}>
+                <Ionicons name="barbell-outline" size={32} color={theme.textDisabled} />
+                <Text style={{ fontSize: 14, color: theme.textMuted }}>
                   {addSearch ? t("workout:addExerciseModal.noResultsMessage") : t("workout:addExerciseModal.allInWorkoutMessage")}
                 </Text>
               </View>
@@ -1197,16 +1198,17 @@ const ExercisePickerItem = memo(function ExercisePickerItem({
   onPress: (id: string) => void;
 }) {
   const { t } = useTranslation();
+  const theme = useTheme();
   return (
     <TouchableOpacity
       onPress={() => onPress(id)}
-      style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: "#f1f5f9", backgroundColor: "#fff", gap: 12 }}
+      style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.borderLight, backgroundColor: theme.surfaceCard, gap: 12 }}
     >
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 14, fontWeight: "500", color: "#0f172a" }}>{name}</Text>
-        <Text style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{t(`exercises:types.${type}`)}</Text>
+        <Text style={{ fontSize: 14, fontWeight: "500", color: theme.text }}>{name}</Text>
+        <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>{t(`exercises:types.${type}`)}</Text>
       </View>
-      <Ionicons name="add-circle-outline" size={20} color="#6366f1" />
+      <Ionicons name="add-circle-outline" size={20} color={theme.primary} />
     </TouchableOpacity>
   );
 });
