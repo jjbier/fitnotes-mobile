@@ -18,7 +18,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
-import { useTheme, useThemeModeStore, type ThemeMode } from "../../lib/theme";
+import { useTheme, useThemeModeStore, type ThemeMode, type ThemeColors } from "../../lib/theme";
 import { usePreferencesStore, computeDefaultCatalogSeedPlan, resolveDefaultExerciseCatalog, type UserPreferences, type DefaultCatalogSeedPlan } from "@fitnotes/core";
 import { createWorkoutRepository, createBackupRepository, isBackupData, type BackupData } from "@fitnotes/database";
 import { useRepositories } from "../../contexts/RepositoryContext";
@@ -69,6 +69,7 @@ function parseCSVRows(csv: string) {
  */
 export default function SettingsScreen() {
   const colors = useTheme();
+  const styles = createStyles(colors);
   const router = useRouter();
   const { t } = useTranslation();
   const { exerciseRepo, workoutRepo, bodyTrackerRepo, preferencesRepo, isGuest, userId } = useRepositories();
@@ -528,7 +529,7 @@ export default function SettingsScreen() {
                 value={displayName}
                 onChangeText={setDisplayName}
                 placeholder={t("settings:profile.displayNamePlaceholder")}
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={colors.textMuted}
                 style={styles.input}
               />
               <TouchableOpacity
@@ -584,7 +585,7 @@ export default function SettingsScreen() {
               value={defaultWeightIncrement}
               onChangeText={handleDefaultIncrementChange}
               placeholder="1"
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={colors.textMuted}
             />
           </View>
           <View style={styles.prefRow}>
@@ -687,7 +688,7 @@ export default function SettingsScreen() {
                   value={defaultRestSeconds}
                   onChangeText={handleDefaultRestSeconds}
                   placeholder="90"
-                  placeholderTextColor="#94a3b8"
+                  placeholderTextColor={colors.textMuted}
                 />
               </View>
               <View style={styles.prefRow}>
@@ -717,7 +718,7 @@ export default function SettingsScreen() {
                     value={restTimerVolume}
                     onChangeText={handleRestTimerVolume}
                     placeholder="80"
-                    placeholderTextColor="#94a3b8"
+                    placeholderTextColor={colors.textMuted}
                   />
                 </View>
               )}
@@ -734,7 +735,7 @@ export default function SettingsScreen() {
               value={estimatedRecordsRepLimit}
               onChangeText={handleEstimatedRecordsRepLimit}
               placeholder={t("settings:estimatedRecordsRepLimit.placeholder")}
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={colors.textMuted}
             />
           </View>
         </View>
@@ -953,7 +954,7 @@ export default function SettingsScreen() {
 
         {/* Danger Zone */}
         <View style={[styles.section, styles.dangerSection]}>
-          <Text style={[styles.sectionTitle, { color: "#ef4444" }]}>{t("settings:sections.dangerZone")}</Text>
+          <Text style={[styles.sectionTitle, { color: colors.danger }]}>{t("settings:sections.dangerZone")}</Text>
           <TouchableOpacity
             onPress={() => { if (!requireAccount()) return; setDeleteHistoryFrom(""); setDeleteHistoryTo(""); setDeleteHistoryExerciseId(null); setShowDeleteHistoryModal(true); }}
             style={[styles.btn, styles.btnDanger]}
@@ -992,41 +993,41 @@ export default function SettingsScreen() {
       {/* Import CSV modal */}
       <Modal visible={showImportModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowImportModal(false)}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-            <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
-              <Text style={{ flex: 1, fontSize: 17, fontWeight: "700", color: "#0f172a" }}>{t("settings:importCSVModal.title")}</Text>
+          <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceCard }}>
+            <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.borderLight }}>
+              <Text style={{ flex: 1, fontSize: 17, fontWeight: "700", color: colors.text }}>{t("settings:importCSVModal.title")}</Text>
               <TouchableOpacity onPress={() => setShowImportModal(false)} accessibilityLabel="Cerrar modal">
-                <Ionicons name="close" size={22} color="#64748b" />
+                <Ionicons name="close" size={22} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
             <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }} keyboardShouldPersistTaps="handled">
-              <Text style={{ fontSize: 13, color: "#64748b", lineHeight: 18 }}>
+              <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>
                 {t("settings:importCSVModal.description")}
               </Text>
-              <View style={{ backgroundColor: "#f8fafc", borderRadius: 10, padding: 12 }}>
-                <Text style={{ fontSize: 11, fontWeight: "600", color: "#94a3b8", marginBottom: 4 }}>{t("settings:importCSVModal.formatLabel")}</Text>
-                <Text style={{ fontSize: 11, color: "#64748b", fontFamily: "monospace" }}>
+              <View style={{ backgroundColor: colors.backgroundAlt, borderRadius: 10, padding: 12 }}>
+                <Text style={{ fontSize: 11, fontWeight: "600", color: colors.textMuted, marginBottom: 4 }}>{t("settings:importCSVModal.formatLabel")}</Text>
+                <Text style={{ fontSize: 11, color: colors.textSecondary, fontFamily: "monospace" }}>
                   Date,Exercise,Weight,Reps,...,Completed,Warmup{"\n"}
                   2025-06-25,Press Banca,100,5,...,1,0
                 </Text>
               </View>
               <TextInput
-                style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, padding: 14, fontSize: 12, minHeight: 200, textAlignVertical: "top", fontFamily: "monospace", color: "#0f172a" }}
+                style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, fontSize: 12, minHeight: 200, textAlignVertical: "top", fontFamily: "monospace", color: colors.text }}
                 placeholder={t("settings:importCSVModal.placeholder")}
-                placeholderTextColor="#cbd5e1"
+                placeholderTextColor={colors.textDisabled}
                 multiline
                 value={importCSV}
                 onChangeText={setImportCSV}
               />
               {importCSV.length > 0 && (
-                <Text style={{ fontSize: 12, color: "#6366f1" }}>
+                <Text style={{ fontSize: 12, color: colors.primary }}>
                   {t("settings:importCSVModal.rowsDetected", { count: parseCSVRows(importCSV).length })}
                 </Text>
               )}
               <TouchableOpacity
                 onPress={handleImportCSV}
                 disabled={importLoading || importCSV.trim().length === 0}
-                style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: importLoading || !importCSV.trim() ? 0.5 : 1 }}
+                style={{ backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: importLoading || !importCSV.trim() ? 0.5 : 1 }}
               >
                 {importLoading
                   ? <ActivityIndicator color="#fff" />
@@ -1040,37 +1041,37 @@ export default function SettingsScreen() {
       {/* Restore backup modal */}
       <Modal visible={showRestoreModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowRestoreModal(false)}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-            <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
-              <Text style={{ flex: 1, fontSize: 17, fontWeight: "700", color: "#0f172a" }}>{t("settings:restoreModal.title")}</Text>
+          <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceCard }}>
+            <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.borderLight }}>
+              <Text style={{ flex: 1, fontSize: 17, fontWeight: "700", color: colors.text }}>{t("settings:restoreModal.title")}</Text>
               <TouchableOpacity onPress={() => setShowRestoreModal(false)} accessibilityLabel="Cerrar modal">
-                <Ionicons name="close" size={22} color="#64748b" />
+                <Ionicons name="close" size={22} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
             <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }} keyboardShouldPersistTaps="handled">
-              <Text style={{ fontSize: 13, color: "#64748b", lineHeight: 18 }}>
+              <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>
                 {t("settings:restoreModal.pasteDescriptionMobile")}
               </Text>
               <TextInput
-                style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, padding: 14, fontSize: 11, minHeight: 200, textAlignVertical: "top", fontFamily: "monospace", color: "#0f172a" }}
+                style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, fontSize: 11, minHeight: 200, textAlignVertical: "top", fontFamily: "monospace", color: colors.text }}
                 placeholder={t("settings:restoreModal.pastePlaceholderMobile")}
-                placeholderTextColor="#cbd5e1"
+                placeholderTextColor={colors.textDisabled}
                 multiline
                 value={restorePaste}
                 onChangeText={handleRestorePasteChange}
               />
               {restorePaste.length > 0 && !restoreParsed && (
-                <Text style={{ fontSize: 12, color: "#ef4444" }}>{t("settings:restoreModal.invalidFile")}</Text>
+                <Text style={{ fontSize: 12, color: colors.danger }}>{t("settings:restoreModal.invalidFile")}</Text>
               )}
               {restoreParsed && (
-                <Text style={{ fontSize: 12, color: "#6366f1" }}>
+                <Text style={{ fontSize: 12, color: colors.primary }}>
                   {t("settings:restoreModal.validSummaryMobile", { workouts: restoreParsed.workouts.length, sets: restoreParsed.sets.length, exercises: restoreParsed.exercises.length })}
                 </Text>
               )}
               <TouchableOpacity
                 onPress={handleExecuteRestore}
                 disabled={restoreLoading || !restoreParsed}
-                style={{ backgroundColor: "#ef4444", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: restoreLoading || !restoreParsed ? 0.5 : 1 }}
+                style={{ backgroundColor: colors.danger, borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: restoreLoading || !restoreParsed ? 0.5 : 1 }}
               >
                 {restoreLoading
                   ? <ActivityIndicator color="#fff" />
@@ -1083,25 +1084,25 @@ export default function SettingsScreen() {
       </Modal>
       {/* Delete workout history modal */}
       <Modal visible={showDeleteHistoryModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowDeleteHistoryModal(false)}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
-            <Text style={{ flex: 1, fontSize: 17, fontWeight: "700", color: "#0f172a" }}>{t("settings:dangerZone.deleteHistoryLabel")}</Text>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceCard }}>
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.borderLight }}>
+            <Text style={{ flex: 1, fontSize: 17, fontWeight: "700", color: colors.text }}>{t("settings:dangerZone.deleteHistoryLabel")}</Text>
             <TouchableOpacity onPress={() => setShowDeleteHistoryModal(false)} accessibilityLabel="Cerrar modal">
-              <Ionicons name="close" size={22} color="#64748b" />
+              <Ionicons name="close" size={22} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
-            <Text style={{ fontSize: 13, color: "#64748b", lineHeight: 18 }}>
+            <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>
               {t("settings:dangerZone.deleteHistoryDescriptionMobile")}
             </Text>
             <View style={{ flexDirection: "row", gap: 10 }}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.label}>{t("settings:dangerZone.deleteHistoryFrom")}</Text>
-                <TextInput style={styles.input} value={deleteHistoryFrom} onChangeText={setDeleteHistoryFrom} placeholder="AAAA-MM-DD" placeholderTextColor="#94a3b8" />
+                <TextInput style={styles.input} value={deleteHistoryFrom} onChangeText={setDeleteHistoryFrom} placeholder="AAAA-MM-DD" placeholderTextColor={colors.textMuted} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.label}>{t("settings:dangerZone.deleteHistoryTo")}</Text>
-                <TextInput style={styles.input} value={deleteHistoryTo} onChangeText={setDeleteHistoryTo} placeholder="AAAA-MM-DD" placeholderTextColor="#94a3b8" />
+                <TextInput style={styles.input} value={deleteHistoryTo} onChangeText={setDeleteHistoryTo} placeholder="AAAA-MM-DD" placeholderTextColor={colors.textMuted} />
               </View>
             </View>
             <View>
@@ -1109,7 +1110,7 @@ export default function SettingsScreen() {
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 6 }}>
                 <TouchableOpacity
                   onPress={() => setDeleteHistoryExerciseId(null)}
-                  style={[styles.unitBtn, { borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8 }, deleteHistoryExerciseId === null && styles.unitBtnActive]}
+                  style={[styles.unitBtn, { borderWidth: 1, borderColor: colors.border, borderRadius: 8 }, deleteHistoryExerciseId === null && styles.unitBtnActive]}
                 >
                   <Text style={[styles.unitBtnText, deleteHistoryExerciseId === null && styles.unitBtnTextActive]}>{t("settings:dangerZone.deleteHistoryAll")}</Text>
                 </TouchableOpacity>
@@ -1117,7 +1118,7 @@ export default function SettingsScreen() {
                   <TouchableOpacity
                     key={ex.id}
                     onPress={() => setDeleteHistoryExerciseId(ex.id)}
-                    style={[styles.unitBtn, { borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8 }, deleteHistoryExerciseId === ex.id && styles.unitBtnActive]}
+                    style={[styles.unitBtn, { borderWidth: 1, borderColor: colors.border, borderRadius: 8 }, deleteHistoryExerciseId === ex.id && styles.unitBtnActive]}
                   >
                     <Text style={[styles.unitBtnText, deleteHistoryExerciseId === ex.id && styles.unitBtnTextActive]}>{ex.name}</Text>
                   </TouchableOpacity>
@@ -1136,7 +1137,7 @@ export default function SettingsScreen() {
                 )
               }
               disabled={deleteHistoryLoading}
-              style={{ backgroundColor: "#ef4444", borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: deleteHistoryLoading ? 0.5 : 1 }}
+              style={{ backgroundColor: colors.danger, borderRadius: 12, paddingVertical: 14, alignItems: "center", opacity: deleteHistoryLoading ? 0.5 : 1 }}
             >
               {deleteHistoryLoading
                 ? <ActivityIndicator color="#fff" />
@@ -1150,30 +1151,33 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+/** Fábrica de estilos parametrizada por `colors` — StyleSheet.create no puede referenciar el tema en tiempo de módulo, así que se reconstruye en cada render de `SettingsScreen` a partir de `useTheme()`. */
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   content: { padding: 16, paddingBottom: 60, gap: 16 },
-  title: { fontSize: 22, fontWeight: "700", color: "#0f172a", marginBottom: 4 },
-  section: { borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 16, padding: 18, gap: 10 },
-  dangerSection: { borderColor: "#fecaca" },
-  sectionTitle: { fontSize: 14, fontWeight: "600", color: "#0f172a" },
-  emailText: { fontSize: 13, color: "#64748b" },
-  label: { fontSize: 12, fontWeight: "500", color: "#64748b" },
-  input: { borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: "#0f172a" },
+  title: { fontSize: 22, fontWeight: "700", color: colors.text, marginBottom: 4 },
+  section: { borderWidth: 1, borderColor: colors.border, borderRadius: 16, padding: 18, gap: 10 },
+  dangerSection: { borderColor: colors.danger + "40" },
+  sectionTitle: { fontSize: 14, fontWeight: "600", color: colors.text },
+  emailText: { fontSize: 13, color: colors.textSecondary },
+  label: { fontSize: 12, fontWeight: "500", color: colors.textSecondary },
+  input: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: colors.text },
   btn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10 },
-  btnPrimary: { backgroundColor: "#6366f1" },
+  btnPrimary: { backgroundColor: colors.primary },
   btnPrimaryText: { color: "#fff", fontSize: 14, fontWeight: "600" },
-  btnOutline: { borderWidth: 1, borderColor: "#e2e8f0" },
-  btnOutlineText: { color: "#64748b", fontSize: 14, fontWeight: "500" },
-  btnDanger: { borderWidth: 1, borderColor: "#ef4444" },
-  btnDangerText: { color: "#ef4444", fontSize: 14, fontWeight: "500" },
+  btnOutline: { borderWidth: 1, borderColor: colors.border },
+  btnOutlineText: { color: colors.textSecondary, fontSize: 14, fontWeight: "500" },
+  btnDanger: { borderWidth: 1, borderColor: colors.danger },
+  btnDangerText: { color: colors.danger, fontSize: 14, fontWeight: "500" },
   prefRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   prefRowWrap: { flexWrap: "wrap", rowGap: 8 },
-  prefLabel: { fontSize: 13, fontWeight: "500", color: "#0f172a" },
-  prefSub: { fontSize: 11, color: "#94a3b8", marginTop: 1 },
-  unitToggle: { flexDirection: "row", borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, overflow: "hidden" },
+  prefLabel: { fontSize: 13, fontWeight: "500", color: colors.text },
+  prefSub: { fontSize: 11, color: colors.textMuted, marginTop: 1 },
+  unitToggle: { flexDirection: "row", borderWidth: 1, borderColor: colors.border, borderRadius: 8, overflow: "hidden" },
   unitBtn: { paddingHorizontal: 14, paddingVertical: 6 },
-  unitBtnActive: { backgroundColor: "#6366f1" },
-  unitBtnText: { fontSize: 13, fontWeight: "500", color: "#64748b" },
+  unitBtnActive: { backgroundColor: colors.primary },
+  unitBtnText: { fontSize: 13, fontWeight: "500", color: colors.textSecondary },
   unitBtnTextActive: { color: "#fff" },
-});
+  });
+}
