@@ -719,7 +719,7 @@ export default function HomeScreen() {
             <View style={{ gap: 8 }}>
               {/* Workout header: timer + share */}
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#f8fafc", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, flex: 1, minWidth: 120 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.backgroundAlt, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, flex: 1, minWidth: 120 }}>
                   {!activeWorkout.end_time && (
                     <TouchableOpacity
                       onPress={timerState === "running" ? handlePauseTimer : handleStartTimer}
@@ -729,55 +729,55 @@ export default function HomeScreen() {
                       <Ionicons
                         name={timerState === "running" ? "pause-circle" : "play-circle"}
                         size={22}
-                        color="#6366f1"
+                        color={colors.primary}
                       />
                     </TouchableOpacity>
                   )}
-                  {activeWorkout.end_time && <Ionicons name="time-outline" size={14} color="#6366f1" />}
-                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#6366f1" }} numberOfLines={1}>{formatClockDuration(timerDisplay)}</Text>
+                  {activeWorkout.end_time && <Ionicons name="time-outline" size={14} color={colors.primary} />}
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: colors.primary }} numberOfLines={1}>{formatClockDuration(timerDisplay)}</Text>
                   {timerState === "paused" && timerDisplay > 0 && (
-                    <Text style={{ fontSize: 11, color: "#94a3b8" }} numberOfLines={1}>{t("workout:pausedLabel")}</Text>
+                    <Text style={{ fontSize: 11, color: colors.textMuted }} numberOfLines={1}>{t("workout:pausedLabel")}</Text>
                   )}
-                  {activeWorkout.end_time && <Text style={{ fontSize: 11, color: "#94a3b8" }} numberOfLines={1}>{t("workout:finishedLabel")}</Text>}
+                  {activeWorkout.end_time && <Text style={{ fontSize: 11, color: colors.textMuted }} numberOfLines={1}>{t("workout:finishedLabel")}</Text>}
                 </View>
                 <TouchableOpacity
                   onPress={() => { setMoveDate(activeWorkout.date); setShowMoveModal(true); }}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}
                 >
-                  <Ionicons name="calendar-outline" size={16} color="#64748b" />
-                  <Text style={{ fontSize: 13, color: "#64748b" }}>{t("workout:moveButton")}</Text>
+                  <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
+                  <Text style={{ fontSize: 13, color: colors.textSecondary }}>{t("workout:moveButton")}</Text>
                 </TouchableOpacity>
                 {/* Solo tiene sentido añadir un entrenamiento nuevo cuando el activo ya ha finalizado. */}
                 {activeWorkout.end_time && (
                   <TouchableOpacity
                     onPress={openStartModal}
-                    style={{ flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}
                     accessibilityLabel={t("workout:addAnotherWorkoutLabel")}
                   >
-                    <Ionicons name="add-circle-outline" size={16} color="#64748b" />
-                    <Text style={{ fontSize: 13, color: "#64748b" }}>{t("workout:newButton")}</Text>
+                    <Ionicons name="add-circle-outline" size={16} color={colors.textSecondary} />
+                    <Text style={{ fontSize: 13, color: colors.textSecondary }}>{t("workout:newButton")}</Text>
                   </TouchableOpacity>
                 )}
                 {workoutExercises.length > 0 && (
                   <TouchableOpacity
                     onPress={toggleSelectMode}
-                    style={{ flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: selectMode ? "#6366f1" : "#e2e8f0", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: selectMode ? colors.primary : colors.border, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}
                     accessibilityLabel={selectMode ? t("workout:cancelSelectionLabel") : t("workout:selectMultipleLabel")}
                   >
-                    <Ionicons name="checkbox-outline" size={16} color={selectMode ? "#6366f1" : "#64748b"} />
+                    <Ionicons name="checkbox-outline" size={16} color={selectMode ? colors.primary : colors.textSecondary} />
                   </TouchableOpacity>
                 )}
               </View>
 
               {selectMode && (
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#eff0fe", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}>
-                  <Text style={{ fontSize: 13, color: "#6366f1", fontWeight: "500" }}>{t("workout:selectedCount", { count: selectedWEIds.size })}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.primaryBg, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}>
+                  <Text style={{ fontSize: 13, color: colors.primary, fontWeight: "500" }}>{t("workout:selectedCount", { count: selectedWEIds.size })}</Text>
                   <TouchableOpacity
                     onPress={handleDeleteSelected}
                     disabled={selectedWEIds.size === 0}
                     style={{ opacity: selectedWEIds.size === 0 ? 0.4 : 1 }}
                   >
-                    <Text style={{ fontSize: 13, color: "#ef4444", fontWeight: "600" }}>{t("workout:deleteSelectedButton")}</Text>
+                    <Text style={{ fontSize: 13, color: colors.danger, fontWeight: "600" }}>{t("workout:deleteSelectedButton")}</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -809,9 +809,9 @@ export default function HomeScreen() {
                     <ScaleDecorator activeScale={0.98}>
                       <View style={{ flexDirection: "row" }}>
                         {isGrouped ? (
-                          <View style={{ width: 4, backgroundColor: "#8b5cf6", borderRadius: 2, marginRight: 8, marginTop: prevGrouped ? 0 : 8, marginBottom: nextGrouped ? 0 : 8 }} />
+                          <View style={{ width: 4, backgroundColor: colors.primary, borderRadius: 2, marginRight: 8, marginTop: prevGrouped ? 0 : 8, marginBottom: nextGrouped ? 0 : 8 }} />
                         ) : <View style={{ width: 12 }} />}
-                      <View style={{ flex: 1, marginBottom: 8, borderWidth: 1, borderColor: isSelected ? "#6366f1" : allDone ? "#22c55e30" : isGrouped ? "#8b5cf620" : "#f1f5f9", borderRadius: 16, backgroundColor: isSelected ? "#eff0fe" : allDone ? "#f0fdf4" : "#fff", overflow: "hidden" }}>
+                      <View style={{ flex: 1, marginBottom: 8, borderWidth: 1, borderColor: isSelected ? colors.primary : allDone ? colors.success + "30" : isGrouped ? colors.primary + "20" : colors.borderLight, borderRadius: 16, backgroundColor: isSelected ? colors.primaryBg : allDone ? colors.successBg : colors.surfaceCard, overflow: "hidden" }}>
                         <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 8 }}>
                           {selectMode && (
                             <TouchableOpacity
@@ -820,7 +820,7 @@ export default function HomeScreen() {
                               style={{ paddingLeft: 14 }}
                               accessibilityLabel={isSelected ? t("workout:deselectLabel") : t("workout:selectLabel")}
                             >
-                              <Ionicons name={isSelected ? "checkbox" : "square-outline"} size={20} color={isSelected ? "#6366f1" : "#94a3b8"} />
+                              <Ionicons name={isSelected ? "checkbox" : "square-outline"} size={20} color={isSelected ? colors.primary : colors.textMuted} />
                             </TouchableOpacity>
                           )}
                           <TouchableOpacity
@@ -828,9 +828,9 @@ export default function HomeScreen() {
                             style={{ flex: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, gap: 12 }}
                           >
                             <View style={{ flex: 1 }}>
-                              <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>{exName}</Text>
+                              <Text style={{ fontSize: 14, fontWeight: "600", color: colors.text }}>{exName}</Text>
                               {showSetCountHome && (
-                                <Text style={{ fontSize: 12, color: allDone ? "#16a34a" : "#94a3b8", marginTop: 2 }}>
+                                <Text style={{ fontSize: 12, color: allDone ? colors.success : colors.textMuted, marginTop: 2 }}>
                                   {totalCount === 0
                                     ? t("workout:noSetsLabel")
                                     : allDone
@@ -840,8 +840,8 @@ export default function HomeScreen() {
                               )}
                             </View>
                             {allDone
-                              ? <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
-                              : !selectMode ? <Ionicons name="chevron-forward" size={16} color="#94a3b8" /> : null}
+                              ? <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                              : !selectMode ? <Ionicons name="chevron-forward" size={16} color={colors.textMuted} /> : null}
                           </TouchableOpacity>
                           {!selectMode && (
                             <>
@@ -851,7 +851,7 @@ export default function HomeScreen() {
                                 style={{ padding: 8 }}
                                 accessibilityLabel={t("workout:removeExerciseLabel")}
                               >
-                                <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                                <Ionicons name="trash-outline" size={16} color={colors.danger} />
                               </TouchableOpacity>
                               {!activeWorkout.end_time && workoutExercises.length > 1 && (
                                 <TouchableOpacity
@@ -861,15 +861,15 @@ export default function HomeScreen() {
                                   style={{ padding: 8 }}
                                   accessibilityLabel={t("workout:reorderExerciseHintLabel")}
                                 >
-                                  <Ionicons name="reorder-three-outline" size={18} color="#94a3b8" />
+                                  <Ionicons name="reorder-three-outline" size={18} color={colors.textMuted} />
                                 </TouchableOpacity>
                               )}
                             </>
                           )}
                         </View>
                         {totalCount > 0 && !allDone && (
-                          <View style={{ height: 3, backgroundColor: "#f1f5f9" }}>
-                            <View style={{ height: 3, width: `${progress * 100}%`, backgroundColor: progress > 0 ? "#6366f1" : "#f1f5f9", borderRadius: 2 }} />
+                          <View style={{ height: 3, backgroundColor: colors.borderLight }}>
+                            <View style={{ height: 3, width: `${progress * 100}%`, backgroundColor: progress > 0 ? colors.primary : colors.borderLight, borderRadius: 2 }} />
                           </View>
                         )}
                       </View>
@@ -882,17 +882,17 @@ export default function HomeScreen() {
               {!activeWorkout.end_time && (
                 <TouchableOpacity
                   onPress={() => router.push("/exercises")}
-                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderStyle: "dashed", borderRadius: 16, paddingVertical: 14, alignItems: "center" }}
+                  style={{ borderWidth: 1, borderColor: colors.border, borderStyle: "dashed", borderRadius: 16, paddingVertical: 14, alignItems: "center" }}
                 >
-                  <Text style={{ fontSize: 13, color: "#94a3b8" }}>{t("workout:addExerciseButton")}</Text>
+                  <Text style={{ fontSize: 13, color: colors.textMuted }}>{t("workout:addExerciseButton")}</Text>
                 </TouchableOpacity>
               )}
 
               {/* Workout comment */}
               <TextInput
-                style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, fontSize: 13, color: "#0f172a", backgroundColor: "#fafafa", minHeight: 44 }}
+                style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, fontSize: 13, color: colors.text, backgroundColor: colors.backgroundAlt, minHeight: 44 }}
                 placeholder={t("workout:commentPlaceholder")}
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={colors.textMuted}
                 value={workoutComment}
                 onChangeText={setWorkoutCommentLocal}
                 onBlur={handleSaveComment}
@@ -901,8 +901,8 @@ export default function HomeScreen() {
               />
 
               {!activeWorkout.end_time && (
-                <TouchableOpacity onPress={handleFinish} style={{ borderWidth: 1, borderColor: "#ef4444", borderRadius: 14, paddingVertical: 12, alignItems: "center", marginTop: 4 }}>
-                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#ef4444" }}>{t("workout:finishButton")}</Text>
+                <TouchableOpacity onPress={handleFinish} style={{ borderWidth: 1, borderColor: colors.danger, borderRadius: 14, paddingVertical: 12, alignItems: "center", marginTop: 4 }}>
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: colors.danger }}>{t("workout:finishButton")}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -911,23 +911,23 @@ export default function HomeScreen() {
           {/* Recent workouts — solo los del día que se está viendo */}
           {workouts.filter((w) => w.date === currentDate).length > 0 && (
             <View style={{ gap: 8 }}>
-              <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>{t("workout:recentActivityTitle")}</Text>
+              <Text style={{ fontSize: 16, fontWeight: "600", color: colors.text }}>{t("workout:recentActivityTitle")}</Text>
               {workouts.filter((w) => w.date === currentDate).map((w) => {
                 const s = recentSummaries[w.id];
                 return (
-                  <View key={w.id} style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 14, paddingRight: 8 }}>
+                  <View key={w.id} style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: colors.borderLight, borderRadius: 14, paddingRight: 8 }}>
                     <TouchableOpacity
                       onPress={() => loadWorkoutById(w.id)}
                       style={{ flex: 1, paddingHorizontal: 16, paddingVertical: 12 }}
                     >
-                      <Text style={{ fontSize: 13, fontWeight: "500", color: "#0f172a" }}>{formatWorkoutDate(w.date)}</Text>
+                      <Text style={{ fontSize: 13, fontWeight: "500", color: colors.text }}>{formatWorkoutDate(w.date)}</Text>
                       {s && s.exerciseCount > 0 ? (
                         <View style={{ flexDirection: "row", gap: 10, marginTop: 3 }}>
-                          <Text style={{ fontSize: 11, color: "#94a3b8" }}>
+                          <Text style={{ fontSize: 11, color: colors.textMuted }}>
                             {t("routines:exercisesCount", { count: s.exerciseCount })}
                           </Text>
                           {s.volume > 0 && (
-                            <Text style={{ fontSize: 11, color: "#6366f1", fontWeight: "600" }}>
+                            <Text style={{ fontSize: 11, color: colors.primary, fontWeight: "600" }}>
                               {s.volume >= 1000 ? `${(s.volume / 1000).toFixed(1)}k` : s.volume} kg
                             </Text>
                           )}
@@ -940,7 +940,7 @@ export default function HomeScreen() {
                       style={{ padding: 8 }}
                       accessibilityLabel={t("workout:deleteWorkoutLabel")}
                     >
-                      <Ionicons name="trash-outline" size={14} color="#ef4444" />
+                      <Ionicons name="trash-outline" size={14} color={colors.danger} />
                     </TouchableOpacity>
                   </View>
                 );
@@ -951,18 +951,18 @@ export default function HomeScreen() {
       )}
       {/* Start workout modal — routine selector (o selector de día si la rutina tiene varios) */}
       <Modal visible={showStartModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={closeStartModal}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceCard }}>
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: colors.borderLight }}>
             {routineDaysToPick ? (
               <TouchableOpacity onPress={() => setRoutineDaysToPick(null)} accessibilityLabel={t("workout:startModal.backLabel")} style={{ paddingRight: 12 }}>
-                <Ionicons name="chevron-back" size={22} color="#64748b" />
+                <Ionicons name="chevron-back" size={22} color={colors.textSecondary} />
               </TouchableOpacity>
             ) : null}
-            <Text style={{ flex: 1, fontSize: 16, fontWeight: "700", color: "#0f172a" }}>
+            <Text style={{ flex: 1, fontSize: 16, fontWeight: "700", color: colors.text }}>
               {routineDaysToPick ? t("workout:startModal.chooseDayTitle", { routineName: routineDaysToPick.routineName }) : t("workout:startModal.chooseRoutineTitle")}
             </Text>
             <TouchableOpacity onPress={closeStartModal} accessibilityLabel={t("common:close")}>
-              <Ionicons name="close" size={22} color="#64748b" />
+              <Ionicons name="close" size={22} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -975,31 +975,31 @@ export default function HomeScreen() {
                 <TouchableOpacity
                   onPress={() => handleLogRoutineDay(d.id)}
                   disabled={!!loggingRoutineId}
-                  style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 16, paddingHorizontal: 16, paddingVertical: 16, gap: 14, backgroundColor: "#fff", opacity: loggingRoutineId && loggingRoutineId !== d.id ? 0.4 : 1 }}
+                  style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: colors.borderLight, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 16, gap: 14, backgroundColor: colors.surfaceCard, opacity: loggingRoutineId && loggingRoutineId !== d.id ? 0.4 : 1 }}
                 >
-                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#6366f115", alignItems: "center", justifyContent: "center" }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primaryLight, alignItems: "center", justifyContent: "center" }}>
                     {loggingRoutineId === d.id
-                      ? <ActivityIndicator size="small" color="#6366f1" />
-                      : <Ionicons name="barbell-outline" size={20} color="#6366f1" />}
+                      ? <ActivityIndicator size="small" color={colors.primary} />
+                      : <Ionicons name="barbell-outline" size={20} color={colors.primary} />}
                   </View>
-                  <Text style={{ flex: 1, fontSize: 15, fontWeight: "600", color: "#0f172a" }}>{d.name}</Text>
-                  <Ionicons name="play-circle-outline" size={24} color="#6366f1" />
+                  <Text style={{ flex: 1, fontSize: 15, fontWeight: "600", color: colors.text }}>{d.name}</Text>
+                  <Ionicons name="play-circle-outline" size={24} color={colors.primary} />
                 </TouchableOpacity>
               )}
             />
           ) : startModalLoading ? (
-            <ActivityIndicator style={{ flex: 1 }} color="#6366f1" />
+            <ActivityIndicator style={{ flex: 1 }} color={colors.primary} />
           ) : startRoutines.length === 0 ? (
             <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 16 }}>
-              <Ionicons name="clipboard-outline" size={48} color="#cbd5e1" />
-              <Text style={{ fontSize: 16, fontWeight: "600", color: "#64748b", textAlign: "center" }}>{t("workout:startModal.noRoutinesTitle")}</Text>
-              <Text style={{ fontSize: 14, color: "#94a3b8", textAlign: "center" }}>
+              <Ionicons name="clipboard-outline" size={48} color={colors.textDisabled} />
+              <Text style={{ fontSize: 16, fontWeight: "600", color: colors.textSecondary, textAlign: "center" }}>{t("workout:startModal.noRoutinesTitle")}</Text>
+              <Text style={{ fontSize: 14, color: colors.textMuted, textAlign: "center" }}>
                 {t("workout:startModal.noRoutinesSubtitle")}
               </Text>
               <TouchableOpacity
                 onPress={handleStartBlankWorkout}
                 disabled={!!loggingRoutineId}
-                style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12, flexDirection: "row", alignItems: "center", gap: 8 }}
+                style={{ backgroundColor: colors.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12, flexDirection: "row", alignItems: "center", gap: 8 }}
               >
                 {loggingRoutineId === "blank"
                   ? <ActivityIndicator size="small" color="#fff" />
@@ -1009,7 +1009,7 @@ export default function HomeScreen() {
                 onPress={() => { setShowStartModal(false); router.push("/tools"); }}
                 style={{ paddingHorizontal: 24, paddingVertical: 8 }}
               >
-                <Text style={{ fontSize: 14, fontWeight: "600", color: "#6366f1" }}>{t("workout:startModal.goToRoutinesButton")}</Text>
+                <Text style={{ fontSize: 14, fontWeight: "600", color: colors.primary }}>{t("workout:startModal.goToRoutinesButton")}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -1021,32 +1021,32 @@ export default function HomeScreen() {
                 <TouchableOpacity
                   onPress={handleStartBlankWorkout}
                   disabled={!!loggingRoutineId}
-                  style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderStyle: "dashed", borderRadius: 16, paddingHorizontal: 16, paddingVertical: 16, gap: 14, backgroundColor: "#fff", marginBottom: 10, opacity: loggingRoutineId && loggingRoutineId !== "blank" ? 0.4 : 1 }}
+                  style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: colors.borderLight, borderStyle: "dashed", borderRadius: 16, paddingHorizontal: 16, paddingVertical: 16, gap: 14, backgroundColor: colors.surfaceCard, marginBottom: 10, opacity: loggingRoutineId && loggingRoutineId !== "blank" ? 0.4 : 1 }}
                 >
-                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#6366f115", alignItems: "center", justifyContent: "center" }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primaryLight, alignItems: "center", justifyContent: "center" }}>
                     {loggingRoutineId === "blank"
-                      ? <ActivityIndicator size="small" color="#6366f1" />
-                      : <Ionicons name="add-outline" size={22} color="#6366f1" />}
+                      ? <ActivityIndicator size="small" color={colors.primary} />
+                      : <Ionicons name="add-outline" size={22} color={colors.primary} />}
                   </View>
-                  <Text style={{ flex: 1, fontSize: 15, fontWeight: "600", color: "#0f172a" }}>{t("workout:startModal.blankWorkoutButton")}</Text>
+                  <Text style={{ flex: 1, fontSize: 15, fontWeight: "600", color: colors.text }}>{t("workout:startModal.blankWorkoutButton")}</Text>
                 </TouchableOpacity>
               }
               renderItem={({ item: r }) => (
                 <TouchableOpacity
                   onPress={() => handleLogRoutine(r.id)}
                   disabled={!!loggingRoutineId}
-                  style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 16, paddingHorizontal: 16, paddingVertical: 16, gap: 14, backgroundColor: "#fff", opacity: loggingRoutineId && loggingRoutineId !== r.id ? 0.4 : 1 }}
+                  style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: colors.borderLight, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 16, gap: 14, backgroundColor: colors.surfaceCard, opacity: loggingRoutineId && loggingRoutineId !== r.id ? 0.4 : 1 }}
                 >
-                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#6366f115", alignItems: "center", justifyContent: "center" }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primaryLight, alignItems: "center", justifyContent: "center" }}>
                     {loggingRoutineId === r.id
-                      ? <ActivityIndicator size="small" color="#6366f1" />
-                      : <Ionicons name="clipboard-outline" size={20} color="#6366f1" />}
+                      ? <ActivityIndicator size="small" color={colors.primary} />
+                      : <Ionicons name="clipboard-outline" size={20} color={colors.primary} />}
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 15, fontWeight: "600", color: "#0f172a" }}>{r.name}</Text>
-                    {r.notes ? <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }} numberOfLines={1}>{r.notes}</Text> : null}
+                    <Text style={{ fontSize: 15, fontWeight: "600", color: colors.text }}>{r.name}</Text>
+                    {r.notes ? <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }} numberOfLines={1}>{r.notes}</Text> : null}
                   </View>
-                  <Ionicons name="play-circle-outline" size={24} color="#6366f1" />
+                  <Ionicons name="play-circle-outline" size={24} color={colors.primary} />
                 </TouchableOpacity>
               )}
             />
@@ -1056,28 +1056,28 @@ export default function HomeScreen() {
 
       {/* Move workout modal */}
       <Modal visible={showMoveModal} animationType="fade" transparent onRequestClose={() => setShowMoveModal(false)}>
-        <View style={{ flex: 1, backgroundColor: "#00000060", justifyContent: "center", paddingHorizontal: 32 }}>
-          <View style={{ backgroundColor: "#fff", borderRadius: 16, padding: 20, gap: 16 }}>
-            <Text style={{ fontSize: 16, fontWeight: "600", color: "#0f172a" }}>{t("workout:moveModal.heading")}</Text>
+        <View style={{ flex: 1, backgroundColor: colors.overlay, justifyContent: "center", paddingHorizontal: 32 }}>
+          <View style={{ backgroundColor: colors.surfaceCard, borderRadius: 16, padding: 20, gap: 16 }}>
+            <Text style={{ fontSize: 16, fontWeight: "600", color: colors.text }}>{t("workout:moveModal.heading")}</Text>
             <View style={{ gap: 6 }}>
-              <Text style={{ fontSize: 12, color: "#64748b" }}>{t("workout:moveModal.newDateLabel")}</Text>
+              <Text style={{ fontSize: 12, color: colors.textSecondary }}>{t("workout:moveModal.newDateLabel")}</Text>
               <DateInput value={moveDate} onChange={setMoveDate} />
               {moveConflict && (
-                <Text style={{ fontSize: 12, color: "#ef4444" }}>
+                <Text style={{ fontSize: 12, color: colors.danger }}>
                   {t("workout:moveModal.conflictMessage")}
                 </Text>
               )}
             </View>
             <View style={{ flexDirection: "row", gap: 10 }}>
-              <TouchableOpacity onPress={() => setShowMoveModal(false)} style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: "#e2e8f0", alignItems: "center" }}>
-                <Text style={{ fontSize: 14, color: "#64748b" }}>{t("common:cancel")}</Text>
+              <TouchableOpacity onPress={() => setShowMoveModal(false)} style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: "center" }}>
+                <Text style={{ fontSize: 14, color: colors.textSecondary }}>{t("common:cancel")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleMoveWorkout}
                 disabled={!moveDate || moveDate === activeWorkout?.date || moveConflict}
-                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: moveDate && moveDate !== activeWorkout?.date && !moveConflict ? "#6366f1" : "#e2e8f0", alignItems: "center" }}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: moveDate && moveDate !== activeWorkout?.date && !moveConflict ? colors.primary : colors.border, alignItems: "center" }}
               >
-                <Text style={{ fontSize: 14, fontWeight: "600", color: moveDate && moveDate !== activeWorkout?.date && !moveConflict ? "#fff" : "#94a3b8" }}>{t("workout:moveButton")}</Text>
+                <Text style={{ fontSize: 14, fontWeight: "600", color: moveDate && moveDate !== activeWorkout?.date && !moveConflict ? "#fff" : colors.textMuted }}>{t("workout:moveButton")}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1086,26 +1086,26 @@ export default function HomeScreen() {
 
       {/* Copy workout modal */}
       <Modal visible={showCopyModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowCopyModal(false)}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
-            <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: "#0f172a" }}>{t("workout:copyModal.heading")}</Text>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceCard }}>
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: colors.borderLight }}>
+            <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: colors.text }}>{t("workout:copyModal.heading")}</Text>
             <TouchableOpacity onPress={() => setShowCopyModal(false)} accessibilityLabel={t("common:close")}>
-              <Ionicons name="close" size={22} color="#64748b" />
+              <Ionicons name="close" size={22} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
           <FlatList
             data={workouts.filter((w) => w.id !== activeWorkout?.id).slice(0, 10)}
             keyExtractor={(w) => w.id}
             contentContainerStyle={{ padding: 16, gap: 8 }}
-            ListEmptyComponent={<Text style={{ color: "#94a3b8", textAlign: "center", marginTop: 40 }}>{t("workout:copyModal.emptyMessage")}</Text>}
+            ListEmptyComponent={<Text style={{ color: colors.textMuted, textAlign: "center", marginTop: 40 }}>{t("workout:copyModal.emptyMessage")}</Text>}
             renderItem={({ item: w }) => (
               <TouchableOpacity
                 onPress={() => handleCopyWorkout(w.id)}
-                style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, gap: 12 }}
+                style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: colors.borderLight, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, gap: 12 }}
               >
-                <Ionicons name="calendar-outline" size={20} color="#6366f1" />
-                <Text style={{ flex: 1, fontSize: 14, fontWeight: "500", color: "#0f172a" }}>{formatWorkoutDate(w.date)}</Text>
-                <Ionicons name="copy-outline" size={16} color="#94a3b8" />
+                <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+                <Text style={{ flex: 1, fontSize: 14, fontWeight: "500", color: colors.text }}>{formatWorkoutDate(w.date)}</Text>
+                <Ionicons name="copy-outline" size={16} color={colors.textMuted} />
               </TouchableOpacity>
             )}
           />
@@ -1113,22 +1113,22 @@ export default function HomeScreen() {
       </Modal>
 
       {copyLoading && (
-        <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#00000030", justifyContent: "center", alignItems: "center" }}>
-          <View style={{ backgroundColor: "#fff", borderRadius: 16, padding: 24, alignItems: "center", gap: 12 }}>
-            <ActivityIndicator color="#6366f1" />
-            <Text style={{ fontSize: 14, color: "#64748b" }}>{t("workout:copyModal.copyingMessage")}</Text>
+        <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.overlay, justifyContent: "center", alignItems: "center" }}>
+          <View style={{ backgroundColor: colors.surfaceCard, borderRadius: 16, padding: 24, alignItems: "center", gap: 12 }}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={{ fontSize: 14, color: colors.textSecondary }}>{t("workout:copyModal.copyingMessage")}</Text>
           </View>
         </View>
       )}
 
       {/* Workout finish summary modal */}
       <Modal visible={showSummary} animationType="fade" transparent onRequestClose={() => setShowSummary(false)}>
-        <View style={{ flex: 1, backgroundColor: "#00000050", justifyContent: "center", alignItems: "center", padding: 24 }}>
-          <View style={{ backgroundColor: "#fff", borderRadius: 24, padding: 28, width: "100%", alignItems: "center", gap: 20 }}>
-            <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: "#6366f115", alignItems: "center", justifyContent: "center" }}>
-              <Ionicons name="trophy" size={28} color="#6366f1" />
+        <View style={{ flex: 1, backgroundColor: colors.overlay, justifyContent: "center", alignItems: "center", padding: 24 }}>
+          <View style={{ backgroundColor: colors.surfaceCard, borderRadius: 24, padding: 28, width: "100%", alignItems: "center", gap: 20 }}>
+            <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: colors.primaryLight, alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="trophy" size={28} color={colors.primary} />
             </View>
-            <Text style={{ fontSize: 20, fontWeight: "700", color: "#0f172a" }}>{t("workout:summaryModal.heading")}</Text>
+            <Text style={{ fontSize: 20, fontWeight: "700", color: colors.text }}>{t("workout:summaryModal.heading")}</Text>
             {summaryStats && (
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "center", width: "100%" }}>
                 {[
@@ -1137,17 +1137,17 @@ export default function HomeScreen() {
                   { icon: "list-outline" as const, label: t("workout:summaryModal.setsLabel"), value: String(summaryStats.sets) },
                   { icon: "flame-outline" as const, label: t("workout:summaryModal.volumeLabel"), value: summaryStats.volume > 0 ? (summaryStats.volume >= 1000 ? `${(summaryStats.volume / 1000).toFixed(1)}k kg` : `${summaryStats.volume} kg`) : "—" },
                 ].map((stat) => (
-                  <View key={stat.label} style={{ width: "45%", backgroundColor: "#f8fafc", borderRadius: 14, padding: 14, alignItems: "center", gap: 4 }}>
-                    <Ionicons name={stat.icon} size={20} color="#6366f1" />
-                    <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>{stat.value}</Text>
-                    <Text style={{ fontSize: 11, color: "#94a3b8", fontWeight: "600", textTransform: "uppercase" }}>{stat.label}</Text>
+                  <View key={stat.label} style={{ width: "45%", backgroundColor: colors.backgroundAlt, borderRadius: 14, padding: 14, alignItems: "center", gap: 4 }}>
+                    <Ionicons name={stat.icon} size={20} color={colors.primary} />
+                    <Text style={{ fontSize: 18, fontWeight: "700", color: colors.text }}>{stat.value}</Text>
+                    <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: "600", textTransform: "uppercase" }}>{stat.label}</Text>
                   </View>
                 ))}
               </View>
             )}
             <TouchableOpacity
               onPress={() => setShowSummary(false)}
-              style={{ backgroundColor: "#6366f1", borderRadius: 14, paddingHorizontal: 40, paddingVertical: 14, width: "100%", alignItems: "center" }}
+              style={{ backgroundColor: colors.primary, borderRadius: 14, paddingHorizontal: 40, paddingVertical: 14, width: "100%", alignItems: "center" }}
             >
               <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>{t("workout:summaryModal.closeButton")}</Text>
             </TouchableOpacity>
