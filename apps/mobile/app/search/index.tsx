@@ -125,8 +125,7 @@ export default function SearchScreen() {
             const cat = catMap[ex.category_id ?? ""];
             return (
               <TouchableOpacity
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                onPress={() => router.push(`/exercise-history/${ex.id}` as any)}
+                onPress={() => router.push({ pathname: "/exercise-history/[exerciseId]", params: { exerciseId: ex.id, name: ex.name, type: ex.type, weightUnit: ex.weight_unit } } as never)}
                 style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.backgroundAlt, gap: 12 }}
               >
                 {/* Left: name + meta */}
