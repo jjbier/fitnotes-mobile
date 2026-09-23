@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, TextInput, Modal, Alert, ActivityIndicator } from "react-native";
+import { ScrollView, Text, View, TouchableOpacity, TextInput, Modal, Alert, ActivityIndicator } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";

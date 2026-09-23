@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator, Alert, TextInput, Modal, FlatList } from "react-native";
+import { ScrollView, Text, View, TouchableOpacity, ActivityIndicator, Alert, TextInput, Modal, FlatList } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { NestableScrollContainer, NestableDraggableFlatList, ScaleDecorator, type RenderItemParams } from "react-native-draggable-flatlist";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useTranslation } from "react-i18next";

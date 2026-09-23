@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import {
-  SafeAreaView, ScrollView, Text, View, TouchableOpacity,
+  ScrollView, Text, View, TouchableOpacity,
   ActivityIndicator, Alert, Modal, TextInput, KeyboardAvoidingView, Platform,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useExerciseStore, useProgressStore, calculate1RM, ExerciseType } from "@fitnotes/core";

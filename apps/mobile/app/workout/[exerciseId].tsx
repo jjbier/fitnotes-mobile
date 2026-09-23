@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback, memo } from "react";
-import { SafeAreaView, Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, FlatList, ScrollView, Vibration, useWindowDimensions } from "react-native";
+import { Text, View, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, FlatList, ScrollView, Vibration, useWindowDimensions } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import * as FileSystem from "expo-file-system";
 import { Audio } from "expo-av";
 import { useTranslation } from "react-i18next";

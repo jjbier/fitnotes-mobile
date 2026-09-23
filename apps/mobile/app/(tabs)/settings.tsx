@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  SafeAreaView,
   ScrollView,
   Text,
   View,
@@ -14,6 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";

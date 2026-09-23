@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator } from "react-native";
+import { ScrollView, Text, View, TouchableOpacity, ActivityIndicator } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useProgressStore, useExerciseStore, calculate1RM, ExerciseType, getWeekRange, todayISO } from "@fitnotes/core";
 import { useRouter, useFocusEffect } from "expo-router";

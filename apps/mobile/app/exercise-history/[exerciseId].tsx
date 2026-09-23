@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "../../lib/theme";
 import {
-  SafeAreaView, Text, View, TouchableOpacity,
+  Text, View, TouchableOpacity,
   ActivityIndicator, FlatList, useWindowDimensions, ScrollView,
   Modal, TextInput, Alert, Image, Linking,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { SafeAreaView, ScrollView, Text, View, TextInput, TouchableOpacity, Alert } from "react-native";
+import { ScrollView, Text, View, TextInput, TouchableOpacity, Alert } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { useTheme } from "../../lib/theme";

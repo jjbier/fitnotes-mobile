@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import type { AppStateStatus } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useRouter, useSegments } from "expo-router";
@@ -115,17 +116,32 @@ const styles = StyleSheet.create({
 /**
  * Layout raíz de la app (`app/_layout.tsx`). Envuelve todo el árbol en
  * `GestureHandlerRootView` (requerido por `react-native-gesture-handler`, usado
- * en drag&drop de calendario/ejercicios/entrenamiento) y en `RepositoryProvider`
- * (resuelve la identidad local — invitado o cuenta real — y expone los repos
- * locales vía `useRepositories()`). Toda la lógica real vive en `AppContent`,
- * que necesita estar dentro del provider para leer `userId`/`isGuest`.
+ * en drag&drop de calendario/ejercicios/entrenamiento), en `SafeAreaProvider`
+ * (necesario para que el `SafeAreaView` de `react-native-safe-area-context` —
+ * usado en todas las pantallas, ver más abajo — resuelva los insets reales;
+ * sin él caían siempre a cero) y en `RepositoryProvider` (resuelve la
+ * identidad local — invitado o cuenta real — y expone los repos locales vía
+ * `useRepositories()`). Toda la lógica real vive en `AppContent`, que
+ * necesita estar dentro del provider para leer `userId`/`isGuest`.
+ *
+ * **`SafeAreaView` (2026-09-23)**: todas las pantallas usan el `SafeAreaView`
+ * de `react-native-safe-area-context`, no el de `react-native` — el de RN
+ * solo añade padding en iOS (no-op en Android, ver la propia doc de RN), así
+ * que en Android el contenido de toda pantalla con `headerShown: false`
+ * (la mayoría) se dibujaba debajo de la status bar y la cabecera propia de
+ * cada pantalla (título, botones) quedaba tapada/cortada por ella —
+ * especialmente visible en Configuración, cuyo título es el primer elemento
+ * del scroll. Al añadir una pantalla nueva, importar `SafeAreaView` siempre
+ * de `"react-native-safe-area-context"`.
  */
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <RepositoryProvider>
-        <AppContent />
-      </RepositoryProvider>
+      <SafeAreaProvider>
+        <RepositoryProvider>
+          <AppContent />
+        </RepositoryProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

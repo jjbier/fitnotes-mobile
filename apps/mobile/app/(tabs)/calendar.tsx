@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Dimensions, PanResponder, SafeAreaView, ScrollView, Text, View, TouchableOpacity, ActivityIndicator, Modal, TextInput } from "react-native";
+import { Animated, Dimensions, PanResponder, ScrollView, Text, View, TouchableOpacity, ActivityIndicator, Modal, TextInput } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";

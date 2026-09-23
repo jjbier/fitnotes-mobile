@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import {
-  SafeAreaView, ScrollView, Text, View, TouchableOpacity,
+  ScrollView, Text, View, TouchableOpacity,
   TextInput, ActivityIndicator, Alert,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
@@ -188,7 +189,7 @@ export default function ExerciseCategoryScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+    <SafeAreaView edges={["left", "right", "bottom"]} style={{ flex: 1, backgroundColor: theme.background }}>
       {/* Search + add */}
       <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, flexDirection: "row", gap: 8 }}>
         <View style={{ flex: 1, flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: theme.border, backgroundColor: theme.inputBg, borderRadius: 12, paddingHorizontal: 12, gap: 8 }}>
