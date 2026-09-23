@@ -425,35 +425,35 @@ export default function ExerciseHistoryScreen() {
             />
           ) : (
             <TouchableOpacity onPress={() => Linking.openURL(storeExercise.demo_url!)}>
-              <Text style={{ fontSize: 13, color: "#6366f1", fontWeight: "600" }}>{t("exercises:demoUrlOpenLink")}</Text>
+              <Text style={{ fontSize: 13, color: colors.primary, fontWeight: "600" }}>{t("exercises:demoUrlOpenLink")}</Text>
             </TouchableOpacity>
           )}
         </View>
       )}
 
       {/* Tabs */}
-      <View style={{ backgroundColor: "#fff", borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
+      <View style={{ backgroundColor: colors.surfaceCard, borderBottomWidth: 1, borderColor: colors.borderLight }}>
         <View style={{ flexDirection: "row" }}>
           {([["history", "time-outline", "Historial"], ["chart", "trending-up-outline", "Gráfico"], ["stats", "bar-chart-outline", "Estadísticas"]] as const).map(([key, icon, label]) => (
             <TouchableOpacity
               key={key}
               onPress={() => setTab(key)}
-              style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderBottomWidth: 2, borderColor: tab === key ? "#6366f1" : "transparent" }}
+              style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderBottomWidth: 2, borderColor: tab === key ? colors.primary : "transparent" }}
             >
-              <Ionicons name={icon} size={16} color={tab === key ? "#6366f1" : "#94a3b8"} />
-              <Text style={{ fontSize: 13, fontWeight: "600", color: tab === key ? "#6366f1" : "#94a3b8" }}>{label}</Text>
+              <Ionicons name={icon} size={16} color={tab === key ? colors.primary : colors.textMuted} />
+              <Text style={{ fontSize: 13, fontWeight: "600", color: tab === key ? colors.primary : colors.textMuted }}>{label}</Text>
             </TouchableOpacity>
           ))}
         </View>
         {tab === "history" && (
           <TouchableOpacity
             onPress={() => setHideWarmup((v) => !v)}
-            style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 7, borderTopWidth: 1, borderColor: "#f8fafc" }}
+            style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 7, borderTopWidth: 1, borderColor: colors.backgroundAlt }}
           >
-            <View style={{ width: 16, height: 16, borderRadius: 4, borderWidth: 1.5, borderColor: hideWarmup ? "#6366f1" : "#cbd5e1", backgroundColor: hideWarmup ? "#6366f1" : "transparent", alignItems: "center", justifyContent: "center" }}>
+            <View style={{ width: 16, height: 16, borderRadius: 4, borderWidth: 1.5, borderColor: hideWarmup ? colors.primary : colors.textDisabled, backgroundColor: hideWarmup ? colors.primary : "transparent", alignItems: "center", justifyContent: "center" }}>
               {hideWarmup && <Ionicons name="checkmark" size={10} color="#fff" />}
             </View>
-            <Text style={{ fontSize: 12, color: "#64748b" }}>Ocultar calentamientos</Text>
+            <Text style={{ fontSize: 12, color: colors.textSecondary }}>Ocultar calentamientos</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -461,14 +461,14 @@ export default function ExerciseHistoryScreen() {
       {/* History tab */}
       {tab === "history" && (
         loading ? (
-          <ActivityIndicator style={{ marginTop: 48 }} color="#6366f1" />
+          <ActivityIndicator style={{ marginTop: 48 }} color={colors.primary} />
         ) : error ? (
-          <Text style={{ textAlign: "center", marginTop: 48, color: "#ef4444", paddingHorizontal: 24 }}>{error}</Text>
+          <Text style={{ textAlign: "center", marginTop: 48, color: colors.danger, paddingHorizontal: 24 }}>{error}</Text>
         ) : sessions.length === 0 ? (
           <View style={{ alignItems: "center", marginTop: 80, paddingHorizontal: 32 }}>
-            <Ionicons name="time-outline" size={48} color="#cbd5e1" />
-            <Text style={{ fontSize: 16, fontWeight: "600", color: "#64748b", marginTop: 16 }}>Sin historial</Text>
-            <Text style={{ fontSize: 14, color: "#94a3b8", textAlign: "center", marginTop: 8 }}>
+            <Ionicons name="time-outline" size={48} color={colors.textDisabled} />
+            <Text style={{ fontSize: 16, fontWeight: "600", color: colors.textSecondary, marginTop: 16 }}>Sin historial</Text>
+            <Text style={{ fontSize: 14, color: colors.textMuted, textAlign: "center", marginTop: 8 }}>
               Este ejercicio no tiene series registradas todavía.
             </Text>
           </View>
@@ -481,16 +481,16 @@ export default function ExerciseHistoryScreen() {
               const visibleSets = hideWarmup ? session.sets.filter((s) => !s.is_warmup) : session.sets;
               if (visibleSets.length === 0 && hideWarmup) return null;
               return (
-              <View style={{ backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: "#f1f5f9", overflow: "hidden" }}>
-                <View style={{ backgroundColor: "#f8fafc", paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
+              <View style={{ backgroundColor: colors.surfaceCard, borderRadius: 12, borderWidth: 1, borderColor: colors.borderLight, overflow: "hidden" }}>
+                <View style={{ backgroundColor: colors.backgroundAlt, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderColor: colors.borderLight }}>
                   <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#0f172a", textTransform: "capitalize", flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: colors.text, textTransform: "capitalize", flex: 1 }}>
                       {formatFullDate(session.date, dateLocale(i18n.language))}
                     </Text>
                     {(() => {
                       const vol = visibleSets.filter((s) => s.is_complete && !s.is_warmup).reduce((acc, s) => acc + (s.weight && s.reps ? s.weight * s.reps : 0), 0);
                       return vol > 0 ? (
-                        <Text style={{ fontSize: 11, color: "#6366f1", fontWeight: "600", marginRight: 10 }}>{vol.toLocaleString()} {unit}</Text>
+                        <Text style={{ fontSize: 11, color: colors.primary, fontWeight: "600", marginRight: 10 }}>{vol.toLocaleString()} {unit}</Text>
                       ) : null;
                     })()}
                     <TouchableOpacity
@@ -498,16 +498,16 @@ export default function ExerciseHistoryScreen() {
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       accessibilityLabel="Ver entrenamiento completo"
                     >
-                      <Ionicons name="list-outline" size={16} color="#94a3b8" />
+                      <Ionicons name="list-outline" size={16} color={colors.textMuted} />
                     </TouchableOpacity>
                   </View>
                   {session.comment ? (
-                    <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }} numberOfLines={1}>{session.comment}</Text>
+                    <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }} numberOfLines={1}>{session.comment}</Text>
                   ) : null}
                 </View>
                 <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
                   {visibleSets.length === 0 ? (
-                    <Text style={{ fontSize: 13, color: "#cbd5e1", paddingVertical: 6 }}>Sin series</Text>
+                    <Text style={{ fontSize: 13, color: colors.textDisabled, paddingVertical: 6 }}>Sin series</Text>
                   ) : (
                     visibleSets.map((set, idx) => (
                       <TouchableOpacity
@@ -515,20 +515,20 @@ export default function ExerciseHistoryScreen() {
                         onPress={() => selectMode ? toggleSetSelection(set.id) : openEditSet(sessions.indexOf(session), idx, set)}
                         onLongPress={() => !selectMode && enterSelectMode(set.id)}
                         delayLongPress={400}
-                        style={{ flexDirection: "row", alignItems: "center", paddingVertical: 7, borderBottomWidth: idx < session.sets.length - 1 ? 1 : 0, borderColor: "#f8fafc", backgroundColor: selectMode && selectedSetIds.has(set.id) ? "#6366f108" : "transparent", borderRadius: 6 }}
+                        style={{ flexDirection: "row", alignItems: "center", paddingVertical: 7, borderBottomWidth: idx < session.sets.length - 1 ? 1 : 0, borderColor: colors.backgroundAlt, backgroundColor: selectMode && selectedSetIds.has(set.id) ? colors.primary + "08" : "transparent", borderRadius: 6 }}
                       >
                         {selectMode ? (
-                          <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: selectedSetIds.has(set.id) ? "#6366f1" : "#cbd5e1", backgroundColor: selectedSetIds.has(set.id) ? "#6366f1" : "transparent", alignItems: "center", justifyContent: "center", marginRight: 10 }}>
+                          <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: selectedSetIds.has(set.id) ? colors.primary : colors.textDisabled, backgroundColor: selectedSetIds.has(set.id) ? colors.primary : "transparent", alignItems: "center", justifyContent: "center", marginRight: 10 }}>
                             {selectedSetIds.has(set.id) && <Ionicons name="checkmark" size={12} color="#fff" />}
                           </View>
                         ) : (
-                          <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: set.is_warmup ? "#fef3c7" : set.is_complete ? "#6366f115" : "#f1f5f9", alignItems: "center", justifyContent: "center", marginRight: 12 }}>
-                            <Text style={{ fontSize: 11, fontWeight: "600", color: set.is_warmup ? "#d97706" : set.is_complete ? "#6366f1" : "#94a3b8" }}>{set.is_warmup ? "W" : idx + 1}</Text>
+                          <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: set.is_warmup ? colors.warmupBadge : set.is_complete ? colors.primaryLight : colors.borderLight, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
+                            <Text style={{ fontSize: 11, fontWeight: "600", color: set.is_warmup ? colors.warmupText : set.is_complete ? colors.primary : colors.textMuted }}>{set.is_warmup ? "W" : idx + 1}</Text>
                           </View>
                         )}
-                        <Text style={{ fontSize: 14, color: "#0f172a", flex: 1 }}>{formatSetDisplay(set, exerciseType, unit)}</Text>
+                        <Text style={{ fontSize: 14, color: colors.text, flex: 1 }}>{formatSetDisplay(set, exerciseType, unit)}</Text>
                         {!selectMode && set.comment ? (
-                          <Text style={{ fontSize: 11, color: "#94a3b8", maxWidth: 100 }} numberOfLines={1}>{set.comment}</Text>
+                          <Text style={{ fontSize: 11, color: colors.textMuted, maxWidth: 100 }} numberOfLines={1}>{set.comment}</Text>
                         ) : null}
                         {!selectMode && (
                           <TouchableOpacity
@@ -541,11 +541,11 @@ export default function ExerciseHistoryScreen() {
                             <Ionicons
                               name={copiedSetIds.has(set.id) ? "checkmark-circle" : "copy-outline"}
                               size={15}
-                              color={copiedSetIds.has(set.id) ? "#10b981" : "#94a3b8"}
+                              color={copiedSetIds.has(set.id) ? colors.success : colors.textMuted}
                             />
                           </TouchableOpacity>
                         )}
-                        {!selectMode && <Ionicons name="pencil-outline" size={13} color="#cbd5e1" style={{ marginLeft: 6 }} />}
+                        {!selectMode && <Ionicons name="pencil-outline" size={13} color={colors.textDisabled} style={{ marginLeft: 6 }} />}
                       </TouchableOpacity>
                     ))
                   )}
@@ -560,13 +560,13 @@ export default function ExerciseHistoryScreen() {
       {/* Stats tab */}
       {tab === "stats" && (
         loading ? (
-          <ActivityIndicator style={{ marginTop: 48 }} color="#6366f1" />
+          <ActivityIndicator style={{ marginTop: 48 }} color={colors.primary} />
         ) : error ? (
-          <Text style={{ textAlign: "center", marginTop: 48, color: "#ef4444", paddingHorizontal: 24 }}>{error}</Text>
+          <Text style={{ textAlign: "center", marginTop: 48, color: colors.danger, paddingHorizontal: 24 }}>{error}</Text>
         ) : sessions.length === 0 ? (
           <View style={{ alignItems: "center", marginTop: 80, paddingHorizontal: 32 }}>
-            <Ionicons name="bar-chart-outline" size={48} color="#cbd5e1" />
-            <Text style={{ fontSize: 16, fontWeight: "600", color: "#64748b", marginTop: 16 }}>Sin datos</Text>
+            <Ionicons name="bar-chart-outline" size={48} color={colors.textDisabled} />
+            <Text style={{ fontSize: 16, fontWeight: "600", color: colors.textSecondary, marginTop: 16 }}>Sin datos</Text>
           </View>
         ) : (() => {
           const filteredSessions = (() => {
@@ -611,9 +611,9 @@ export default function ExerciseHistoryScreen() {
                   <TouchableOpacity
                     key={key}
                     onPress={() => setStatsPeriod(key)}
-                    style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 18, borderWidth: 1.5, borderColor: statsPeriod === key ? "#6366f1" : "#e2e8f0", backgroundColor: statsPeriod === key ? "#6366f1" : "transparent" }}
+                    style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 18, borderWidth: 1.5, borderColor: statsPeriod === key ? colors.primary : colors.border, backgroundColor: statsPeriod === key ? colors.primary : "transparent" }}
                   >
-                    <Text style={{ fontSize: 12, fontWeight: "600", color: statsPeriod === key ? "#fff" : "#64748b" }}>{label}</Text>
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: statsPeriod === key ? "#fff" : colors.textSecondary }}>{label}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -631,12 +631,12 @@ export default function ExerciseHistoryScreen() {
 
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                 {stats.map((stat) => (
-                  <View key={stat.label} style={{ width: "47%", backgroundColor: "#f8fafc", borderRadius: 14, borderWidth: 1, borderColor: "#f1f5f9", padding: 14, gap: 6 }}>
+                  <View key={stat.label} style={{ width: "47%", backgroundColor: colors.backgroundAlt, borderRadius: 14, borderWidth: 1, borderColor: colors.borderLight, padding: 14, gap: 6 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                      <Ionicons name={stat.icon} size={14} color="#94a3b8" />
-                      <Text style={{ fontSize: 11, fontWeight: "600", color: "#94a3b8", textTransform: "uppercase" }}>{stat.label}</Text>
+                      <Ionicons name={stat.icon} size={14} color={colors.textMuted} />
+                      <Text style={{ fontSize: 11, fontWeight: "600", color: colors.textMuted, textTransform: "uppercase" }}>{stat.label}</Text>
                     </View>
-                    <Text style={{ fontSize: 20, fontWeight: "700", color: "#0f172a" }}>{stat.value}</Text>
+                    <Text style={{ fontSize: 20, fontWeight: "700", color: colors.text }}>{stat.value}</Text>
                   </View>
                 ))}
               </View>
@@ -648,12 +648,12 @@ export default function ExerciseHistoryScreen() {
       {/* Chart tab */}
       {tab === "chart" && (
         chartLoading ? (
-          <ActivityIndicator style={{ marginTop: 48 }} color="#6366f1" />
+          <ActivityIndicator style={{ marginTop: 48 }} color={colors.primary} />
         ) : chartPoints.length === 0 ? (
           <View style={{ alignItems: "center", marginTop: 80, paddingHorizontal: 32 }}>
-            <Ionicons name="trending-up-outline" size={48} color="#cbd5e1" />
-            <Text style={{ fontSize: 16, fontWeight: "600", color: "#64748b", marginTop: 16 }}>Sin datos</Text>
-            <Text style={{ fontSize: 14, color: "#94a3b8", textAlign: "center", marginTop: 8 }}>
+            <Ionicons name="trending-up-outline" size={48} color={colors.textDisabled} />
+            <Text style={{ fontSize: 16, fontWeight: "600", color: colors.textSecondary, marginTop: 16 }}>Sin datos</Text>
+            <Text style={{ fontSize: 14, color: colors.textMuted, textAlign: "center", marginTop: 8 }}>
               Completa series marcándolas como completadas para ver tu progreso.
             </Text>
           </View>
@@ -671,52 +671,52 @@ export default function ExerciseHistoryScreen() {
                       updateExerciseStore(exerciseId, { default_chart: m.key as "weight" | "volume" | "reps" });
                     }
                   }}
-                  style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, borderColor: metric === m.key ? "#6366f1" : "#e2e8f0", backgroundColor: metric === m.key ? "#6366f1" : "transparent", alignItems: "center" }}
+                  style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, borderColor: metric === m.key ? colors.primary : colors.border, backgroundColor: metric === m.key ? colors.primary : "transparent", alignItems: "center" }}
                 >
-                  <Text style={{ fontSize: 12, fontWeight: "600", color: metric === m.key ? "#fff" : "#64748b" }}>{m.label}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: metric === m.key ? "#fff" : colors.textSecondary }}>{m.label}</Text>
                 </TouchableOpacity>
               ))}
               <TouchableOpacity
                 onPress={() => setShowTrend((v) => !v)}
-                style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, borderColor: showTrend ? "#f97316" : "#e2e8f0", backgroundColor: showTrend ? "#f97316" : "transparent", alignItems: "center" }}
+                style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, borderColor: showTrend ? colors.warning : colors.border, backgroundColor: showTrend ? colors.warning : "transparent", alignItems: "center" }}
               >
-                <Text style={{ fontSize: 12, fontWeight: "600", color: showTrend ? "#fff" : "#64748b" }}>Tendencia</Text>
+                <Text style={{ fontSize: 12, fontWeight: "600", color: showTrend ? "#fff" : colors.textSecondary }}>Tendencia</Text>
               </TouchableOpacity>
             </View>
 
             {isSpecialMetric && (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748b" }}>Repeticiones:</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: colors.textSecondary }}>Repeticiones:</Text>
                 <TouchableOpacity
                   onPress={() => setRepTarget((v) => Math.max(1, v - 1))}
-                  style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: "#e2e8f0", alignItems: "center", justifyContent: "center" }}
+                  style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }}
                 >
-                  <Text style={{ fontSize: 16, color: "#64748b" }}>−</Text>
+                  <Text style={{ fontSize: 16, color: colors.textSecondary }}>−</Text>
                 </TouchableOpacity>
-                <Text style={{ fontSize: 14, fontWeight: "700", color: "#0f172a", minWidth: 20, textAlign: "center" }}>{repTarget}</Text>
+                <Text style={{ fontSize: 14, fontWeight: "700", color: colors.text, minWidth: 20, textAlign: "center" }}>{repTarget}</Text>
                 <TouchableOpacity
                   onPress={() => setRepTarget((v) => Math.min(15, v + 1))}
-                  style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: "#e2e8f0", alignItems: "center", justifyContent: "center" }}
+                  style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }}
                 >
-                  <Text style={{ fontSize: 16, color: "#64748b" }}>+</Text>
+                  <Text style={{ fontSize: 16, color: colors.textSecondary }}>+</Text>
                 </TouchableOpacity>
               </View>
             )}
 
             {/* Chart */}
             <ViewShot ref={chartShotRef} options={{ format: "png", quality: 0.95 }}>
-              <View style={{ backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: "#f1f5f9", padding: 16 }}>
+              <View style={{ backgroundColor: colors.surfaceCard, borderRadius: 16, borderWidth: 1, borderColor: colors.borderLight, padding: 16 }}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 8 }}>
                   <View>
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#0f172a" }}>
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: colors.text }}>
                       {storeExercise?.name ?? name}
                     </Text>
-                    <Text style={{ fontSize: 11, color: "#94a3b8" }}>{availableMetrics.find((m) => m.key === metric)?.label}</Text>
+                    <Text style={{ fontSize: 11, color: colors.textMuted }}>{availableMetrics.find((m) => m.key === metric)?.label}</Text>
                   </View>
-                  <Text style={{ fontSize: 11, color: "#94a3b8" }}>{chartUnit}</Text>
+                  <Text style={{ fontSize: 11, color: colors.textMuted }}>{chartUnit}</Text>
                 </View>
                 {chartData.length === 0 ? (
-                  <Text style={{ fontSize: 13, color: "#94a3b8", textAlign: "center", paddingVertical: 24 }}>
+                  <Text style={{ fontSize: 13, color: colors.textMuted, textAlign: "center", paddingVertical: 24 }}>
                     Sin sesiones a {repTarget} reps aún.
                   </Text>
                 ) : (
@@ -729,14 +729,14 @@ export default function ExerciseHistoryScreen() {
               <TouchableOpacity
                 onPress={handleExportImage}
                 disabled={exportingImage}
-                style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingVertical: 10, opacity: exportingImage ? 0.5 : 1 }}
+                style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingVertical: 10, opacity: exportingImage ? 0.5 : 1 }}
               >
                 {exportingImage ? (
-                  <ActivityIndicator size="small" color="#6366f1" />
+                  <ActivityIndicator size="small" color={colors.primary} />
                 ) : (
                   <>
-                    <Ionicons name="share-outline" size={15} color="#6366f1" />
-                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#6366f1" }}>Compartir imagen del gráfico</Text>
+                    <Ionicons name="share-outline" size={15} color={colors.primary} />
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: colors.primary }}>Compartir imagen del gráfico</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -756,9 +756,9 @@ export default function ExerciseHistoryScreen() {
                     { label: "Último", value: `${latest % 1 === 0 ? latest : latest.toFixed(1)} ${chartUnit}` },
                     { label: "Progresión", value: `${trend >= 0 ? "+" : ""}${trend.toFixed(1)}%`, positive: trend >= 0 },
                   ].map((stat) => (
-                    <View key={stat.label} style={{ flex: 1, backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: "#f1f5f9", padding: 12, alignItems: "center", gap: 4 }}>
-                      <Text style={{ fontSize: 10, fontWeight: "600", color: "#94a3b8", textTransform: "uppercase" }}>{stat.label}</Text>
-                      <Text style={{ fontSize: 14, fontWeight: "700", color: "positive" in stat && stat.positive === false ? "#ef4444" : "#0f172a" }}>{stat.value}</Text>
+                    <View key={stat.label} style={{ flex: 1, backgroundColor: colors.surfaceCard, borderRadius: 12, borderWidth: 1, borderColor: colors.borderLight, padding: 12, alignItems: "center", gap: 4 }}>
+                      <Text style={{ fontSize: 10, fontWeight: "600", color: colors.textMuted, textTransform: "uppercase" }}>{stat.label}</Text>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: "positive" in stat && stat.positive === false ? colors.danger : colors.text }}>{stat.value}</Text>
                     </View>
                   ))}
                 </View>
@@ -766,7 +766,7 @@ export default function ExerciseHistoryScreen() {
             })()}
 
             {/* Sessions count */}
-            <Text style={{ fontSize: 11, color: "#94a3b8", textAlign: "center" }}>
+            <Text style={{ fontSize: 11, color: colors.textMuted, textAlign: "center" }}>
               {chartPoints.length} sesiones registradas
             </Text>
           </ScrollView>
@@ -774,67 +774,67 @@ export default function ExerciseHistoryScreen() {
       )}
       {/* Multi-select action bar */}
       {selectMode && tab === "history" && (
-        <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "#fff", borderTopWidth: 1, borderColor: "#e2e8f0", paddingHorizontal: 16, paddingVertical: 12, paddingBottom: 20, flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <Text style={{ flex: 1, fontSize: 13, fontWeight: "600", color: "#0f172a" }}>{selectedSetIds.size} {selectedSetIds.size === 1 ? "serie" : "series"}</Text>
+        <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: colors.surfaceCard, borderTopWidth: 1, borderColor: colors.border, paddingHorizontal: 16, paddingVertical: 12, paddingBottom: 20, flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Text style={{ flex: 1, fontSize: 13, fontWeight: "600", color: colors.text }}>{selectedSetIds.size} {selectedSetIds.size === 1 ? "serie" : "series"}</Text>
           <TouchableOpacity
             onPress={() => { setBulkWeight(""); setBulkReps(""); setBulkEditVisible(true); }}
             disabled={selectedSetIds.size === 0}
-            style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, backgroundColor: "#6366f1", opacity: selectedSetIds.size === 0 ? 0.4 : 1 }}
+            style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, backgroundColor: colors.primary, opacity: selectedSetIds.size === 0 ? 0.4 : 1 }}
           >
             <Text style={{ fontSize: 13, fontWeight: "600", color: "#fff" }}>Editar</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={handleBulkDelete}
             disabled={selectedSetIds.size === 0}
-            style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, backgroundColor: "#fee2e2", opacity: selectedSetIds.size === 0 ? 0.4 : 1 }}
+            style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, backgroundColor: colors.dangerBg, opacity: selectedSetIds.size === 0 ? 0.4 : 1 }}
           >
-            <Text style={{ fontSize: 13, fontWeight: "600", color: "#ef4444" }}>Eliminar</Text>
+            <Text style={{ fontSize: 13, fontWeight: "600", color: colors.danger }}>Eliminar</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={exitSelectMode} style={{ padding: 6 }}>
-            <Ionicons name="close" size={20} color="#64748b" />
+            <Ionicons name="close" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
       )}
 
       {/* Bulk edit modal */}
       <Modal visible={bulkEditVisible} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setBulkEditVisible(false)}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceCard }}>
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: colors.borderLight }}>
             <TouchableOpacity onPress={() => setBulkEditVisible(false)} style={{ marginRight: 12 }}>
-              <Ionicons name="close" size={22} color="#64748b" />
+              <Ionicons name="close" size={22} color={colors.textSecondary} />
             </TouchableOpacity>
-            <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: "#0f172a" }}>
+            <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: colors.text }}>
               Editar {selectedSetIds.size} {selectedSetIds.size === 1 ? "serie" : "series"}
             </Text>
           </View>
           <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
-            <Text style={{ fontSize: 13, color: "#64748b" }}>Los campos vacíos no se modifican.</Text>
+            <Text style={{ fontSize: 13, color: colors.textSecondary }}>Los campos vacíos no se modifican.</Text>
             <View style={{ gap: 6 }}>
-              <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748b" }}>{unit.toUpperCase()}</Text>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: colors.textSecondary }}>{unit.toUpperCase()}</Text>
               <TextInput
-                style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 }}
+                style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 }}
                 keyboardType="decimal-pad"
                 value={bulkWeight}
                 onChangeText={setBulkWeight}
                 placeholder="Sin cambios"
-                placeholderTextColor="#cbd5e1"
+                placeholderTextColor={colors.textDisabled}
               />
             </View>
             <View style={{ gap: 6 }}>
-              <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748b" }}>REPS</Text>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: colors.textSecondary }}>REPS</Text>
               <TextInput
-                style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 }}
+                style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 }}
                 keyboardType="number-pad"
                 value={bulkReps}
                 onChangeText={setBulkReps}
                 placeholder="Sin cambios"
-                placeholderTextColor="#cbd5e1"
+                placeholderTextColor={colors.textDisabled}
               />
             </View>
             <TouchableOpacity
               onPress={handleBulkEdit}
               disabled={bulkSaving || (!bulkWeight && !bulkReps)}
-              style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", marginTop: 8, opacity: !bulkWeight && !bulkReps ? 0.5 : 1 }}
+              style={{ backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center", marginTop: 8, opacity: !bulkWeight && !bulkReps ? 0.5 : 1 }}
             >
               {bulkSaving
                 ? <ActivityIndicator color="#fff" />
@@ -847,87 +847,87 @@ export default function ExerciseHistoryScreen() {
 
       {/* Edit set modal */}
       <Modal visible={editSet !== null} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setEditSet(null)}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: "#f1f5f9" }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceCard }}>
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: colors.borderLight }}>
             <TouchableOpacity onPress={() => setEditSet(null)} style={{ marginRight: 12 }}>
-              <Ionicons name="close" size={22} color="#64748b" />
+              <Ionicons name="close" size={22} color={colors.textSecondary} />
             </TouchableOpacity>
-            <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: "#0f172a" }}>Editar serie</Text>
+            <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: colors.text }}>Editar serie</Text>
             <TouchableOpacity
               onPress={() => editSet && handleDeleteHistorySet(editSet.sessionIdx, editSet.setIdx, editSet.set.id)}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="trash-outline" size={20} color="#ef4444" />
+              <Ionicons name="trash-outline" size={20} color={colors.danger} />
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
             {editSet?.set.weight != null || exerciseType === ExerciseType.WEIGHT_REPS || exerciseType === ExerciseType.WEIGHT_ONLY ? (
               <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748b" }}>{unit.toUpperCase()}</Text>
+                <Text style={{ fontSize: 12, fontWeight: "600", color: colors.textSecondary }}>{unit.toUpperCase()}</Text>
                 <TextInput
-                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 }}
+                  style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 }}
                   keyboardType="decimal-pad"
                   value={editWeight}
                   onChangeText={setEditWeight}
                   placeholder="—"
-                  placeholderTextColor="#cbd5e1"
+                  placeholderTextColor={colors.textDisabled}
                 />
               </View>
             ) : null}
             {editSet?.set.reps != null || exerciseType === ExerciseType.WEIGHT_REPS || exerciseType === ExerciseType.REPS_ONLY ? (
               <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748b" }}>REPS</Text>
+                <Text style={{ fontSize: 12, fontWeight: "600", color: colors.textSecondary }}>REPS</Text>
                 <TextInput
-                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 }}
+                  style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 }}
                   keyboardType="number-pad"
                   value={editReps}
                   onChangeText={setEditReps}
                   placeholder="—"
-                  placeholderTextColor="#cbd5e1"
+                  placeholderTextColor={colors.textDisabled}
                 />
               </View>
             ) : null}
             {editSet?.set.distance != null ? (
               <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748b" }}>KM</Text>
+                <Text style={{ fontSize: 12, fontWeight: "600", color: colors.textSecondary }}>KM</Text>
                 <TextInput
-                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 }}
+                  style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 }}
                   keyboardType="decimal-pad"
                   value={editDistance}
                   onChangeText={setEditDistance}
                   placeholder="—"
-                  placeholderTextColor="#cbd5e1"
+                  placeholderTextColor={colors.textDisabled}
                 />
               </View>
             ) : null}
             {editSet?.set.time_seconds != null ? (
               <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748b" }}>SEGUNDOS</Text>
+                <Text style={{ fontSize: 12, fontWeight: "600", color: colors.textSecondary }}>SEGUNDOS</Text>
                 <TextInput
-                  style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 }}
+                  style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 }}
                   keyboardType="number-pad"
                   value={editTime}
                   onChangeText={setEditTime}
                   placeholder="—"
-                  placeholderTextColor="#cbd5e1"
+                  placeholderTextColor={colors.textDisabled}
                 />
               </View>
             ) : null}
             <View style={{ gap: 6 }}>
-              <Text style={{ fontSize: 12, fontWeight: "600", color: "#64748b" }}>NOTA</Text>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: colors.textSecondary }}>NOTA</Text>
               <TextInput
-                style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, minHeight: 80, textAlignVertical: "top" }}
+                style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, minHeight: 80, textAlignVertical: "top" }}
                 value={editComment}
                 onChangeText={setEditComment}
                 placeholder="Nota opcional…"
-                placeholderTextColor="#cbd5e1"
+                placeholderTextColor={colors.textDisabled}
                 multiline
               />
             </View>
             <TouchableOpacity
               onPress={handleSaveEditSet}
               disabled={editSaving}
-              style={{ backgroundColor: "#6366f1", borderRadius: 12, paddingVertical: 14, alignItems: "center", marginTop: 8 }}
+              style={{ backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center", marginTop: 8 }}
             >
               {editSaving
                 ? <ActivityIndicator color="#fff" />
