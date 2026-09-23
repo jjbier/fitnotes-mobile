@@ -300,7 +300,7 @@ export default function ExercisesScreen() {
           <Ionicons name="search" size={16} color={colors.textSecondary} />
           <TextInput
             testID="exercises-search-input"
-            style={{ flex: 1, paddingVertical: 12, fontSize: 14 }}
+            style={{ flex: 1, paddingVertical: 12, fontSize: 14, color: colors.text }}
             placeholder={t("exercises:searchPlaceholderCatalogMobile")}
             value={search}
             onChangeText={setSearch}
@@ -368,7 +368,7 @@ export default function ExercisesScreen() {
               {exercises.some((e) => e.is_favorite) && (
                 <CategoryCard
                   name={t("exercises:favoritesLabel")}
-                  color="#6366f1"
+                  color={colors.primary}
                   count={exercises.filter((e) => e.is_favorite).length}
                   onPress={() => router.push({ pathname: "/exercises/[categoryId]", params: { categoryId: "favorites" } } as never)}
                 />
@@ -417,20 +417,20 @@ export default function ExercisesScreen() {
               setShowCategoryOnlyModal(true);
             }}
             testID="exercises-fab-new-category"
-            style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#fff", borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 8, elevation: 4 }}
+            style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.surfaceCard, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 8, elevation: 4 }}
           >
-            <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>{t("exercises:fabNewCategory")}</Text>
-            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#6366f1", alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: colors.text }}>{t("exercises:fabNewCategory")}</Text>
+            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}>
               <Ionicons name="pricetag-outline" size={18} color="white" />
             </View>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => { setShowFabMenu(false); openCreateModal(); }}
             testID="exercises-fab-new-exercise"
-            style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#fff", borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 8, elevation: 4 }}
+            style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.surfaceCard, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 8, elevation: 4 }}
           >
-            <Text style={{ fontSize: 14, fontWeight: "600", color: "#0f172a" }}>{t("exercises:fabNewExercise")}</Text>
-            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#6366f1", alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: colors.text }}>{t("exercises:fabNewExercise")}</Text>
+            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}>
               <Ionicons name="barbell-outline" size={18} color="white" />
             </View>
           </TouchableOpacity>
@@ -439,7 +439,7 @@ export default function ExercisesScreen() {
       <TouchableOpacity
         onPress={() => setShowFabMenu((v) => !v)}
         testID="exercises-fab-add"
-        style={{ position: "absolute", bottom: 32, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: "#6366f1", alignItems: "center", justifyContent: "center", shadowColor: "#6366f1", shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 }}
+        style={{ position: "absolute", bottom: 32, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", shadowColor: colors.primary, shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 }}
         accessibilityLabel={showFabMenu ? t("exercises:fabMenuClose") : t("exercises:fabMenuOpen")}
       >
         <Ionicons name={showFabMenu ? "close" : "add"} size={28} color="white" />
@@ -448,20 +448,20 @@ export default function ExercisesScreen() {
       {/* Standalone "Nueva categoría" modal */}
       <Modal visible={showCategoryOnlyModal} animationType="fade" transparent onRequestClose={() => setShowCategoryOnlyModal(false)}>
         <TouchableOpacity
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", padding: 24 }}
+          style={{ flex: 1, backgroundColor: colors.overlay, justifyContent: "center", padding: 24 }}
           activeOpacity={1}
           onPress={() => setShowCategoryOnlyModal(false)}
         >
           <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-            <View style={{ backgroundColor: "#fff", borderRadius: 16, padding: 20, gap: 16 }}>
+            <View style={{ backgroundColor: colors.surfaceCard, borderRadius: 16, padding: 20, gap: 16 }}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>{t("exercises:newCategoryHeading")}</Text>
+                <Text style={{ fontSize: 18, fontWeight: "700", color: colors.text }}>{t("exercises:newCategoryHeading")}</Text>
                 <TouchableOpacity onPress={() => setShowCategoryOnlyModal(false)} accessibilityLabel={t("exercises:closeModalLabel")}>
-                  <Ionicons name="close" size={24} color="#64748b" />
+                  <Ionicons name="close" size={24} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
               <TextInput
-                style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 }}
+                style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: colors.text }}
                 placeholder={t("exercises:newCategoryNamePlaceholder")}
                 value={newCatName}
                 onChangeText={setNewCatName}
@@ -472,14 +472,14 @@ export default function ExercisesScreen() {
                   <TouchableOpacity
                     key={c}
                     onPress={() => setNewCatColor(c)}
-                    style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: c, borderWidth: 2.5, borderColor: newCatColor === c ? "#0f172a" : "transparent" }}
+                    style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: c, borderWidth: 2.5, borderColor: newCatColor === c ? colors.text : "transparent" }}
                   />
                 ))}
               </View>
               <TouchableOpacity
                 onPress={handleCreateCategoryStandalone}
                 disabled={catSaving || !newCatName.trim()}
-                style={{ backgroundColor: "#6366f1", borderRadius: 10, paddingVertical: 12, alignItems: "center", opacity: catSaving || !newCatName.trim() ? 0.5 : 1 }}
+                style={{ backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: "center", opacity: catSaving || !newCatName.trim() ? 0.5 : 1 }}
               >
                 <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>
                   {catSaving ? t("exercises:creatingButton") : t("exercises:createCategoryButton")}
@@ -508,11 +508,11 @@ export default function ExercisesScreen() {
         onRequestClose={() => { setShowCatModal(false); cancelEditCat(); }}
       >
         <GestureHandlerRootView style={{ flex: 1 }}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>{t("exercises:categoriesModalTitleMobile")}</Text>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceCard }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.borderLight }}>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: colors.text }}>{t("exercises:categoriesModalTitleMobile")}</Text>
             <TouchableOpacity onPress={() => { setShowCatModal(false); cancelEditCat(); }} accessibilityLabel={t("exercises:closeModalLabel")}>
-              <Ionicons name="close" size={24} color="#64748b" />
+              <Ionicons name="close" size={24} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -523,38 +523,38 @@ export default function ExercisesScreen() {
             contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
             ListEmptyComponent={
               <View style={{ paddingVertical: 40, alignItems: "center" }}>
-                <Text style={{ color: "#94a3b8", fontSize: 14 }}>{t("exercises:emptyCategoriesTitle")}</Text>
+                <Text style={{ color: colors.textMuted, fontSize: 14 }}>{t("exercises:emptyCategoriesTitle")}</Text>
               </View>
             }
             renderItem={({ item: cat, drag, isActive }: RenderItemParams<typeof categories[number]>) => (
               <ScaleDecorator activeScale={1.02}>
                 <View style={{ marginBottom: 8 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: isActive ? "#6366f1" : "#f1f5f9", borderRadius: 12, backgroundColor: isActive ? "#f5f3ff" : "#fff", paddingHorizontal: 14, paddingVertical: 12, gap: 10 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: isActive ? colors.primary : colors.borderLight, borderRadius: 12, backgroundColor: isActive ? colors.primaryBg : colors.surfaceCard, paddingHorizontal: 14, paddingVertical: 12, gap: 10 }}>
                     <TouchableOpacity onPressIn={drag} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={t("exercises:reorderCategoryLabelMobile")}>
-                      <Ionicons name="menu" size={20} color={isActive ? "#6366f1" : "#94a3b8"} />
+                      <Ionicons name="menu" size={20} color={isActive ? colors.primary : colors.textMuted} />
                     </TouchableOpacity>
                     <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: cat.color }} />
-                    <Text style={{ flex: 1, fontSize: 14, fontWeight: "500", color: "#0f172a" }}>{cat.name}</Text>
+                    <Text style={{ flex: 1, fontSize: 14, fontWeight: "500", color: colors.text }}>{cat.name}</Text>
                     <TouchableOpacity
                       onPress={() => editingCatId === cat.id ? cancelEditCat() : startEditCat(cat)}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       accessibilityLabel={editingCatId === cat.id ? t("exercises:cancelEditLabelMobile") : t("exercises:editCategoryLabelMobile")}
                     >
-                      <Ionicons name={editingCatId === cat.id ? "close-outline" : "pencil-outline"} size={18} color="#94a3b8" />
+                      <Ionicons name={editingCatId === cat.id ? "close-outline" : "pencil-outline"} size={18} color={colors.textMuted} />
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={() => handleDeleteCategory(cat.id, cat.name)}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       accessibilityLabel={t("exercises:deleteCategoryTitleMobile")}
                     >
-                      <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                      <Ionicons name="trash-outline" size={18} color={colors.danger} />
                     </TouchableOpacity>
                   </View>
 
                   {editingCatId === cat.id && (
-                    <View style={{ marginTop: 4, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 12, padding: 14, gap: 12, backgroundColor: "#f8fafc" }}>
+                    <View style={{ marginTop: 4, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, gap: 12, backgroundColor: colors.backgroundAlt }}>
                       <TextInput
-                        style={{ borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, backgroundColor: "#fff" }}
+                        style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, backgroundColor: colors.surfaceCard, color: colors.text }}
                         value={editCatName}
                         onChangeText={setEditCatName}
                         autoFocus
@@ -564,14 +564,14 @@ export default function ExercisesScreen() {
                           <TouchableOpacity
                             key={c}
                             onPress={() => setEditCatColor(c)}
-                            style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: c, borderWidth: 2.5, borderColor: editCatColor === c ? "#0f172a" : "transparent" }}
+                            style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: c, borderWidth: 2.5, borderColor: editCatColor === c ? colors.text : "transparent" }}
                           />
                         ))}
                       </View>
                       <TouchableOpacity
                         onPress={handleUpdateCategory}
                         disabled={catEditSaving || !editCatName.trim()}
-                        style={{ backgroundColor: "#6366f1", borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: catEditSaving || !editCatName.trim() ? 0.5 : 1 }}
+                        style={{ backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 10, alignItems: "center", opacity: catEditSaving || !editCatName.trim() ? 0.5 : 1 }}
                       >
                         <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>
                           {catEditSaving ? t("exercises:savingButton") : t("exercises:saveChangesButton")}
@@ -593,18 +593,19 @@ export default function ExercisesScreen() {
 /** Tarjeta de categoría (o "Favoritos") con color, nombre y número de ejercicios; navega al listado de esa categoría. */
 const CategoryCard = memo(function CategoryCard({ name, color, count, onPress }: { name: string; color: string; count: number; onPress: () => void }) {
   const { t } = useTranslation();
+  const colors = useTheme();
   return (
     <TouchableOpacity
       onPress={onPress}
       testID={`category-card-${name}`}
-      style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 12, backgroundColor: "#fff", paddingHorizontal: 16, paddingVertical: 14, gap: 12, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 }}
+      style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: colors.borderLight, borderRadius: 12, backgroundColor: colors.surfaceCard, paddingHorizontal: 16, paddingVertical: 14, gap: 12, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 }}
     >
       <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: color }} />
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 15, fontWeight: "600", color: "#0f172a" }}>{name}</Text>
-        <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>{t("exercises:exerciseCount", { count })}</Text>
+        <Text style={{ fontSize: 15, fontWeight: "600", color: colors.text }}>{name}</Text>
+        <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>{t("exercises:exerciseCount", { count })}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
+      <Ionicons name="chevron-forward" size={16} color={colors.textDisabled} />
     </TouchableOpacity>
   );
 });
@@ -628,6 +629,7 @@ const ExerciseRow = memo(function ExerciseRow({
   onToggleFavorite: () => void;
 }) {
   const { t, i18n } = useTranslation();
+  const colors = useTheme();
   const category = categories.find((c) => c.id === ex.category_id);
   const statsLine = stats
     ? `${t("exercises:usageStats", { count: stats.workout_count })}${stats.last_used ? ` · ${formatLastUsedLabel(stats.last_used, dateLocale(i18n.language))}` : ""}`
@@ -636,25 +638,25 @@ const ExerciseRow = memo(function ExerciseRow({
   return (
     <TouchableOpacity
       onPress={onPress}
-      style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: "#f1f5f9", borderRadius: 12, backgroundColor: "#fff", paddingHorizontal: 16, paddingVertical: 12, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 }}
+      style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: colors.borderLight, borderRadius: 12, backgroundColor: colors.surfaceCard, paddingHorizontal: 16, paddingVertical: 12, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 }}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
         {category && <View style={{ width: 4, height: statsLine ? 44 : 36, borderRadius: 2, backgroundColor: category.color }} />}
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 14, fontWeight: "500", color: "#0f172a" }}>{ex.name}</Text>
-          <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>{t(`exercises:types.${ex.type}`)}</Text>
-          {statsLine && <Text style={{ fontSize: 11, color: "#cbd5e1", marginTop: 2 }}>{statsLine}</Text>}
+          <Text style={{ fontSize: 14, fontWeight: "500", color: colors.text }}>{ex.name}</Text>
+          <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>{t(`exercises:types.${ex.type}`)}</Text>
+          {statsLine && <Text style={{ fontSize: 11, color: colors.textDisabled, marginTop: 2 }}>{statsLine}</Text>}
         </View>
       </View>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
         <TouchableOpacity onPress={onToggleFavorite} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={ex.is_favorite ? t("exercises:favoriteRemove") : t("exercises:favoriteAdd")}>
-          <Ionicons name={ex.is_favorite ? "star" : "star-outline"} size={18} color={ex.is_favorite ? "#6366f1" : "#cbd5e1"} />
+          <Ionicons name={ex.is_favorite ? "star" : "star-outline"} size={18} color={ex.is_favorite ? colors.primary : colors.textDisabled} />
         </TouchableOpacity>
         <TouchableOpacity onPress={onEdit} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={t("exercises:edit")}>
-          <Ionicons name="pencil-outline" size={16} color="#94a3b8" />
+          <Ionicons name="pencil-outline" size={16} color={colors.textMuted} />
         </TouchableOpacity>
         <TouchableOpacity onPress={onDelete} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={t("exercises:deleteExerciseTitleMobile")}>
-          <Ionicons name="trash-outline" size={16} color="#ef4444" />
+          <Ionicons name="trash-outline" size={16} color={colors.danger} />
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
