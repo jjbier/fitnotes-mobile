@@ -5,6 +5,7 @@ import { AppState, View, Text, ActivityIndicator, StyleSheet } from "react-nativ
 import type { AppStateStatus } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useRouter, useSegments } from "expo-router";
@@ -169,6 +170,7 @@ function AppContent() {
   const router = useRouter();
   const segments = useSegments();
   const theme = useTheme();
+  const { t } = useTranslation();
   const [initialized, setInitialized] = useState(false);
   const { userId, isGuest, refreshIdentity, wipeAndSetIdentity } = useRepositories();
 
@@ -399,8 +401,8 @@ function AppContent() {
             headerShown: false,
           }}
         />
-        <Stack.Screen name="exercises/[categoryId]" options={{ headerTitle: "Exercises" }} />
-        <Stack.Screen name="routines/[id]" options={{ headerTitle: "Routine" }} />
+        <Stack.Screen name="exercises/[categoryId]" options={{ headerTitle: t("exercises:title") }} />
+        <Stack.Screen name="routines/[id]" options={{ headerTitle: t("routines:title") }} />
         <Stack.Screen name="body-tracker/index" options={{ headerShown: false }} />
         <Stack.Screen name="search/index" options={{ headerShown: false }} />
         <Stack.Screen name="exercise-history/[exerciseId]" options={{ headerShown: false }} />
