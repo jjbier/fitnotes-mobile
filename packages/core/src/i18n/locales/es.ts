@@ -926,6 +926,8 @@ export const es = {
     markIncompleteLabel: "Desmarcar serie",
     markCompleteLabel: "Marcar serie completa",
     reorderSetLabel: "Reordenar serie",
+    enableReorderSetsLabel: "Activar reordenar series",
+    disableReorderSetsLabel: "Desactivar reordenar series",
     setCommentPlaceholder: "Nota sobre esta serie…",
     addingButton: "Añadiendo…",
     addSetButton: "Añadir serie",

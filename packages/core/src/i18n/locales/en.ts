@@ -924,6 +924,8 @@ export const en = {
     markIncompleteLabel: "Mark set incomplete",
     markCompleteLabel: "Mark set complete",
     reorderSetLabel: "Reorder set",
+    enableReorderSetsLabel: "Enable reordering sets",
+    disableReorderSetsLabel: "Disable reordering sets",
     setCommentPlaceholder: "Note about this set…",
     addingButton: "Adding…",
     addSetButton: "Add set",

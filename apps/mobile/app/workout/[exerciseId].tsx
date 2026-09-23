@@ -104,6 +104,8 @@ export default function TrainingScreen() {
   const [prByReps, setPrByReps] = useState<Record<number, number>>({});
   const [showNotes, setShowNotes] = useState(false);
   const [commentingSetId, setCommentingSetId] = useState<string | null>(null);
+  /** Las series no son reordenables por defecto — hay que activar este modo explícitamente para que aparezca el asa de arrastre en cada fila. */
+  const [reorderSetsMode, setReorderSetsMode] = useState(false);
   /** Texto en curso de edición para inputs numéricos de series (weight/distance), clave `${setId}:${field}`. Evita que el round-trip por `parseFloat`/`String` en cada pulsación borre un punto decimal recién tecleado (p.ej. "70." -> 70 -> "70"). Se limpia al perder el foco, momento en el que el input vuelve a mostrar el valor formateado desde el store. */
   const [numericDrafts, setNumericDrafts] = useState<Record<string, string>>({});
   const [showAddExercise, setShowAddExercise] = useState(false);
@@ -731,7 +733,14 @@ export default function TrainingScreen() {
                 <Text style={{ fontSize: 10, fontWeight: "600", color: theme.primary }}>{t("workout:markAllCompleteButton")}</Text>
               </TouchableOpacity>
             )}
-            <Text style={{ fontSize: 11, color: theme.textDisabled, width: 16 }}>≡</Text>
+            <TouchableOpacity
+              onPress={() => setReorderSetsMode((v) => !v)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityLabel={reorderSetsMode ? t("workout:disableReorderSetsLabel") : t("workout:enableReorderSetsLabel")}
+              style={{ width: 16, alignItems: "center" }}
+            >
+              <Text style={{ fontSize: 13, color: reorderSetsMode ? theme.primary : theme.textDisabled }}>≡</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -887,10 +896,12 @@ export default function TrainingScreen() {
                         </TouchableOpacity>
                       )}
 
-                      {/* Drag handle */}
-                      <TouchableOpacity onLongPress={drag} delayLongPress={150} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={t("workout:reorderSetLabel")}>
-                        <Ionicons name="reorder-two-outline" size={18} color={theme.textDisabled} />
-                      </TouchableOpacity>
+                      {/* Drag handle — solo visible con el modo de reordenar activado */}
+                      {reorderSetsMode && (
+                        <TouchableOpacity onLongPress={drag} delayLongPress={150} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={t("workout:reorderSetLabel")}>
+                          <Ionicons name="reorder-two-outline" size={18} color={theme.textDisabled} />
+                        </TouchableOpacity>
+                      )}
                     </View>
                     {(() => {
                       if (!showWeight || !showReps || !s.weight || !s.reps || s.reps >= 37) return null;
