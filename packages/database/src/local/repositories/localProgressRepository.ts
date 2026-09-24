@@ -11,8 +11,12 @@ type PersonalRecordRow = Database["public"]["Tables"]["personal_records"]["Row"]
  * `(exercise_id, reps)` no borrado, elige una única fila canónica (mayor
  * peso; empate por `achieved_at` más antiguo, y por `id` como último
  * desempate para que el resultado sea determinista) vía `ROW_NUMBER()`.
- * Colapsa así el duplicado aceptado de `personal_records` (ver doc de
- * `getPersonalRecords`) sin tocar las filas ni el mecanismo que las genera.
+ * Colapsa así el duplicado de `personal_records` (ver doc de
+ * `getPersonalRecords`) sin tocar las filas. El mecanismo que los generaba
+ * (trigger SQL remoto + réplica local escribiendo el mismo PR por separado)
+ * se quitó en `010_drop_personal_record_trigger.sql` (2026-09-24) — esta CTE
+ * se mantiene como red de seguridad para los duplicados ya existentes de
+ * antes de esa migración, que no se limpian solos.
  */
 const DEDUP_PERSONAL_RECORDS_CTE = `
   WITH ranked AS (
@@ -59,10 +63,11 @@ export function createLocalProgressRepository(db: SqlExecutor) {
     /**
      * Lee de `personal_records` (solo lectura, sin cascada ni pending_ops) los
      * PRs de un ejercicio, un peor-a-mejor por número de reps — colapsando a
-     * una única fila por `reps` (ver {@link DEDUP_PERSONAL_RECORDS_CTE}): el
-     * mismo set completado offline puede generar dos filas para el mismo PR
-     * (una vía `maybeRecordPersonalRecord` local, otra vía el trigger SQL
-     * remoto al pushear el set, ver `offline-sync.md`); ambas quedan en la
+     * una única fila por `reps` (ver {@link DEDUP_PERSONAL_RECORDS_CTE}): antes
+     * de `010_drop_personal_record_trigger.sql` (2026-09-24), el mismo set
+     * completado offline podía generar dos filas para el mismo PR (una vía
+     * `maybeRecordPersonalRecord` local, otra vía el trigger SQL remoto al
+     * pushear el set, ver `offline-sync.md`); esas filas antiguas siguen en la
      * tabla (esto no las borra), pero solo una llega a la UI.
      */
     async getPersonalRecords(exerciseId: string): Promise<{ data: PersonalRecordRow[]; error: RepoError | null }> {

@@ -1,10 +1,14 @@
 /**
- * Réplica en JS de la regla del trigger SQL `update_personal_record`
- * (packages/database/src/supabase/migrations/001_initial_schema.sql) —
- * necesaria para que un set completado offline (modo invitado, sin red)
- * genere el mismo PR que generaría el trigger tras el sync. Deliberadamente
- * NO filtra `is_warmup` (el trigger tampoco lo hace) para no divergir del
- * histórico ya creado en producción por el trigger real.
+ * Regla para decidir si un set completado genera un nuevo récord personal
+ * — necesaria para que un set completado offline (modo invitado, sin red)
+ * genere su PR sin depender del sync. Hasta la migración
+ * `010_drop_personal_record_trigger.sql` (2026-09-24) esta misma regla
+ * también vivía en un trigger SQL remoto (`update_personal_record`,
+ * `packages/database/src/supabase/migrations/001_initial_schema.sql`) que
+ * duplicaba el PR al pushear el set (ver el comentario de
+ * `maybeRecordPersonalRecord` en `localWorkoutRepository.ts`); se quitó por
+ * ser redundante. Deliberadamente NO filtra `is_warmup` (el trigger
+ * tampoco lo hacía) para no divergir del histórico ya creado en producción.
  */
 
 /** Datos mínimos de un set necesarios para evaluar si genera un PR nuevo. */

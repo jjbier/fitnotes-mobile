@@ -54,12 +54,15 @@ describe("localProgressRepository", () => {
   });
 
   /**
-   * Simula el duplicado aceptado tras claim+sync (ver CLAUDE.md/offline-sync.md):
-   * el mismo evento genera dos filas en `personal_records` con el mismo
-   * `exercise_id`/`reps`/`weight` pero distinto `id`/`achieved_at` — una vía
-   * `maybeRecordPersonalRecord` local, otra vía el trigger SQL remoto al
-   * pushear el set. Los tests insertan la segunda fila a mano (no hay forma
-   * de disparar el trigger remoto desde el repo local).
+   * Simula el duplicado histórico que generaba el trigger SQL remoto (quitado
+   * en `010_drop_personal_record_trigger.sql`, 2026-09-24, ver CLAUDE.md/
+   * offline-sync.md): el mismo evento generaba dos filas en `personal_records`
+   * con el mismo `exercise_id`/`reps`/`weight` pero distinto `id`/`achieved_at`
+   * — una vía `maybeRecordPersonalRecord` local, otra vía el trigger. Ya no
+   * puede volver a pasar (el trigger no existe), pero las filas duplicadas de
+   * antes de la migración siguen en las bases de datos existentes, así que
+   * este test sigue siendo la prueba de regresión de la CTE de dedup que las
+   * colapsa en la lectura. Los tests insertan la segunda fila a mano.
    */
   async function insertDuplicatePr(exerciseId: string, reps: number, weight: number, achievedAt: string) {
     await db.runAsync(

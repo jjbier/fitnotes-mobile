@@ -11,12 +11,26 @@ type PersonalRecordRow = Database["public"]["Tables"]["personal_records"]["Row"]
 type ExerciseRow = Database["public"]["Tables"]["exercises"]["Row"];
 
 /**
- * Réplica local del trigger SQL `update_personal_record` (ver
- * packages/core/src/utils/personalRecords.ts) — corre dentro de la misma
- * transacción que el UPDATE del set para que un workout de invitado también
- * genere sus PRs sin depender de sync. Solo INSERT (nunca overwrite), igual
- * que el trigger: un `(exercise_id, reps)` puede acumular varias filas de
- * histórico, la más reciente con mayor peso es "la" PR vigente.
+ * Genera los PRs localmente (ver packages/core/src/utils/personalRecords.ts)
+ * — corre dentro de la misma transacción que el UPDATE del set para que un
+ * workout de invitado también genere sus PRs sin depender de sync. Solo
+ * INSERT (nunca overwrite): un `(exercise_id, reps)` puede acumular varias
+ * filas de histórico, la más reciente con mayor peso es "la" PR vigente.
+ *
+ * Hasta la migración `010_drop_personal_record_trigger.sql` (2026-09-24)
+ * existía también un trigger SQL remoto (`update_personal_record`,
+ * `AFTER INSERT/UPDATE ON sets`) que hacía este mismo cálculo de forma
+ * independiente al pushear el set — como el orden de push empuja `sets`
+ * antes que `personal_records` (`pushOrdering.ts`), el trigger nunca veía
+ * todavía la fila generada aquí y duplicaba el PR en Supabase. No solo tras
+ * claim+sync: pasaba en cualquier sync de cualquier PR completado
+ * offline-first, para cualquier cuenta. El trigger era puramente redundante
+ * (ninguna app aparte de este móvil escribe `sets` en Supabase), así que se
+ * quitó en vez de coordinar los dos escritores. Las filas duplicadas
+ * generadas antes de esa migración siguen en la tabla — se colapsan en la
+ * lectura vía la CTE de `ROW_NUMBER()` en `getPersonalRecords`/
+ * `getAllPersonalRecords` (`localProgressRepository.ts`), que se mantiene
+ * como red de seguridad para ese histórico.
  */
 async function maybeRecordPersonalRecord(db: SqlExecutor, setRow: RawRow): Promise<void> {
   const isComplete = toBool(setRow.is_complete);
