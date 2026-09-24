@@ -123,7 +123,12 @@ export function formatShortDate(iso: string, locale: DateLocale = "es"): string 
 
 /** Formats an ISO date string as a relative label: "hoy" / "ayer" / "hace N días" / "hace N sem" / "hace N mes" / "hace N año" (or the English equivalent for `locale: "en"`). */
 export function formatDaysAgo(iso: string, locale: DateLocale = "es"): string {
-  const diff = Math.floor((Date.now() - new Date(iso + "T12:00:00").getTime()) / 86400000);
+  // Compara fechas de calendario puras (vía daysBetween, que parsea ambos extremos
+  // como "YYYY-MM-DD" a medianoche UTC) en vez de restar timestamps con hora del día:
+  // la versión anterior comparaba `Date.now()` contra `iso` anclado al mediodía LOCAL,
+  // así que cualquier hora antes del mediodía local devolvía "hace -1 días" en vez de
+  // "hoy" (bug reproducible ~12h al día, ver CLAUDE.md).
+  const diff = daysBetween(iso, todayISO());
   if (locale === "en") {
     if (diff === 0) return "today";
     if (diff === 1) return "yesterday";
