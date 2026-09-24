@@ -43,7 +43,7 @@ function mapPersonalRecordRow(row: RawRow): PersonalRecordRow {
 /**
  * Repositorio local de lectura de personal_records — espeja
  * createProgressRepository().getPersonalRecords/getAllPersonalRecords/
- * getWeeklyTraining/getBestSetsByExercise (packages/database/src/repositories/
+ * getWeeklyTraining/getDailyTraining/getBestSetsByExercise (packages/database/src/repositories/
  * progressRepository.ts): son consultas simples sobre tablas ya replicadas
  * localmente (sets/workout_exercises/workouts/personal_records), sin
  * agregados propios de Postgres. Las filas de personal_records se escriben
@@ -91,17 +91,20 @@ export function createLocalProgressRepository(db: SqlExecutor) {
 
     /**
      * Agrega, por ejercicio, el número de sets completos y el volumen total
-     * (peso×reps) desde `weekStart` — join manual sets→workout_exercises→workouts
+     * (peso×reps) entre `dateFrom` y `dateTo` (ambos inclusive; `dateTo`
+     * omitido = sin límite superior) — join manual sets→workout_exercises→workouts
      * en JS, ya que SQLite local no tiene las funciones de agregación de Postgres.
+     * Usado para el resumen por categoría del tab Progreso, con el rango que
+     * corresponda al periodo elegido (semana/mes/año/todo).
      */
-    async getWeeklyTraining(weekStart: string): Promise<{ exerciseId: string; setCount: number; volume: number }[]> {
+    async getWeeklyTraining(dateFrom: string, dateTo?: string): Promise<{ exerciseId: string; setCount: number; volume: number }[]> {
       const rows = await db.getAllAsync<{ exercise_id: string; weight: number | null; reps: number | null }>(
         `SELECT we.exercise_id as exercise_id, s.weight as weight, s.reps as reps
          FROM sets s
          JOIN workout_exercises we ON we.id = s.workout_exercise_id AND we._deleted = 0
          JOIN workouts w ON w.id = we.workout_id AND w._deleted = 0
-         WHERE s._deleted = 0 AND s.is_complete = 1 AND s.is_warmup = 0 AND w.date >= ?`,
-        [weekStart]
+         WHERE s._deleted = 0 AND s.is_complete = 1 AND s.is_warmup = 0 AND w.date >= ?${dateTo ? " AND w.date <= ?" : ""}`,
+        dateTo ? [dateFrom, dateTo] : [dateFrom]
       );
       const byExercise: Record<string, { setCount: number; volume: number }> = {};
       for (const row of rows) {
@@ -110,6 +113,33 @@ export function createLocalProgressRepository(db: SqlExecutor) {
         byExercise[row.exercise_id]!.volume += (row.weight ?? 0) * (row.reps ?? 0);
       }
       return Object.entries(byExercise).map(([exerciseId, vals]) => ({ exerciseId, ...vals }));
+    },
+
+    /**
+     * Agrega, por fecha de entrenamiento (no por ejercicio), el número de sets
+     * completos y el volumen total desde `dateFrom` en adelante, a través de
+     * TODOS los ejercicios — usado por el tab Progreso para la racha de días
+     * consecutivos, las cifras de cabecera del periodo elegido y el gráfico de
+     * tendencia de volumen semanal (todo derivado de esta única serie diaria).
+     */
+    async getDailyTraining(dateFrom: string): Promise<{ date: string; setCount: number; volume: number }[]> {
+      const rows = await db.getAllAsync<{ date: string; weight: number | null; reps: number | null }>(
+        `SELECT w.date as date, s.weight as weight, s.reps as reps
+         FROM sets s
+         JOIN workout_exercises we ON we.id = s.workout_exercise_id AND we._deleted = 0
+         JOIN workouts w ON w.id = we.workout_id AND w._deleted = 0
+         WHERE s._deleted = 0 AND s.is_complete = 1 AND s.is_warmup = 0 AND w.date >= ?`,
+        [dateFrom]
+      );
+      const byDate: Record<string, { setCount: number; volume: number }> = {};
+      for (const row of rows) {
+        if (!byDate[row.date]) byDate[row.date] = { setCount: 0, volume: 0 };
+        byDate[row.date]!.setCount++;
+        byDate[row.date]!.volume += (row.weight ?? 0) * (row.reps ?? 0);
+      }
+      return Object.entries(byDate)
+        .map(([date, vals]) => ({ date, ...vals }))
+        .sort((a, b) => a.date.localeCompare(b.date));
     },
 
     /** Devuelve, por cada ejercicio de `exerciseIds`, el máximo de reps/distancia/tiempo entre sus sets completos no-warmup — usado para calculadoras/récords por tipo de ejercicio avanzado. */

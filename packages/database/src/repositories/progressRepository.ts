@@ -150,12 +150,16 @@ export function createProgressRepository(client: Client) {
         .sort((a, b) => a.date.localeCompare(b.date));
     },
 
-    /** Sets completados y volumen (peso × reps) por ejercicio, para todos los entrenamientos desde `weekStart` en adelante — usado en el resumen semanal del dashboard. */
-    async getWeeklyTraining(weekStart: string): Promise<{ exerciseId: string; setCount: number; volume: number }[]> {
-      const { data: workouts } = await client
-        .from("workouts")
-        .select("id")
-        .gte("date", weekStart);
+    /**
+     * Sets completados y volumen (peso × reps) por ejercicio, entre `dateFrom`
+     * y `dateTo` (ambos inclusive; `dateTo` omitido = sin límite superior) —
+     * usado en el resumen por categoría del tab Progreso, con el rango que
+     * corresponda al periodo elegido (semana/mes/año/todo).
+     */
+    async getWeeklyTraining(dateFrom: string, dateTo?: string): Promise<{ exerciseId: string; setCount: number; volume: number }[]> {
+      let query = client.from("workouts").select("id").gte("date", dateFrom);
+      if (dateTo) query = query.lte("date", dateTo);
+      const { data: workouts } = await query;
       if (!workouts || workouts.length === 0) return [];
 
       const workoutIds = workouts.map((w) => w.id);
@@ -185,6 +189,52 @@ export function createProgressRepository(client: Client) {
       }
 
       return Object.entries(byExercise).map(([exerciseId, vals]) => ({ exerciseId, ...vals }));
+    },
+
+    /**
+     * Sets completados y volumen (peso × reps) agregados por fecha de
+     * entrenamiento (no por ejercicio), a través de TODOS los ejercicios,
+     * desde `dateFrom` en adelante — usado por el tab Progreso para la racha
+     * de días consecutivos, las cifras de cabecera del periodo elegido y el
+     * gráfico de tendencia de volumen semanal (todo derivado de esta única
+     * serie diaria).
+     */
+    async getDailyTraining(dateFrom: string): Promise<{ date: string; setCount: number; volume: number }[]> {
+      const { data: workouts } = await client.from("workouts").select("id, date").gte("date", dateFrom);
+      if (!workouts || workouts.length === 0) return [];
+
+      const workoutIds = workouts.map((w) => w.id);
+      const dateByWorkoutId: Record<string, string> = Object.fromEntries(workouts.map((w) => [w.id, w.date]));
+      const { data: weRows } = await client
+        .from("workout_exercises")
+        .select("id, workout_id")
+        .in("workout_id", workoutIds);
+      if (!weRows || weRows.length === 0) return [];
+
+      const weIds = weRows.map((we) => we.id);
+      const dateByWeId: Record<string, string> = Object.fromEntries(
+        weRows.map((we) => [we.id, dateByWorkoutId[we.workout_id]!])
+      );
+
+      const { data: setRows } = await client
+        .from("sets")
+        .select("workout_exercise_id, weight, reps")
+        .in("workout_exercise_id", weIds)
+        .eq("is_complete", true)
+        .eq("is_warmup", false);
+
+      const byDate: Record<string, { setCount: number; volume: number }> = {};
+      for (const s of setRows ?? []) {
+        const date = dateByWeId[s.workout_exercise_id];
+        if (!date) continue;
+        if (!byDate[date]) byDate[date] = { setCount: 0, volume: 0 };
+        byDate[date]!.setCount++;
+        byDate[date]!.volume += (s.weight ?? 0) * (s.reps ?? 0);
+      }
+
+      return Object.entries(byDate)
+        .map(([date, vals]) => ({ date, ...vals }))
+        .sort((a, b) => a.date.localeCompare(b.date));
     },
   };
 }

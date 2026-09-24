@@ -107,6 +107,36 @@ describe("localProgressRepository", () => {
     expect(result).toEqual([{ exerciseId: "ex-1", setCount: 2, volume: 80 * 8 + 90 * 5 }]);
   });
 
+  it("getWeeklyTraining respects an optional dateTo upper bound", async () => {
+    await completeSet("ex-1", "2026-07-13", { weight: 80, reps: 8 });
+    await completeSet("ex-1", "2026-07-20", { weight: 90, reps: 5 });
+
+    const result = await progressRepo.getWeeklyTraining("2026-07-13", "2026-07-14");
+    expect(result).toEqual([{ exerciseId: "ex-1", setCount: 1, volume: 80 * 8 }]);
+  });
+
+  describe("getDailyTraining", () => {
+    it("aggregates completed, non-warmup sets by workout date across all exercises", async () => {
+      await completeSet("ex-1", "2026-07-13", { weight: 80, reps: 8 });
+      await completeSet("ex-2", "2026-07-13", { weight: 40, reps: 10 });
+      await completeSet("ex-1", "2026-07-14", { weight: 90, reps: 5 });
+      await completeSet("ex-1", "2026-07-14", { weight: 50, reps: 10, is_warmup: true });
+      await completeSet("ex-1", "2026-07-01", { weight: 200, reps: 1 });
+
+      const result = await progressRepo.getDailyTraining("2026-07-13");
+      expect(result).toEqual([
+        { date: "2026-07-13", setCount: 2, volume: 80 * 8 + 40 * 10 },
+        { date: "2026-07-14", setCount: 1, volume: 90 * 5 },
+      ]);
+    });
+
+    it("returns an empty array when there is no training on or after dateFrom", async () => {
+      await completeSet("ex-1", "2026-07-01", { weight: 80, reps: 8 });
+      const result = await progressRepo.getDailyTraining("2026-07-13");
+      expect(result).toEqual([]);
+    });
+  });
+
   it("getBestSetsByExercise returns the max reps/distance/time for completed, non-warmup sets", async () => {
     await completeSet("ex-1", "2026-07-17", { weight: 0, reps: 12 });
     await completeSet("ex-1", "2026-07-18", { weight: 0, reps: 8 });

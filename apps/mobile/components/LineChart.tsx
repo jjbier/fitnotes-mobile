@@ -23,6 +23,7 @@ export interface ChartDataPoint {
  * - `goalValue`: si se indica (y no es `mini`), dibuja una línea discontinua de objetivo.
  * - `trendData`: serie paralela opcional (misma longitud que `data`) dibujada como línea de tendencia discontinua naranja.
  * - `onPointPress`: se invoca al tocar un punto con el índice dentro del array `data` original (no del recorte de 20).
+ * - `gridColor`/`axisLabelColor`: colores de las líneas de rejilla y las etiquetas de los ejes — por defecto los literales claros originales (no theme-aware por compatibilidad con los usos existentes); pásalos desde `useTheme()` para que el gráfico siga el tema en pantallas nuevas.
  */
 interface LineChartProps {
   data: ChartDataPoint[];
@@ -33,6 +34,8 @@ interface LineChartProps {
   goalValue?: number;
   trendData?: number[];
   onPointPress?: (dataIndex: number) => void;
+  gridColor?: string;
+  axisLabelColor?: string;
 }
 
 const PAD_TOP = 20;
@@ -71,7 +74,7 @@ function niceMin(v: number, max: number): number {
  * `points` es el recorte `data.slice(-20)` y ambos índices solo coinciden
  * cuando la serie completa tiene 20 elementos o menos.
  */
-export default function LineChart({ data, width, height = 180, color = "#6366f1", mini = false, goalValue, trendData, onPointPress }: LineChartProps) {
+export default function LineChart({ data, width, height = 180, color = "#6366f1", mini = false, goalValue, trendData, onPointPress, gridColor = "#f1f5f9", axisLabelColor = "#94a3b8" }: LineChartProps) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
   if (!data || data.length === 0) return null;
@@ -143,7 +146,7 @@ export default function LineChart({ data, width, height = 180, color = "#6366f1"
 
         {/* Y grid lines */}
         {!mini && yTicks.map((v, i) => (
-          <Line key={i} x1={padLeft} y1={yPos(v)} x2={padLeft + chartW} y2={yPos(v)} stroke="#f1f5f9" strokeWidth={1} />
+          <Line key={i} x1={padLeft} y1={yPos(v)} x2={padLeft + chartW} y2={yPos(v)} stroke={gridColor} strokeWidth={1} />
         ))}
 
         {/* Goal line */}
@@ -207,14 +210,14 @@ export default function LineChart({ data, width, height = 180, color = "#6366f1"
 
         {/* Y axis labels */}
         {!mini && yTicks.map((v, i) => (
-          <SvgText key={i} x={padLeft - 6} y={yPos(v) + 4} fontSize={9} fill="#94a3b8" textAnchor="end">
+          <SvgText key={i} x={padLeft - 6} y={yPos(v) + 4} fontSize={9} fill={axisLabelColor} textAnchor="end">
             {v % 1 === 0 ? v : v.toFixed(1)}
           </SvgText>
         ))}
 
         {/* X axis labels */}
         {!mini && xLabelIndices.map((i) => (
-          <SvgText key={i} x={xPos(i)} y={padTop + chartH + 16} fontSize={9} fill="#94a3b8" textAnchor="middle">
+          <SvgText key={i} x={xPos(i)} y={padTop + chartH + 16} fontSize={9} fill={axisLabelColor} textAnchor="middle">
             {points[i]!.label}
           </SvgText>
         ))}
