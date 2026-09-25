@@ -22,6 +22,7 @@ import {
   createLocalPreferencesRepository,
   claimGuestIdentity,
   setActiveIdentity,
+  mergeDuplicateCatalogEntries,
 } from "@fitnotes/database";
 import { useThemeModeStore, useTheme, type ThemeMode } from "../lib/theme";
 import type { Session } from "@supabase/supabase-js";
@@ -289,6 +290,14 @@ function AppContent() {
    * haber marca de agua todavía para esta cuenta en este dispositivo, el pull
    * normal de `runSync()` ya trae el histórico completo la primera vez.
    *
+   * Tras un claim, además de sincronizar se fusionan duplicados de catálogo
+   * (`mergeDuplicateCatalogEntries`): si el mismo usuario ya usó modo invitado
+   * en otro dispositivo y esa cuenta ya tiene datos remotos, el `sync()` de
+   * después del claim trae ambos orígenes a esta DB local a la vez — el único
+   * momento en que se puede detectar y colapsar, p.ej., un catálogo de
+   * ejercicios por defecto o las medidas corporales por defecto creadas por
+   * duplicado en los dos dispositivos (ver CLAUDE.md/offline-sync.md).
+   *
    * @param session Sesión actual de Supabase (o `null` si no hay ninguna).
    * @param isExplicitSignOut Distingue un `SIGNED_OUT` real (borra la DB
    * local) de una mera comprobación de sesión sin resultado — p.ej. la sesión
@@ -308,6 +317,12 @@ function AppContent() {
           await claimGuestIdentity(db, { guestUserId: userId, realUserId: session.user.id });
           await setActiveIdentity(db, { activeUserId: session.user.id, isGuest: false });
           await refreshIdentity();
+          await runSync(); // trae lo que ya hubiera remoto para esta cuenta (p.ej. de otro dispositivo)
+          const merged = await mergeDuplicateCatalogEntries(db, session.user.id);
+          if (merged.mergedCategories || merged.mergedExercises || merged.mergedBodyMeasurements) {
+            await runSync(); // sube las fusiones (tombstones + FKs reescritas) antes de que la UI las lea
+          }
+          return;
         } else {
           // Edge case raro: login directo a otra cuenta real sin sign-out previo.
           // No se pueden mezclar datos de una cuenta con otra.
