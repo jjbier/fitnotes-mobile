@@ -88,6 +88,21 @@ export function createFakeSupabaseClient(seed: FakeDb = {}) {
           return Promise.resolve({ data: null, error: { message: "simulated failure" } });
         }
         const rows = Array.isArray(data) ? data : [data];
+        // Real Postgres rejects an insert whose id already exists (unique constraint on the
+        // primary key) — mirrored here so tests can catch a retried insert of an already-pushed
+        // row (see SyncEngine.executeOperation's upsert fix for why that retry must not throw).
+        if (rows.some((row) => (row.id as string) in db[table]!)) {
+          return Promise.resolve({ data: null, error: { message: `duplicate key value violates unique constraint "${table}_pkey"` } });
+        }
+        for (const row of rows) db[table]![row.id as string] = { ...row };
+        return Promise.resolve({ data: rows, error: null });
+      },
+      upsert(data: Row | Row[]) {
+        if (failNext.current === table) {
+          failNext.current = null;
+          return Promise.resolve({ data: null, error: { message: "simulated failure" } });
+        }
+        const rows = Array.isArray(data) ? data : [data];
         for (const row of rows) db[table]![row.id as string] = { ...row };
         return Promise.resolve({ data: rows, error: null });
       },

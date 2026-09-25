@@ -215,17 +215,32 @@ function AppContent() {
    * Ejecuta un ciclo de sincronización completo (push + pull) vía
    * `getSyncEngine().sync(userId)`. No hace nada en modo invitado (RLS/FK de
    * Supabase rechazarían el push de filas sin cuenta real). Tras sincronizar,
-   * refresca directamente los stores de ejercicios/categorías y rutinas
-   * leyendo de SQLite local (ya actualizado por `applyRemoteRows` durante el
-   * sync, sin volver a pedir a Supabase), y para entrenamientos/series
-   * incrementa `refetchSignal` para que las pantallas relean por su cuenta.
+   * fusiona duplicados de catálogo (`mergeDuplicateCatalogEntries`) — se
+   * comprueba en CADA sync, no solo justo después de un claim: si el proceso
+   * se mata a mitad de un sync anterior (fácil con un pull inicial grande, ver
+   * CLAUDE.md) la fusión de esa vez nunca llega a ejecutarse y no había forma
+   * de reintentarla; al engancharla aquí converge sola en el siguiente sync,
+   * la haya disparado un claim o no. Si fusionó algo, se repite el ciclo para
+   * subir las fusiones antes de refrescar la UI. Refresca directamente los
+   * stores de ejercicios/categorías y rutinas leyendo de SQLite local (ya
+   * actualizado por `applyRemoteRows`/la fusión, sin volver a pedir a
+   * Supabase), y para entrenamientos/series incrementa `refetchSignal` para
+   * que las pantallas relean por su cuenta.
    */
   const runSync = useCallback(async () => {
     if (isGuest) return; // sin cuenta real todavía — RLS/FK de Supabase rechazarían el push
     setSyncStatus("syncing");
     try {
       const engine = await getSyncEngine();
-      const result = await engine.sync(userId);
+      let result = await engine.sync(userId);
+
+      const db = await getLocalDb();
+      const merged = await mergeDuplicateCatalogEntries(db, userId);
+      const catalogMerged = merged.mergedCategories > 0 || merged.mergedExercises > 0 || merged.mergedBodyMeasurements > 0;
+      if (catalogMerged) {
+        result = await engine.sync(userId); // sube las fusiones (tombstones + FKs reescritas)
+      }
+
       setSyncStatus(result.pushFailed > 0 ? "error" : "idle");
       setLastSyncAt(new Date().toISOString());
       setPendingCount(await engine.getPendingCount());
@@ -235,8 +250,7 @@ function AppContent() {
       // Refresh exercise/routine stores directly so all screens see new data.
       // applyRemoteRows ya dejó los datos pulled en SQLite local durante el
       // sync — leemos de ahí en vez de volver a pedirlos a Supabase.
-      if (ct.has("exercises") || ct.has("categories")) {
-        const db = await getLocalDb();
+      if (ct.has("exercises") || ct.has("categories") || catalogMerged) {
         const exerciseRepo = createLocalExerciseRepository(db);
         const [catRes, exRes] = await Promise.all([
           exerciseRepo.getCategories(),
@@ -264,7 +278,6 @@ function AppContent() {
       }
 
       if (ct.has("routines") || ct.has("routine_days") || ct.has("routine_day_exercises")) {
-        const db = await getLocalDb();
         const routineRepo = createLocalRoutineRepository(db);
         const { data } = await routineRepo.getRoutines();
         if (data) {
@@ -290,11 +303,11 @@ function AppContent() {
    * haber marca de agua todavía para esta cuenta en este dispositivo, el pull
    * normal de `runSync()` ya trae el histórico completo la primera vez.
    *
-   * Tras un claim, además de sincronizar se fusionan duplicados de catálogo
-   * (`mergeDuplicateCatalogEntries`): si el mismo usuario ya usó modo invitado
-   * en otro dispositivo y esa cuenta ya tiene datos remotos, el `sync()` de
-   * después del claim trae ambos orígenes a esta DB local a la vez — el único
-   * momento en que se puede detectar y colapsar, p.ej., un catálogo de
+   * Tras un claim, `runSync()` (más abajo) ya se encarga también de fusionar
+   * duplicados de catálogo (`mergeDuplicateCatalogEntries`): si el mismo
+   * usuario ya usó modo invitado en otro dispositivo y esa cuenta ya tiene
+   * datos remotos, el primer sync tras el claim trae ambos orígenes a esta DB
+   * local a la vez, lo que permite detectar y colapsar, p.ej., un catálogo de
    * ejercicios por defecto o las medidas corporales por defecto creadas por
    * duplicado en los dos dispositivos (ver CLAUDE.md/offline-sync.md).
    *
@@ -317,12 +330,6 @@ function AppContent() {
           await claimGuestIdentity(db, { guestUserId: userId, realUserId: session.user.id });
           await setActiveIdentity(db, { activeUserId: session.user.id, isGuest: false });
           await refreshIdentity();
-          await runSync(); // trae lo que ya hubiera remoto para esta cuenta (p.ej. de otro dispositivo)
-          const merged = await mergeDuplicateCatalogEntries(db, session.user.id);
-          if (merged.mergedCategories || merged.mergedExercises || merged.mergedBodyMeasurements) {
-            await runSync(); // sube las fusiones (tombstones + FKs reescritas) antes de que la UI las lea
-          }
-          return;
         } else {
           // Edge case raro: login directo a otra cuenta real sin sign-out previo.
           // No se pueden mezclar datos de una cuenta con otra.

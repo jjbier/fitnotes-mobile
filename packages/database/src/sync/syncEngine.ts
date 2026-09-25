@@ -83,7 +83,9 @@ export class SyncEngine {
         await this.clearDirtyIfFullyPushed(op);
         pushed++;
       } catch (err) {
-        await markOpFailed(this.db, op.id, op.attempts, err instanceof Error ? err.message : String(err));
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[sync] push failed: ${op.op_type} ${op.table_name}#${op.row_id} — ${message}`);
+        await markOpFailed(this.db, op.id, op.attempts, message);
         failed++;
       }
     }
@@ -142,7 +144,14 @@ export class SyncEngine {
 
     let result: { error: unknown };
     if (op_type === "insert") {
-      result = await (this.client.from(table) as ReturnType<typeof this.client.from>).insert(data as never);
+      // upsert, no insert: si el proceso se mató justo entre el INSERT remoto
+      // (que sí llegó a completarse) y el markOpSucceeded local que lo saca de
+      // la cola, este mismo insert se reintenta en el siguiente sync — con
+      // insert() puro eso es un "duplicate key" permanente (la fila ya existe
+      // con ese id) que nunca se recupera solo. upsert() con el mismo payload
+      // es un no-op seguro en ese caso, e idéntico a un insert normal cuando
+      // la fila es realmente nueva.
+      result = await (this.client.from(table) as ReturnType<typeof this.client.from>).upsert(data as never);
     } else if (op_type === "update") {
       result = await (this.client.from(table) as ReturnType<typeof this.client.from>)
         .update(data as never)

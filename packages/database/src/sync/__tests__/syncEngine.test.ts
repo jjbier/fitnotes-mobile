@@ -92,6 +92,27 @@ describe("SyncEngine.pushLocalChanges", () => {
     expect(row).toBeNull();
   });
 
+  it("retrying an insert whose row already exists remotely succeeds instead of failing on a duplicate key (upsert, not insert)", async () => {
+    // Simulates being force-stopped between the remote insert completing and markOpSucceeded
+    // clearing the local queue: the row already exists remotely, but the local insert op is
+    // still queued and gets retried on the next sync.
+    const db = createNodeSqlExecutor();
+    await runLocalMigrations(db);
+    const repo = createLocalWorkoutRepository(db);
+    const { data: workout } = await repo.createWorkout({ date: "2026-07-03" }, "user-1");
+
+    const fake = createFakeSupabaseClient({
+      workouts: {
+        [workout!.id]: { id: workout!.id, user_id: "user-1", date: "2026-07-03", created_at: workout!.created_at, updated_at: workout!.updated_at },
+      },
+    });
+    const engine = new SyncEngine(asClient(fake), db);
+
+    const result = await engine.pushLocalChanges();
+    expect(result).toEqual({ pushed: 1, failed: 0 });
+    expect(await engine.getPendingCount()).toBe(0);
+  });
+
   it("keeps a failed op in the queue with backoff instead of losing it", async () => {
     const db = createNodeSqlExecutor();
     await runLocalMigrations(db);
