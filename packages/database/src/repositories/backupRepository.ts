@@ -5,6 +5,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../supabase/types.js";
+import { dedupePersonalRecords, type DedupablePersonalRecord } from "./progressRepository.js";
 
 type Client = SupabaseClient<Database>;
 type BackupEntry = Record<string, unknown>;
@@ -46,7 +47,15 @@ const DELETE_TABLES = [
 /** Repositorio de exportación/restauración total de datos y recálculo de PRs, contra las tablas remotas de Supabase. */
 export function createBackupRepository(client: Client) {
   return {
-    /** Exporta TODAS las tablas de datos del usuario (12 tablas, en paralelo salvo `exercise_goals`) a un único objeto `BackupData` con marca de tiempo. */
+    /**
+     * Exporta TODAS las tablas de datos del usuario (12 tablas, en paralelo
+     * salvo `exercise_goals`) a un único objeto `BackupData` con marca de
+     * tiempo. `personal_records` se colapsa con {@link dedupePersonalRecords}
+     * antes de exportar: hasta `010_drop_personal_record_trigger.sql`
+     * (2026-09-24) esta tabla podía tener dos filas por el mismo PR (ver
+     * CLAUDE.md/offline-sync.md), y sin este dedup el `.fitnotes` exportado
+     * arrastraba esos duplicados aunque la propia app ya no los muestre.
+     */
     async exportBackup(userId: string): Promise<BackupData> {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const q = (table: string) => (client.from(table as never) as any).select("*").eq("user_id", userId);
@@ -65,7 +74,8 @@ export function createBackupRepository(client: Client) {
         routine_days: rds ?? [], routine_day_exercises: rdes ?? [], predefined_sets: ps ?? [],
         body_measurements: bms ?? [], body_measurement_entries: bmes ?? [],
         workouts: wos ?? [], workout_exercises: wes ?? [], sets: sets ?? [],
-        personal_records: prs ?? [], exercise_goals: egs ?? [],
+        personal_records: dedupePersonalRecords((prs ?? []) as DedupablePersonalRecord[]) as unknown as BackupEntry[],
+        exercise_goals: egs ?? [],
       };
     },
 
@@ -75,7 +85,14 @@ export function createBackupRepository(client: Client) {
      * violar FKs), luego inserta en orden padres→hijos por chunks de 500 filas
      * (límite de tamaño de payload de Supabase), forzando `user_id` en cada fila
      * restaurada (por si el backup viene de otra cuenta/export antiguo).
-     * `onStep` permite reportar progreso a la UI; cualquier error aborta lanzando.
+     * `personal_records` se restaura también aquí, deduplicado con
+     * {@link dedupePersonalRecords} (por si el backup es de antes de que
+     * `exportBackup` empezara a deduplicar): hasta `010_drop_personal_record_trigger.sql`
+     * (2026-09-24) esta tabla no se restauraba explícitamente porque el propio
+     * trigger la regeneraba como efecto secundario de insertar `sets` — al
+     * quitar el trigger eso dejó de pasar, así que sin este paso una
+     * restauración perdía todos los PRs. `onStep` permite reportar progreso a
+     * la UI; cualquier error aborta lanzando.
      */
     async restoreBackup(userId: string, data: BackupData, onStep?: (message: string) => void): Promise<void> {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -90,6 +107,7 @@ export function createBackupRepository(client: Client) {
       const insertSteps: [string, BackupEntry[]][] = [
         ["categories", data.categories],
         ["exercises", data.exercises],
+        ["personal_records", dedupePersonalRecords(data.personal_records as unknown as DedupablePersonalRecord[]) as unknown as BackupEntry[]],
         ["routines", data.routines],
         ["routine_days", data.routine_days],
         ["routine_day_exercises", data.routine_day_exercises],

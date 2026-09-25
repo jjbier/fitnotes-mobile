@@ -9,6 +9,48 @@ import type { Database } from "../supabase/types.js";
 
 type Client = SupabaseClient<Database>;
 
+/** Fila mínima de `personal_records` necesaria para colapsar duplicados (ver {@link dedupePersonalRecords}). */
+export interface DedupablePersonalRecord {
+  id: string;
+  exercise_id: string;
+  reps: number;
+  weight: number;
+  achieved_at: string;
+}
+
+/**
+ * Colapsa duplicados de `personal_records` por `(exercise_id, reps)` —
+ * réplica en JS de `DEDUP_PERSONAL_RECORDS_CTE` (`localProgressRepository.ts`,
+ * `ROW_NUMBER() OVER (PARTITION BY exercise_id, reps ORDER BY weight DESC,
+ * achieved_at ASC, id ASC)`): se queda con el de mayor peso y, en empate, el
+ * `achieved_at` más antiguo y luego el `id` menor, mismo criterio y mismo
+ * orden de desempate para que ambas implementaciones sean deterministas por
+ * igual. El duplicado en sí (un trigger SQL remoto y `maybeRecordPersonalRecord`
+ * local generando la misma fila por separado) se quitó en
+ * `010_drop_personal_record_trigger.sql` (2026-09-24) — esto es una red de
+ * seguridad de lectura para las filas ya duplicadas antes de esa migración,
+ * igual que su equivalente local. Usado por `getPersonalRecords`/
+ * `getAllPersonalRecords` de abajo y por `exportBackup` (`backupRepository.ts`),
+ * que lee esta misma tabla directamente de Supabase.
+ */
+export function dedupePersonalRecords<T extends DedupablePersonalRecord>(rows: T[]): T[] {
+  const bestByKey = new Map<string, T>();
+  for (const row of rows) {
+    const key = `${row.exercise_id}:${row.reps}`;
+    const current = bestByKey.get(key);
+    if (
+      !current ||
+      row.weight > current.weight ||
+      (row.weight === current.weight &&
+        (row.achieved_at < current.achieved_at ||
+          (row.achieved_at === current.achieved_at && row.id < current.id)))
+    ) {
+      bestByKey.set(key, row);
+    }
+  }
+  return Array.from(bestByKey.values());
+}
+
 /** Agregado de una fecha de entrenamiento para un ejercicio: máximos y totales de peso/reps/distancia/tiempo, 1RM estimado y mejor peso por número de reps. */
 export interface ChartPoint {
   date: string;
@@ -28,24 +70,29 @@ export interface ChartPoint {
 
 export function createProgressRepository(client: Client) {
   return {
-    /** PRs de un ejercicio, ordenados por reps ascendente y luego peso descendente. */
-    getPersonalRecords(exerciseId: string) {
-      return client
-        .from("personal_records")
-        .select("*")
-        .eq("exercise_id", exerciseId)
-        .order("reps", { ascending: true })
-        .order("weight", { ascending: false });
+    /**
+     * PRs de un ejercicio, colapsados a una única fila por reps (ver
+     * {@link dedupePersonalRecords}), ordenados por reps ascendente y luego
+     * peso descendente.
+     */
+    async getPersonalRecords(exerciseId: string) {
+      const { data, error } = await client.from("personal_records").select("*").eq("exercise_id", exerciseId);
+      if (error || !data) return { data, error };
+      const deduped = dedupePersonalRecords(data).sort((a, b) => a.reps - b.reps || b.weight - a.weight);
+      return { data: deduped, error: null };
     },
 
-    /** Todos los PRs del usuario, agrupables por ejercicio (mismo orden que {@link getPersonalRecords} pero sin filtrar). */
-    getAllPersonalRecords() {
-      return client
-        .from("personal_records")
-        .select("*")
-        .order("exercise_id")
-        .order("reps", { ascending: true })
-        .order("weight", { ascending: false });
+    /**
+     * Todos los PRs del usuario, colapsados igual que {@link getPersonalRecords}
+     * (mismo dedup), agrupables por ejercicio (mismo orden pero sin filtrar).
+     */
+    async getAllPersonalRecords() {
+      const { data, error } = await client.from("personal_records").select("*");
+      if (error || !data) return { data, error };
+      const deduped = dedupePersonalRecords(data).sort(
+        (a, b) => a.exercise_id.localeCompare(b.exercise_id) || a.reps - b.reps || b.weight - a.weight
+      );
+      return { data: deduped, error: null };
     },
 
     /** Mejores reps/distancia/tiempo de sets completos (no warmup) por ejercicio — para ejercicios sin PR de peso (p.ej. solo-reps o cardio). */
