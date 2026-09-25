@@ -708,7 +708,11 @@ export function createWorkoutRepository(client: Client) {
      * y/o ejercicio concreto. Sin `exerciseId`: borra los entrenamientos enteros
      * del rango. Con `exerciseId`: borra solo ese `workout_exercises` (y sus sets
      * en cascada) dentro del rango, y además elimina los entrenamientos que
-     * quedan sin ningún ejercicio tras la operación.
+     * quedan sin ningún ejercicio tras la operación. En ambos casos recalcula
+     * los `personal_records` de cada ejercicio afectado (vía
+     * {@link resyncPersonalRecordsForExercise}) a partir de los sets vivos que
+     * queden — antes no lo hacía, dejando PRs huérfanos de series/entrenamientos
+     * ya borrados visibles en el tab Progreso.
      * @returns número de entrenamientos borrados (sin `exerciseId`) o de filas
      * de `workout_exercises` borradas (con `exerciseId`).
      */
@@ -734,6 +738,7 @@ export function createWorkoutRepository(client: Client) {
 
         const weIds = matched.map((w) => w.id);
         await client.from("workout_exercises").delete().in("id", weIds);
+        await resyncPersonalRecordsForExercise(client, opts.exerciseId, userId);
 
         // Clean up workouts left with no exercises after this deletion
         const affectedWorkoutIds = [...new Set(matched.map((w) => w.workout_id))];
@@ -749,7 +754,13 @@ export function createWorkoutRepository(client: Client) {
         return weIds.length;
       }
 
+      const { data: wes } = await client.from("workout_exercises").select("exercise_id").in("workout_id", workoutIds);
+      const affectedExerciseIds = [...new Set((wes ?? []).map((w) => w.exercise_id))];
+
       await client.from("workouts").delete().in("id", workoutIds);
+      for (const exerciseId of affectedExerciseIds) {
+        await resyncPersonalRecordsForExercise(client, exerciseId, userId);
+      }
       return workoutIds.length;
     },
   };

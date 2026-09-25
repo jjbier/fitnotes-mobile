@@ -4,11 +4,13 @@
  * las pantallas de mobile que requieren cuenta real (fuera de alcance offline).
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { recomputePersonalRecordLedger, type CompletedSetForPR } from "@fitnotes/core";
 import type { Database } from "../supabase/types.js";
 import { dedupePersonalRecords, type DedupablePersonalRecord } from "./progressRepository.js";
 
 type Client = SupabaseClient<Database>;
 type BackupEntry = Record<string, unknown>;
+type PersonalRecordInsert = Database["public"]["Tables"]["personal_records"]["Insert"];
 
 /** Volcado completo de los datos de un usuario, en el formato exportado/importado por el backup JSON. */
 export interface BackupData {
@@ -132,15 +134,24 @@ export function createBackupRepository(client: Client) {
     },
 
     /**
-     * Borra y regenera desde cero todos los `personal_records` del usuario a partir
-     * del historial de sets completos (no warmup, con peso y reps) en `workout_exercises`.
-     * Para cada ejercicio guarda el peso máximo por número de reps.
+     * Borra y regenera desde cero todos los `personal_records` del usuario a
+     * partir del historial de sets completos (con peso y reps) en
+     * `workout_exercises`, vía {@link recomputePersonalRecordLedger} (mismo
+     * cálculo, mismo `achieved_at` real por set, que usa el resto de la app —
+     * `resyncPersonalRecordsForExercise` en `workoutRepository.ts`). Antes
+     * reimplementaba la regla por su cuenta con dos divergencias reales: no
+     * incluía `achieved_at` en el insert (caía al `DEFAULT now()` de la
+     * columna, así que un recálculo fechaba TODOS los PRs "hoy" en vez de su
+     * fecha real de consecución) y excluía series de calentamiento, mientras
+     * que la ruta incremental normal no lo hace (ver `personalRecords.ts`) —
+     * un recálculo completo podía dar un conjunto de PRs distinto al que la
+     * app genera sola set a set.
      * @returns número de filas de PR insertadas.
      */
     async recalculatePersonalRecords(userId: string): Promise<number> {
       await client.from("personal_records").delete().eq("user_id", userId);
 
-      const { data: weRows } = await client.from("workout_exercises").select("id, exercise_id");
+      const { data: weRows } = await client.from("workout_exercises").select("id, exercise_id").eq("user_id", userId);
       if (!weRows?.length) return 0;
 
       const weIds = weRows.map((we) => we.id);
@@ -148,32 +159,26 @@ export function createBackupRepository(client: Client) {
 
       const { data: setRows } = await client
         .from("sets")
-        .select("workout_exercise_id, weight, reps")
+        .select("workout_exercise_id, weight, reps, created_at")
         .in("workout_exercise_id", weIds)
         .eq("is_complete", true)
-        .eq("is_warmup", false)
         .not("weight", "is", null)
         .not("reps", "is", null);
 
-      const prMap: Record<string, Record<number, number>> = {};
+      const completedSets: CompletedSetForPR[] = [];
       for (const s of setRows ?? []) {
-        const exId = exerciseById[s.workout_exercise_id];
-        if (!exId || s.weight == null || s.reps == null) continue;
-        if (!prMap[exId]) prMap[exId] = {};
-        if (!prMap[exId][s.reps] || s.weight > prMap[exId][s.reps]!) {
-          prMap[exId][s.reps] = s.weight;
-        }
+        const exerciseId = exerciseById[s.workout_exercise_id];
+        if (!exerciseId || s.weight == null || s.reps == null) continue;
+        completedSets.push({ exercise_id: exerciseId, weight: s.weight, reps: s.reps, created_at: s.created_at });
       }
 
-      const records: { exercise_id: string; reps: number; weight: number; user_id: string }[] = [];
-      for (const [exerciseId, repMap] of Object.entries(prMap)) {
-        for (const [reps, weight] of Object.entries(repMap)) {
-          records.push({ exercise_id: exerciseId, reps: Number(reps), weight, user_id: userId });
-        }
-      }
-      if (records.length > 0) {
-        await client.from("personal_records").insert(records);
-      }
+      const ledger = recomputePersonalRecordLedger(completedSets);
+      if (ledger.length === 0) return 0;
+
+      const records: PersonalRecordInsert[] = ledger.map((e) => ({
+        user_id: userId, exercise_id: e.exercise_id, weight: e.weight, reps: e.reps, achieved_at: e.achieved_at,
+      }));
+      await client.from("personal_records").insert(records);
       return records.length;
     },
   };
