@@ -46,6 +46,8 @@ export { mergeDuplicateCatalogEntries } from "./sync/mergeDuplicateCatalog.js";
 export type { MergeDuplicateCatalogResult } from "./sync/mergeDuplicateCatalog.js";
 export { createLocalWorkoutRepository } from "./local/repositories/localWorkoutRepository.js";
 export type { LocalWorkoutRepository } from "./local/repositories/localWorkoutRepository.js";
+export { createLocalBackupRepository } from "./local/repositories/localBackupRepository.js";
+export type { LocalBackupRepository } from "./local/repositories/localBackupRepository.js";
 export { createLocalExerciseRepository } from "./local/repositories/localExerciseRepository.js";
 export type { LocalExerciseRepository } from "./local/repositories/localExerciseRepository.js";
 export { createLocalRoutineRepository } from "./local/repositories/localRoutineRepository.js";

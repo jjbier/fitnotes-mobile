@@ -20,7 +20,7 @@ import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import { useTheme, useThemeModeStore, type ThemeMode, type ThemeColors } from "../../lib/theme";
 import { usePreferencesStore, computeDefaultCatalogSeedPlan, resolveDefaultExerciseCatalog, type UserPreferences, type DefaultCatalogSeedPlan } from "@fitnotes/core";
-import { createWorkoutRepository, createBackupRepository, isBackupData, type BackupData } from "@fitnotes/database";
+import { isBackupData, type BackupData } from "@fitnotes/database";
 import { useRepositories } from "../../contexts/RepositoryContext";
 import { useSyncStatus } from "../../contexts/SyncContext";
 
@@ -72,17 +72,8 @@ export default function SettingsScreen() {
   const styles = createStyles(colors);
   const router = useRouter();
   const { t } = useTranslation();
-  const { exerciseRepo, workoutRepo, bodyTrackerRepo, preferencesRepo, isGuest, userId } = useRepositories();
+  const { exerciseRepo, workoutRepo, bodyTrackerRepo, preferencesRepo, backupRepo, isGuest, userId } = useRepositories();
   const { pendingCount } = useSyncStatus();
-
-  /** Backup completo (.fitnotes)/recalcular PRs/restaurar/eliminar historial siguen siendo remote-only (fuera de alcance offline) — requieren cuenta real. CSV de entrenamientos/body tracker (2026-09-22) ya no pasa por aquí: usa los repos locales, funciona en modo invitado. */
-  function requireAccount(): boolean {
-    if (isGuest) {
-      Alert.alert(t("settings:requireAccount.title"), t("settings:requireAccount.message"));
-      return false;
-    }
-    return true;
-  }
 
   // Preferencias: siempre resueltas (invitado o cuenta real) desde la DB
   // local — ver localPreferencesRepository. Con cuenta real, cada escritura
@@ -154,7 +145,7 @@ export default function SettingsScreen() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setEmail(session?.user.email ?? "");
     });
-    supabase.from("exercises").select("id, name").order("name").then(({ data }) => {
+    exerciseRepo.getExercises().then(({ data }) => {
       setExerciseOptions(data ?? []);
     });
     exerciseRepo.getCategories().then(({ data }) => {
@@ -277,16 +268,12 @@ export default function SettingsScreen() {
     );
   }
 
-  /** Recalcula todos los récords personales desde cero en el backend (repo remoto, requiere cuenta), mostrando el estado del proceso durante 3s. */
+  /** Recalcula todos los récords personales desde cero (repo local, 2026-09-25 — antes requería cuenta), mostrando el estado del proceso durante 3s. */
   async function handleRecalcPRs() {
-    if (!requireAccount()) return;
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) return;
     setRecalcStatus("running");
     try {
-      const repo = createBackupRepository(supabase);
-      await repo.recalculatePersonalRecords(session.user.id);
-      setRecalcStatus("done");
+      const { error } = await backupRepo.recalculatePersonalRecords(userId);
+      setRecalcStatus(error ? "error" : "done");
     } catch {
       setRecalcStatus("error");
     } finally {
@@ -294,15 +281,11 @@ export default function SettingsScreen() {
     }
   }
 
-  /** Genera una copia de seguridad completa (JSON `.fitnotes`) desde el backend y la comparte vía el share sheet nativo. */
+  /** Genera una copia de seguridad completa (JSON `.fitnotes`, repo local, 2026-09-25 — antes requería cuenta) y la comparte vía el share sheet nativo. */
   async function handleFullBackup() {
-    if (!requireAccount()) return;
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) return;
     setFullBackupLoading(true);
     try {
-      const repo = createBackupRepository(supabase);
-      const backup = await repo.exportBackup(session.user.id);
+      const backup = await backupRepo.exportBackup();
       await Share.share({
         message: JSON.stringify(backup),
         title: `fitnotes-backup-${backup.exported_at.split("T")[0]}.fitnotes`,
@@ -324,16 +307,13 @@ export default function SettingsScreen() {
     }
   }
 
-  /** Ejecuta la restauración de la copia de seguridad parseada, reemplazando todos los datos remotos del usuario. */
+  /** Ejecuta la restauración de la copia de seguridad parseada (repo local, 2026-09-25 — antes requería cuenta), reemplazando todos los datos locales. */
   async function handleExecuteRestore() {
     if (!restoreParsed) return;
-    if (!requireAccount()) return;
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) return;
     setRestoreLoading(true);
     try {
-      const repo = createBackupRepository(supabase);
-      await repo.restoreBackup(session.user.id, restoreParsed);
+      const { error } = await backupRepo.restoreBackup(userId, restoreParsed);
+      if (error) throw new Error(error.message);
       setShowRestoreModal(false);
       setRestorePaste("");
       setRestoreParsed(null);
@@ -436,15 +416,11 @@ export default function SettingsScreen() {
     }
   }
 
-  /** Elimina el historial de entrenamientos remoto según los filtros de fecha/ejercicio indicados (vacíos = elimina todo). */
+  /** Elimina el historial de entrenamientos local según los filtros de fecha/ejercicio indicados (vacíos = elimina todo) — repo local, 2026-09-25, antes requería cuenta. */
   async function handleDeleteHistory() {
-    if (!requireAccount()) return;
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) return;
     setDeleteHistoryLoading(true);
     try {
-      const repo = createWorkoutRepository(supabase);
-      const count = await repo.deleteWorkoutHistory(session.user.id, {
+      const { data: count } = await workoutRepo.deleteWorkoutHistory(userId, {
         dateFrom: deleteHistoryFrom.trim() || undefined,
         dateTo: deleteHistoryTo.trim() || undefined,
         exerciseId: deleteHistoryExerciseId ?? undefined,
@@ -852,7 +828,7 @@ export default function SettingsScreen() {
               </>
             )}
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => { if (!requireAccount()) return; setRestorePaste(""); setRestoreParsed(null); setShowRestoreModal(true); }} style={[styles.btn, styles.btnOutline]}>
+          <TouchableOpacity onPress={() => { setRestorePaste(""); setRestoreParsed(null); setShowRestoreModal(true); }} style={[styles.btn, styles.btnOutline]}>
             <Ionicons name="cloud-upload-outline" size={16} color={colors.textSecondary} />
             <Text style={styles.btnOutlineText}>{t("settings:restoreBackup.buttonMobile")}</Text>
           </TouchableOpacity>
@@ -956,7 +932,7 @@ export default function SettingsScreen() {
         <View style={[styles.section, styles.dangerSection]}>
           <Text style={[styles.sectionTitle, { color: colors.danger }]}>{t("settings:sections.dangerZone")}</Text>
           <TouchableOpacity
-            onPress={() => { if (!requireAccount()) return; setDeleteHistoryFrom(""); setDeleteHistoryTo(""); setDeleteHistoryExerciseId(null); setShowDeleteHistoryModal(true); }}
+            onPress={() => { setDeleteHistoryFrom(""); setDeleteHistoryTo(""); setDeleteHistoryExerciseId(null); setShowDeleteHistoryModal(true); }}
             style={[styles.btn, styles.btnDanger]}
           >
             <Text style={styles.btnDangerText}>{t("settings:dangerZone.deleteHistoryLabel")}</Text>

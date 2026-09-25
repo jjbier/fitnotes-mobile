@@ -433,4 +433,84 @@ describe("localWorkoutRepository", () => {
       expect(prs).toEqual([]);
     });
   });
+
+  describe("deleteWorkoutHistory (2026-09-25)", () => {
+    async function personalRecordsFor(exerciseId: string) {
+      return db.getAllAsync<{ reps: number; weight: number }>(
+        "SELECT reps, weight FROM personal_records WHERE exercise_id = ? AND _deleted = 0",
+        [exerciseId]
+      );
+    }
+
+    it("returns 0 and does nothing when there are no workouts in range", async () => {
+      const { data, error } = await repo.deleteWorkoutHistory(USER_ID, { dateFrom: "2026-01-01", dateTo: "2026-01-31" });
+      expect(error).toBeNull();
+      expect(data).toBe(0);
+    });
+
+    it("deletes every workout in a date range, cascading to workout_exercises/sets, and leaves workouts outside the range untouched", async () => {
+      const { data: inRange } = await repo.createWorkout({ date: "2026-07-15" }, USER_ID);
+      const { data: outOfRange } = await repo.createWorkout({ date: "2026-08-15" }, USER_ID);
+      const { data: we } = await repo.addExercise({ workout_id: inRange!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+      await repo.createSet({ workout_exercise_id: we!.id, order_index: 0, weight: 50, reps: 5 }, USER_ID);
+
+      const { data: count } = await repo.deleteWorkoutHistory(USER_ID, { dateFrom: "2026-07-01", dateTo: "2026-07-31" });
+      expect(count).toBe(1);
+
+      expect((await repo.getWorkout(inRange!.id)).data).toBeNull();
+      expect((await repo.getWorkout(outOfRange!.id)).data).not.toBeNull();
+    });
+
+    it("recalculates PRs for exercises affected by the deleted workouts", async () => {
+      const { data: workoutA } = await repo.createWorkout({ date: "2026-07-10" }, USER_ID);
+      const { data: weA } = await repo.addExercise({ workout_id: workoutA!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+      const { data: setA } = await repo.createSet({ workout_exercise_id: weA!.id, order_index: 0 }, USER_ID);
+      await repo.updateSet(setA!.id, { is_complete: true, weight: 90, reps: 8 });
+
+      const { data: workoutB } = await repo.createWorkout({ date: "2026-07-05" }, USER_ID);
+      const { data: weB } = await repo.addExercise({ workout_id: workoutB!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+      const { data: setB } = await repo.createSet({ workout_exercise_id: weB!.id, order_index: 0 }, USER_ID);
+      await repo.updateSet(setB!.id, { is_complete: true, weight: 80, reps: 8 });
+
+      expect(await personalRecordsFor("ex-1")).toEqual([expect.objectContaining({ reps: 8, weight: 90 })]);
+
+      // Borrar solo el rango de workoutA debería devolver el PR al 80 de workoutB.
+      await repo.deleteWorkoutHistory(USER_ID, { dateFrom: "2026-07-10", dateTo: "2026-07-10" });
+
+      expect(await personalRecordsFor("ex-1")).toEqual([expect.objectContaining({ reps: 8, weight: 80 })]);
+    });
+
+    it("with exerciseId: deletes only that exercise's workout_exercises within range, leaving the workout and its other exercise", async () => {
+      const { data: workout } = await repo.createWorkout({ date: "2026-07-20" }, USER_ID);
+      await repo.addExercise({ workout_id: workout!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+      await repo.addExercise({ workout_id: workout!.id, exercise_id: "ex-2", order_index: 1 }, USER_ID);
+
+      const { data: count } = await repo.deleteWorkoutHistory(USER_ID, { exerciseId: "ex-1" });
+      expect(count).toBe(1);
+
+      const { data: exercises } = await repo.getWorkoutExercises(workout!.id);
+      expect(exercises.map((e) => e.exercise_id)).toEqual(["ex-2"]);
+      expect((await repo.getWorkout(workout!.id)).data).not.toBeNull();
+    });
+
+    it("with exerciseId: removes a workout left with no live exercises after the deletion", async () => {
+      const { data: workout } = await repo.createWorkout({ date: "2026-07-21" }, USER_ID);
+      await repo.addExercise({ workout_id: workout!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+
+      await repo.deleteWorkoutHistory(USER_ID, { exerciseId: "ex-1" });
+
+      expect((await repo.getWorkout(workout!.id)).data).toBeNull();
+    });
+
+    it("enqueues delete pending_ops for every tombstoned row", async () => {
+      const { data: workout } = await repo.createWorkout({ date: "2026-07-22" }, USER_ID);
+      const { data: we } = await repo.addExercise({ workout_id: workout!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+      await repo.createSet({ workout_exercise_id: we!.id, order_index: 0 }, USER_ID);
+
+      await repo.deleteWorkoutHistory(USER_ID, { dateFrom: "2026-07-22", dateTo: "2026-07-22" });
+
+      expect((await pendingOpsFor(db, "workouts")).some((op) => op.row_id === workout!.id && op.op_type === "delete")).toBe(true);
+      expect((await pendingOpsFor(db, "workout_exercises")).some((op) => op.row_id === we!.id && op.op_type === "delete")).toBe(true);
+    });
+  });
 });

@@ -2,12 +2,14 @@
  * Contexto de inyección de dependencias para toda la capa offline de mobile.
  *
  * Provee, a través de `useRepositories()`, la DB SQLite local ya migrada, los
- * 7 repositorios locales (workout/exercise/routine/body-tracker/goals/
- * progress/preferences) construidos sobre esa misma conexión, y la identidad
- * activa del dispositivo (invitado o cuenta real vinculada). La UI de mobile
- * SOLO debe hablar con estos repos locales — los repos remotos quedan
- * reservados al `SyncEngine` y a analíticas fuera de alcance offline (ver
- * `.agent/context/offline-sync.md`). También resuelve el arranque hidratando
+ * 9 repositorios locales (workout/exercise/routine/body-tracker/goals/
+ * progress/preferences/calendar/backup) construidos sobre esa misma
+ * conexión, y la identidad activa del dispositivo (invitado o cuenta real
+ * vinculada). La UI de mobile SOLO debe hablar con estos repos locales — los
+ * repos remotos quedan reservados al `SyncEngine` (ver
+ * `.agent/context/offline-sync.md`, ya no hay analíticas remote-only desde
+ * 2026-09-25: backup/restaurar/recalcular PRs/eliminar historial también
+ * tienen réplica local). También resuelve el arranque hidratando
  * `usePreferencesStore`/`useThemeModeStore` desde la tabla local, y expone las
  * operaciones de identidad (`refreshIdentity`, `wipeAndSetIdentity`) que usan
  * las pantallas de cuenta para reaccionar a login/logout/claim.
@@ -26,6 +28,7 @@ import type {
   LocalProgressRepository,
   LocalPreferencesRepository,
   LocalCalendarRepository,
+  LocalBackupRepository,
 } from "@fitnotes/database";
 import {
   createLocalWorkoutRepository,
@@ -36,6 +39,7 @@ import {
   createLocalProgressRepository,
   createLocalPreferencesRepository,
   createLocalCalendarRepository,
+  createLocalBackupRepository,
   getOrCreateLocalIdentity,
   setActiveIdentity,
 } from "@fitnotes/database";
@@ -55,6 +59,7 @@ interface RepositoryContextValue {
   progressRepo: LocalProgressRepository;
   preferencesRepo: LocalPreferencesRepository;
   calendarRepo: LocalCalendarRepository;
+  backupRepo: LocalBackupRepository;
   userId: string;
   isGuest: boolean;
   /** Vuelve a leer `local_identity` — llamar tras un claim. */
@@ -180,6 +185,7 @@ function RepositoryProviderReady({
   const progressRepo = useMemo(() => createLocalProgressRepository(db), [db]);
   const preferencesRepo = useMemo(() => createLocalPreferencesRepository(db), [db]);
   const calendarRepo = useMemo(() => createLocalCalendarRepository(db), [db]);
+  const backupRepo = useMemo(() => createLocalBackupRepository(db), [db]);
   const [identity, setIdentity] = useState<{ userId: string; isGuest: boolean } | null>(null);
 
   const refreshIdentity = useMemo(
@@ -245,6 +251,7 @@ function RepositoryProviderReady({
         progressRepo,
         preferencesRepo,
         calendarRepo,
+        backupRepo,
         userId: identity.userId,
         isGuest: identity.isGuest,
         refreshIdentity,

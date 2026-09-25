@@ -79,9 +79,10 @@ async function maybeRecordPersonalRecord(db: SqlExecutor, setRow: RawRow): Promi
  * reconstruye el ledger completo desde los `sets` vivos que queden
  * (`recomputePersonalRecordLedger`, misma regla que `maybeRecordPersonalRecord`
  * pero en bloque). Debe llamarse dentro de la misma transacción que borra el
- * set/workout, después de tombstonar `sets`/`workout_exercises`.
+ * set/workout, después de tombstonar `sets`/`workout_exercises`. Exportada
+ * para que `localBackupRepository.recalculatePersonalRecords` la reutilice.
  */
-async function resyncPersonalRecordsForExercise(db: SqlExecutor, exerciseId: string, userId: string): Promise<void> {
+export async function resyncPersonalRecordsForExercise(db: SqlExecutor, exerciseId: string, userId: string): Promise<void> {
   const ts = nowIso();
   const existing = await db.getAllAsync<{ id: string }>(
     `SELECT id FROM personal_records WHERE exercise_id = ? AND user_id = ? AND _deleted = 0`,
@@ -183,10 +184,10 @@ function mapSetRow(row: RawRow): SetRow {
  * transacción) y devuelve el mismo shape que el repo de Supabase. Los borrados
  * marcan _deleted=1 (tombstone) en vez de borrar físicamente.
  *
- * `importFromCSV`/`exportAllCSV` (2026-09-22) también tienen réplica local,
- * mismo formato exacto que el remoto. `shareWorkout`/`deleteWorkoutHistory`
- * siguen fuera — la primera ni siquiera existe como método de repo, la
- * segunda sigue requiriendo cuenta real (ver plan, "fuera de alcance").
+ * `importFromCSV`/`exportAllCSV` (2026-09-22) y `deleteWorkoutHistory`
+ * (2026-09-25) también tienen réplica local, mismo comportamiento que el
+ * remoto. `shareWorkout` sigue fuera — ni siquiera existe como método de
+ * repo remoto, es puro formateo de texto en la pantalla.
  */
 export function createLocalWorkoutRepository(db: SqlExecutor) {
   return {
@@ -988,6 +989,104 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
       });
 
       return { imported, skipped, newExercises };
+    },
+
+    /**
+     * Borra historial de entrenamiento con filtros combinables de rango de
+     * fecha y/o ejercicio concreto — réplica local de
+     * `workoutRepository.deleteWorkoutHistory` (mismo comportamiento, mismo
+     * shape de retorno). Sin `exerciseId`: tombstona los entrenamientos
+     * enteros del rango (cascada manual sobre `workout_exercises`/`sets`,
+     * igual que {@link deleteWorkout}). Con `exerciseId`: tombstona solo esos
+     * `workout_exercises` (y sus sets) dentro del rango, y además tombstona
+     * los entrenamientos que quedan sin ningún ejercicio vivo tras la
+     * operación. Recalcula los PRs de cada ejercicio afectado al final —
+     * antes de esto ser corregido (2026-09-25, ver CLAUDE.md), tanto la
+     * versión local como la remota dejaban PRs huérfanos tras un borrado.
+     * @returns número de entrenamientos tombstonados (sin `exerciseId`) o de
+     * `workout_exercises` tombstonados (con `exerciseId`).
+     */
+    async deleteWorkoutHistory(
+      userId: string,
+      opts: { dateFrom?: string; dateTo?: string; exerciseId?: string }
+    ): Promise<{ data: number; error: RepoError | null }> {
+      let count = 0;
+      await db.withTransactionAsync(async () => {
+        const ts = nowIso();
+        const conditions: string[] = ["user_id = ?", "_deleted = 0"];
+        const params: unknown[] = [userId];
+        if (opts.dateFrom) { conditions.push("date >= ?"); params.push(opts.dateFrom); }
+        if (opts.dateTo) { conditions.push("date <= ?"); params.push(opts.dateTo); }
+        const workouts = await db.getAllAsync<{ id: string }>(
+          `SELECT id FROM workouts WHERE ${conditions.join(" AND ")}`,
+          params
+        );
+        const workoutIds = workouts.map((w) => w.id);
+        if (workoutIds.length === 0) return;
+        const placeholders = workoutIds.map(() => "?").join(",");
+
+        if (opts.exerciseId) {
+          const wes = await db.getAllAsync<{ id: string; workout_id: string }>(
+            `SELECT id, workout_id FROM workout_exercises WHERE exercise_id = ? AND _deleted = 0 AND workout_id IN (${placeholders})`,
+            [opts.exerciseId, ...workoutIds]
+          );
+          if (wes.length === 0) return;
+
+          const allSetIds: string[] = [];
+          for (const we of wes) {
+            const setRows = await db.getAllAsync<{ id: string }>(
+              `SELECT id FROM sets WHERE workout_exercise_id = ? AND _deleted = 0`,
+              [we.id]
+            );
+            allSetIds.push(...setRows.map((s) => s.id));
+            await db.runAsync(`UPDATE sets SET _deleted = 1, _dirty = 1, updated_at = ? WHERE workout_exercise_id = ?`, [ts, we.id]);
+            for (const s of setRows) await enqueuePendingOp(db, "sets", s.id, "delete", null);
+            await db.runAsync(`UPDATE workout_exercises SET _deleted = 1, _dirty = 1, updated_at = ? WHERE id = ?`, [ts, we.id]);
+            await enqueuePendingOp(db, "workout_exercises", we.id, "delete", null);
+          }
+          const affected = await distinctPRExercises(db, allSetIds);
+          for (const a of affected) await resyncPersonalRecordsForExercise(db, a.exercise_id, a.user_id);
+
+          const affectedWorkoutIds = [...new Set(wes.map((w) => w.workout_id))];
+          for (const workoutId of affectedWorkoutIds) {
+            const remaining = await db.getFirstAsync<{ count: number }>(
+              `SELECT COUNT(*) as count FROM workout_exercises WHERE workout_id = ? AND _deleted = 0`,
+              [workoutId]
+            );
+            if (!remaining || remaining.count === 0) {
+              await db.runAsync(`UPDATE workouts SET _deleted = 1, _dirty = 1, updated_at = ? WHERE id = ?`, [ts, workoutId]);
+              await enqueuePendingOp(db, "workouts", workoutId, "delete", null);
+            }
+          }
+          count = wes.length;
+          return;
+        }
+
+        const allSetIds: string[] = [];
+        for (const workoutId of workoutIds) {
+          const wes = await db.getAllAsync<{ id: string }>(
+            `SELECT id FROM workout_exercises WHERE workout_id = ? AND _deleted = 0`,
+            [workoutId]
+          );
+          for (const we of wes) {
+            const setRows = await db.getAllAsync<{ id: string }>(
+              `SELECT id FROM sets WHERE workout_exercise_id = ? AND _deleted = 0`,
+              [we.id]
+            );
+            allSetIds.push(...setRows.map((s) => s.id));
+            await db.runAsync(`UPDATE sets SET _deleted = 1, _dirty = 1, updated_at = ? WHERE workout_exercise_id = ?`, [ts, we.id]);
+            for (const s of setRows) await enqueuePendingOp(db, "sets", s.id, "delete", null);
+            await db.runAsync(`UPDATE workout_exercises SET _deleted = 1, _dirty = 1, updated_at = ? WHERE id = ?`, [ts, we.id]);
+            await enqueuePendingOp(db, "workout_exercises", we.id, "delete", null);
+          }
+          await db.runAsync(`UPDATE workouts SET _deleted = 1, _dirty = 1, updated_at = ? WHERE id = ?`, [ts, workoutId]);
+          await enqueuePendingOp(db, "workouts", workoutId, "delete", null);
+        }
+        const affected = await distinctPRExercises(db, allSetIds);
+        for (const a of affected) await resyncPersonalRecordsForExercise(db, a.exercise_id, a.user_id);
+        count = workoutIds.length;
+      });
+      return { data: count, error: null };
     },
 
     /**
