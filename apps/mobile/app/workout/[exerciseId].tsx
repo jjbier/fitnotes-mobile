@@ -5,6 +5,7 @@ import * as FileSystem from "expo-file-system";
 import { Audio } from "expo-av";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../../lib/theme";
+import { useSyncStatus } from "../../contexts/SyncContext";
 import { intlLocale } from "../../lib/i18n";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -64,6 +65,7 @@ const GROUP_COLORS = ["#6366f1", "#ec4899", "#f59e0b", "#10b981"];
 export default function TrainingScreen() {
   const { exerciseId } = useLocalSearchParams<{ exerciseId: string }>();
   const router = useRouter();
+  const { requestSync } = useSyncStatus();
   const { t, i18n } = useTranslation();
   const theme = useTheme();
 
@@ -504,7 +506,7 @@ export default function TrainingScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       {/* Header */}
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderColor: theme.borderLight }}>
-        <TouchableOpacity onPress={() => router.back()} accessibilityLabel={t("common:close")}>
+        <TouchableOpacity onPress={() => { requestSync(); router.back(); }} accessibilityLabel={t("common:close")}>
           <Ionicons name="close" size={24} color={theme.text} />
         </TouchableOpacity>
         <View style={{ alignItems: "center" }}>

@@ -22,6 +22,7 @@ import { useTheme, useThemeModeStore, type ThemeMode, type ThemeColors } from ".
 import { usePreferencesStore, computeDefaultCatalogSeedPlan, resolveDefaultExerciseCatalog, type UserPreferences, type DefaultCatalogSeedPlan } from "@fitnotes/core";
 import { isBackupData, type BackupData } from "@fitnotes/database";
 import { useRepositories } from "../../contexts/RepositoryContext";
+import { getSyncEngine } from "../../lib/sync";
 import { useSyncStatus } from "../../contexts/SyncContext";
 
 /** Parsea el texto pegado de un CSV exportado previamente (formato `Date,Exercise,Weight,Reps,...,Completed,Warmup`) en filas tipadas, descartando líneas inválidas. */
@@ -73,7 +74,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { exerciseRepo, workoutRepo, bodyTrackerRepo, preferencesRepo, backupRepo, isGuest, userId } = useRepositories();
-  const { pendingCount } = useSyncStatus();
+  const { status: syncStatus, requestSync } = useSyncStatus();
 
   // Preferencias: siempre resueltas (invitado o cuenta real) desde la DB
   // local — ver localPreferencesRepository. Con cuenta real, cada escritura
@@ -444,15 +445,25 @@ export default function SettingsScreen() {
   }
 
   /**
-   * Pide confirmación (avisando de cambios sin sincronizar si `pendingCount`
-   * > 0) y dispara `supabase.auth.signOut()`. El vaciado de la DB local y la
+   * Pide confirmación (avisando de cambios sin sincronizar si los hay) y
+   * dispara `supabase.auth.signOut()`. El vaciado de la DB local y la
    * navegación de vuelta a `(tabs)` como nuevo invitado los hace `_layout.tsx`
    * raíz al reaccionar al evento `SIGNED_OUT` — esta función solo inicia el proceso.
+   *
+   * El `pendingCount` de `SyncContext` solo se refresca tras completar un
+   * ciclo de sync entero (`runSyncOnce` en `_layout.tsx`) — si el usuario hizo
+   * cambios offline después del último sync (o el último sync falló), ese
+   * valor puede mostrar "0 pendientes" aunque sí haya cambios sin subir, y el
+   * aviso de sign-out avisaría de menos (o no avisaría en absoluto) de que
+   * esos cambios se van a perder con el vaciado de la DB local. Se pide aquí
+   * el recuento real y actual directamente a la cola de `pending_ops`.
    */
   async function handleSignOut() {
+    const engine = await getSyncEngine();
+    const livePendingCount = await engine.getPendingCount();
     const message =
-      pendingCount > 0
-        ? t("settings:signOutAlert.messagePending", { count: pendingCount })
+      livePendingCount > 0
+        ? t("settings:signOutAlert.messagePending", { count: livePendingCount })
         : t("settings:signOutAlert.message");
     Alert.alert(t("settings:signOutAlert.title"), message, [
       { text: t("common:cancel"), style: "cancel" },
@@ -508,6 +519,16 @@ export default function SettingsScreen() {
                 placeholderTextColor={colors.textMuted}
                 style={styles.input}
               />
+              <TouchableOpacity
+                onPress={requestSync}
+                disabled={syncStatus === "syncing"}
+                style={[styles.btn, styles.btnOutline]}
+              >
+                <Ionicons name="sync-outline" size={16} color={colors.textSecondary} />
+                <Text style={styles.btnOutlineText}>
+                  {syncStatus === "syncing" ? t("settings:profile.syncing") : t("settings:profile.syncNow")}
+                </Text>
+              </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleSave}
                 disabled={saveStatus === "saving"}

@@ -12,6 +12,7 @@ import { LOCAL_PREFERENCES_SCHEMA_STATEMENTS } from "./localPreferencesSchema.js
 import { APP_MIGRATIONS_SCHEMA_STATEMENTS } from "./appMigrationsSchema.js";
 import { EXERCISE_DEMO_URL_SCHEMA_STATEMENTS } from "./exerciseDemoUrlSchema.js";
 import { EXERCISE_ID_INDEXES_SCHEMA_STATEMENTS } from "./exerciseIdIndexesSchema.js";
+import { LOCAL_IDENTITY_REAL_ACCOUNT_SCHEMA_STATEMENTS } from "./localIdentityRealAccountSchema.js";
 
 interface LocalMigration {
   version: number;
@@ -52,6 +53,10 @@ const MIGRATIONS: LocalMigration[] = [
   {
     version: 6,
     statements: [...EXERCISE_ID_INDEXES_SCHEMA_STATEMENTS],
+  },
+  {
+    version: 7,
+    statements: [...LOCAL_IDENTITY_REAL_ACCOUNT_SCHEMA_STATEMENTS],
   },
 ];
 

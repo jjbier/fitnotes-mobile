@@ -43,6 +43,7 @@ export { getOrCreateLocalIdentity, setActiveIdentity } from "./local/localIdenti
 export type { LocalIdentity } from "./local/localIdentity.js";
 export { claimGuestIdentity } from "./sync/claimGuestData.js";
 export { mergeDuplicateCatalogEntries } from "./sync/mergeDuplicateCatalog.js";
+export { repairStalePendingPayloads } from "./sync/repairStalePayloads.js";
 export type { MergeDuplicateCatalogResult } from "./sync/mergeDuplicateCatalog.js";
 export { createLocalWorkoutRepository } from "./local/repositories/localWorkoutRepository.js";
 export type { LocalWorkoutRepository } from "./local/repositories/localWorkoutRepository.js";

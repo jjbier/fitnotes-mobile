@@ -1,8 +1,7 @@
 import "../lib/cryptoPolyfill";
 import i18n from "../lib/i18n";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AppState, View, Text, ActivityIndicator, StyleSheet } from "react-native";
-import type { AppStateStatus } from "react-native";
+import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
@@ -23,6 +22,7 @@ import {
   claimGuestIdentity,
   setActiveIdentity,
   mergeDuplicateCatalogEntries,
+  repairStalePendingPayloads,
 } from "@fitnotes/database";
 import { useThemeModeStore, useTheme, type ThemeMode } from "../lib/theme";
 import type { Session } from "@supabase/supabase-js";
@@ -148,6 +148,9 @@ export default function RootLayout() {
   );
 }
 
+/** Tiempo mínimo sin red para que una reconexión cuente como real y dispare un sync (ver efecto de `isConnected`). */
+const RECONNECT_SYNC_MIN_OFFLINE_MS = 10_000;
+
 /**
  * Contenido real del layout raíz: declara el `Stack` de navegación (tabs,
  * pantallas modales de entrenamiento/ejercicios/rutinas/body-tracker/etc.) y
@@ -162,8 +165,8 @@ export default function RootLayout() {
  *   cuenta recién creada/vinculada (`claimGuestIdentity`), vaciar la DB local
  *   en sign-out real, o cambiar de identidad si se inicia sesión directamente
  *   en otra cuenta.
- * - Dispara `runSync()` tras cambios de sesión, al volver la app a primer
- *   plano y al recuperar conexión — y expone el estado de sync (`syncStatus`,
+ * - Dispara `runSync()` tras cambios de sesión y al recuperar conexión (NO al
+ *   volver a primer plano: se sincroniza al terminar un ejercicio/entrenamiento o a mano desde Configuración) — y expone el estado de sync (`syncStatus`,
  *   `pendingCount`, `lastSyncAt`, `refetchSignal`) vía `SyncContext` para que
  *   las pantallas puedan refrescar sus datos tras un pull remoto.
  */
@@ -173,16 +176,27 @@ function AppContent() {
   const theme = useTheme();
   const { t } = useTranslation();
   const [initialized, setInitialized] = useState(false);
-  const { userId, isGuest, refreshIdentity, wipeAndSetIdentity } = useRepositories();
+  const { userId, isGuest, wasRealAccount, refreshIdentity, wipeAndSetIdentity } = useRepositories();
 
   // Sync state
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const [pendingCount, setPendingCount] = useState(0);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [refetchSignal, setRefetchSignal] = useState(0);
-  const appState = useRef(AppState.currentState);
   const isConnected = useNetworkStatus();
   const wasConnected = useRef<boolean | null>(null);
+  const disconnectedAtRef = useRef(0);
+  // Evita sincronizaciones solapadas: el evento de auth (SIGNED_IN),
+  // AppState pasando a "active" y NetInfo reconectando pueden dispararse
+  // los tres casi a la vez justo tras un login real. Sin este guard,
+  // `runSync` se llamaba en paralelo desde cada uno — varios push+pull
+  // (y sus fusiones/reparaciones de catálogo) corriendo a la vez, cada
+  // uno con transacciones SQLite secuenciales que se notaban como la app
+  // "bloqueada". Con el guard, una llamada que llega mientras ya hay una
+  // en curso solo marca que hace falta otra pasada al terminar, en vez de
+  // arrancar una nueva de inmediato.
+  const syncInFlightRef = useRef(false);
+  const syncQueuedRef = useRef(false);
 
   // Store actions for targeted updates after sync
   const loadExercises = useExerciseStore((s) => s.loadExercises);
@@ -198,11 +212,16 @@ function AppContent() {
   }, [preferencesLoaded, language]);
 
   /**
-   * Resetea el estado de sync a valores neutros. Tras un wipe (sign-out o
-   * cambio directo de cuenta) el banner de sync no debe seguir mostrando el
-   * estado de la identidad anterior (p.ej. un "Error de sincronización" que
-   * quedó colgado justo antes del wipe). Incrementa `refetchSignal` para que
-   * las pantallas vuelvan a leer de la DB local ya vacía.
+   * Resetea el estado de sync a valores neutros. Tras un sign-out suave, un
+   * wipe (cambio directo de cuenta) o al reconectar con la misma cuenta, el
+   * banner de sync no debe seguir mostrando el estado de la identidad
+   * anterior (p.ej. un "Error de sincronización" que quedó colgado justo
+   * antes). `pendingCount` se pone a 0 aunque el sign-out suave no toque la
+   * cola real de `pending_ops` — se recalcula solo en cuanto corra el
+   * próximo sync (al reconectar), así que el valor mostrado nunca queda
+   * desincronizado por mucho tiempo. Incrementa `refetchSignal` para que las
+   * pantallas relean de la DB local (vacía tras un wipe, sin cambios tras un
+   * sign-out suave o una reconexión).
    */
   const resetSyncState = useCallback(() => {
     setSyncStatus("idle");
@@ -227,8 +246,7 @@ function AppContent() {
    * Supabase), y para entrenamientos/series incrementa `refetchSignal` para
    * que las pantallas relean por su cuenta.
    */
-  const runSync = useCallback(async () => {
-    if (isGuest) return; // sin cuenta real todavía — RLS/FK de Supabase rechazarían el push
+  const runSyncOnce = useCallback(async () => {
     setSyncStatus("syncing");
     try {
       const engine = await getSyncEngine();
@@ -237,8 +255,14 @@ function AppContent() {
       const db = await getLocalDb();
       const merged = await mergeDuplicateCatalogEntries(db, userId);
       const catalogMerged = merged.mergedCategories > 0 || merged.mergedExercises > 0 || merged.mergedBodyMeasurements > 0;
-      if (catalogMerged) {
-        result = await engine.sync(userId); // sube las fusiones (tombstones + FKs reescritas)
+      // Repara pending_ops cuyo payload congelado quedó con una FK
+      // (category_id/exercise_id/measurement_id) obsoleta tras la fusión de
+      // arriba (de esta pasada o de una anterior, antes de que existiera este
+      // repaso) — si no se corrige, ese insert/update sube con una FK que ya
+      // no existe en remoto y falla para siempre. Ver repairStalePayloads.ts.
+      const repaired = await repairStalePendingPayloads(db);
+      if (catalogMerged || repaired > 0) {
+        result = await engine.sync(userId); // sube las fusiones/reparaciones (tombstones + FKs reescritas)
       }
 
       setSyncStatus(result.pushFailed > 0 ? "error" : "idle");
@@ -297,6 +321,35 @@ function AppContent() {
   }, [userId, isGuest]);
 
   /**
+   * Envoltorio de `runSyncOnce` con guard anti-solapamiento: el evento de auth
+   * (SIGNED_IN), AppState pasando a "active" y NetInfo reconectando pueden
+   * dispararse los tres casi a la vez justo tras un login real. Sin este
+   * guard, cada uno llamaba a la sincronización en paralelo — varios
+   * push+pull (con sus fusiones/reparaciones de catálogo) corriendo a la
+   * vez, cada uno con transacciones SQLite secuenciales, lo que se notaba
+   * como la app "bloqueada" justo después de iniciar sesión. Con el guard,
+   * una llamada que llega mientras ya hay una en curso no arranca una
+   * segunda de inmediato — solo marca que hace falta otra pasada al
+   * terminar la actual (para no perder cambios que dispararon esa llamada).
+   */
+  const runSync = useCallback(async () => {
+    if (isGuest) return;
+    if (syncInFlightRef.current) {
+      syncQueuedRef.current = true;
+      return;
+    }
+    syncInFlightRef.current = true;
+    try {
+      do {
+        syncQueuedRef.current = false;
+        await runSyncOnce();
+      } while (syncQueuedRef.current);
+    } finally {
+      syncInFlightRef.current = false;
+    }
+  }, [isGuest, runSyncOnce]);
+
+  /**
    * Reacciona a cambios de sesión de Supabase: si había datos de invitado,
    * los vincula (claim) a la cuenta recién creada/iniciada antes de
    * sincronizar. `runInitialBootstrap` no hace falta como paso aparte: al no
@@ -311,12 +364,25 @@ function AppContent() {
    * ejercicios por defecto o las medidas corporales por defecto creadas por
    * duplicado en los dos dispositivos (ver CLAUDE.md/offline-sync.md).
    *
+   * El sign-out es "suave": NO vacía la DB local (a diferencia del cambio
+   * directo a otra cuenta, que sí debe hacerlo). `setActiveIdentity` marca la
+   * misma identidad como `isGuest=true` sin tocar ni una fila — todos los
+   * datos que había (los ya sincronizados y cualquier cambio offline
+   * pendiente) se quedan en el dispositivo, visibles y editables en modo
+   * local-only, y se retoma la sincronización sin más si más tarde se vuelve
+   * a iniciar sesión con la MISMA cuenta. `wasRealAccount` (persistido en
+   * `local_identity`, nunca se resetea a `isGuest=true`) es lo que permite
+   * distinguir esta cuenta real "dormida" de un invitado genuino si luego se
+   * inicia sesión con una cuenta DISTINTA — en ese caso sí hay que vaciar,
+   * igual que en el cambio directo, porque fusionar mezclaría el historial
+   * de dos cuentas reales distintas.
+   *
    * @param session Sesión actual de Supabase (o `null` si no hay ninguna).
-   * @param isExplicitSignOut Distingue un `SIGNED_OUT` real (borra la DB
-   * local) de una mera comprobación de sesión sin resultado — p.ej. la sesión
-   * de Supabase no sobrevivió a un `force-stop` (bug pre-existente conocido,
-   * ver CLAUDE.md). Tratar "sin sesión" como sign-out en el arranque en frío
-   * borraría datos de una cuenta real que simplemente no pudo reautenticar en
+   * @param isExplicitSignOut Distingue un `SIGNED_OUT` real (sign-out suave)
+   * de una mera comprobación de sesión sin resultado — p.ej. la sesión de
+   * Supabase no sobrevivió a un `force-stop` (bug pre-existente conocido, ver
+   * CLAUDE.md). Tratar "sin sesión" como sign-out en el arranque en frío
+   * marcaría como dormida una cuenta que simplemente no pudo reautenticar en
    * segundo plano — en ese caso preferimos dejar la identidad como estaba y
    * que el sync falle silenciosamente hasta que el usuario vuelva a iniciar
    * sesión manualmente.
@@ -325,29 +391,55 @@ function AppContent() {
     async (session: Session | null, isExplicitSignOut: boolean) => {
       await hydratePreferencesFromSession(session);
       if (session && session.user.id !== userId) {
-        if (isGuest) {
+        if (isGuest && !wasRealAccount) {
+          // Invitado genuino (nunca vinculado a ninguna cuenta) — fusión segura.
           const db = await getLocalDb();
           await claimGuestIdentity(db, { guestUserId: userId, realUserId: session.user.id });
           await setActiveIdentity(db, { activeUserId: session.user.id, isGuest: false });
           await refreshIdentity();
         } else {
-          // Edge case raro: login directo a otra cuenta real sin sign-out previo.
-          // No se pueden mezclar datos de una cuenta con otra.
+          // Cuenta real todavía activa cambiando de cuenta directamente, o
+          // cuenta real "dormida" (sign-out suave) con una cuenta DISTINTA —
+          // en ambos casos no se puede fusionar sin mezclar el historial de
+          // dos cuentas reales, así que se vacía primero.
           await wipeAndSetIdentity({ userId: session.user.id, isGuest: false });
           resetSyncState();
         }
+      } else if (session && session.user.id === userId && isGuest && wasRealAccount) {
+        // Misma cuenta reconectando tras un sign-out suave — los datos ya son
+        // los correctos, solo hay que reactivar la sincronización.
+        const db = await getLocalDb();
+        await setActiveIdentity(db, { activeUserId: userId, isGuest: false });
+        await refreshIdentity();
+        resetSyncState();
       } else if (!session && !isGuest && isExplicitSignOut) {
-        // Sign-out: vaciar la DB local para que la siguiente identidad (un
-        // nuevo invitado, u otra cuenta) no vea datos cacheados de esta cuenta.
-        // El aviso de "cambios sin sincronizar" ya se mostró en Settings antes
-        // de llamar a signOut().
-        await wipeAndSetIdentity();
+        // Sign-out suave: NO se vacía la DB, ver comentario de arriba.
+        const db = await getLocalDb();
+        await setActiveIdentity(db, { activeUserId: userId, isGuest: true });
+        await refreshIdentity();
         resetSyncState();
       }
-      void runSync();
+      // No se llama a `runSync()` aquí: justo después de un claim/wipe/cambio
+      // de identidad de arriba, `userId`/`isGuest` de este cierre siguen
+      // siendo los de ANTES del cambio (el estado de React de la nueva
+      // identidad todavía no se ha propagado en este mismo tick) — llamar a
+      // sync ahora mismo lo haría con la cuenta/guest equivocado. El efecto
+      // de más abajo, sobre `[userId, isGuest]`, dispara el sync en cuanto la
+      // identidad realmente resuelta esté disponible.
     },
-    [userId, isGuest, refreshIdentity, wipeAndSetIdentity, runSync, resetSyncState]
+    [userId, isGuest, wasRealAccount, refreshIdentity, wipeAndSetIdentity, resetSyncState]
   );
+
+  // `onAuthStateChange` (más abajo) se suscribe una sola vez y no vuelve a
+  // hacerlo — mantener aquí siempre la versión más reciente de
+  // `handleSessionChange` evita que, tras el primer evento, el listener quede
+  // "congelado" llamando para siempre a un cierre con el `userId`/`isGuest`
+  // de aquel momento inicial (p.ej. no reconocería un sign-out real si para
+  // entonces la identidad ya había cambiado de invitado a cuenta real).
+  const handleSessionChangeRef = useRef(handleSessionChange);
+  useEffect(() => {
+    handleSessionChangeRef.current = handleSessionChange;
+  }, [handleSessionChange]);
 
   /**
    * Efecto de arranque + suscripción a `onAuthStateChange`. En el primer
@@ -361,7 +453,7 @@ function AppContent() {
    */
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      void handleSessionChange(session, false);
+      void handleSessionChangeRef.current(session, false);
       const inTabsGroup = segments[0] === "(tabs)";
       const inAuthGroup = segments[0] === "(auth)";
       if (!inTabsGroup && !inAuthGroup) {
@@ -372,7 +464,7 @@ function AppContent() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!initialized) return;
-      void handleSessionChange(session, event === "SIGNED_OUT");
+      void handleSessionChangeRef.current(session, event === "SIGNED_OUT");
       // Login/registro exitoso o sign-out — en ambos casos se vuelve a la app
       // (ya no hay pantalla de "deslogueado", el modo invitado la reemplaza).
       router.replace("/(tabs)");
@@ -382,30 +474,39 @@ function AppContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialized]);
 
-  /** Sync al volver la app a primer plano (transición background/inactive → active). */
+  /**
+   * Dispara el sync en cuanto la identidad resuelta (`userId`/`isGuest`)
+   * cambia de verdad — cubre tanto el arranque (primera resolución) como
+   * cualquier claim/wipe hecho dentro de `handleSessionChange`: como ese
+   * cierre no puede fiarse de su propio `userId`/`isGuest` justo después de
+   * escribir la nueva identidad (el estado de React aún no se ha propagado
+   * en el mismo tick), delega el sync a este efecto, que sí ve los valores ya
+   * resueltos una vez React vuelve a renderizar.
+   */
   useEffect(() => {
-    const subscription = AppState.addEventListener("change", (nextState: AppStateStatus) => {
-      if (appState.current.match(/inactive|background/) && nextState === "active") {
-        void runSync();
-      }
-      appState.current = nextState;
-    });
-    return () => subscription.remove();
+    void runSync();
   }, [runSync]);
 
   /**
    * Sync al recuperar conexión — puede pasar con la app ya en primer plano
-   * (p.ej. saliendo de modo avión), algo que el listener de AppState no detecta.
+   * (p.ej. saliendo de modo avión).
    */
   useEffect(() => {
-    if (isConnected && wasConnected.current === false) {
+    if (isConnected === false && wasConnected.current !== false) {
+      disconnectedAtRef.current = Date.now();
+    }
+    // Al volver la app a primer plano NetInfo suele emitir un parpadeo
+    // desconectado→conectado de pocos ms; eso NO es una reconexión real y
+    // disparaba un sync (banner "Sincronizando...") en cada resume. Solo se
+    // sincroniza si estuvo sin red un rato (modo avión, túnel...).
+    if (isConnected && wasConnected.current === false && Date.now() - disconnectedAtRef.current >= RECONNECT_SYNC_MIN_OFFLINE_MS) {
       void runSync();
     }
     wasConnected.current = isConnected;
   }, [isConnected, runSync]);
 
   return (
-    <SyncContext.Provider value={{ status: syncStatus, pendingCount, lastSyncAt, refetchSignal }}>
+    <SyncContext.Provider value={{ status: syncStatus, pendingCount, lastSyncAt, refetchSignal, requestSync: () => { void runSync(); } }}>
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: theme.background },

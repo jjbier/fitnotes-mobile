@@ -38,6 +38,8 @@ export const es = {
       guestNotice: "Sin cuenta — tus datos están solo en este dispositivo.",
       createAccount: "Crear cuenta",
       signInToSync: "Iniciar sesión para sincronizar",
+      syncNow: "Sincronizar ahora",
+      syncing: "Sincronizando…",
       displayNameLabelWeb: "Nombre de usuario",
       displayNameLabelMobile: "Nombre visible",
       displayNamePlaceholder: "Tu nombre",
@@ -288,8 +290,8 @@ export const es = {
     },
     signOutAlert: {
       title: "Cerrar sesión",
-      messagePending: "Tienes {{count}} cambio(s) sin sincronizar. Se perderán al cerrar sesión — ¿seguro que quieres continuar?",
-      message: "¿Estás seguro de que quieres cerrar sesión?",
+      messagePending: "Tienes {{count}} cambio(s) sin sincronizar. Se quedarán guardados en este dispositivo y se subirán la próxima vez que inicies sesión con esta cuenta. ¿Quieres cerrar sesión?",
+      message: "Tus datos se quedarán guardados en este dispositivo y dejarán de sincronizarse hasta que vuelvas a iniciar sesión. ¿Quieres cerrar sesión?",
     },
   },
   exercises: {

@@ -14,12 +14,15 @@ import type { SyncStatus } from "@fitnotes/database";
  * - `refetchSignal`: contador que cambia tras cada sync para que las pantallas
  *   con datos ya cargados sepan que deben refrescar (patrón "señal", no boolean,
  *   para poder disparar refrescos repetidos con `useEffect`).
+ * - `requestSync`: lanza un ciclo de sync bajo demanda (botón manual, fin de ejercicio/entrenamiento).
+ *   No hace nada en modo invitado; si ya hay uno en curso, solo encola otra pasada.
  */
 interface SyncContextValue {
   status: SyncStatus;
   pendingCount: number;
   lastSyncAt: string | null;
   refetchSignal: number;
+  requestSync: () => void;
 }
 
 /** Valor por defecto (estado "en reposo", sin datos) usado antes de que `_layout.tsx` provea el real. */
@@ -28,6 +31,7 @@ export const SyncContext = createContext<SyncContextValue>({
   pendingCount: 0,
   lastSyncAt: null,
   refetchSignal: 0,
+  requestSync: () => {},
 });
 
 /** Hook de acceso al estado de sincronización compartido — ver `SyncContextValue`. */

@@ -36,6 +36,8 @@ export const en = {
       guestNotice: "No account — your data lives only on this device.",
       createAccount: "Create account",
       signInToSync: "Sign in to sync",
+      syncNow: "Sync now",
+      syncing: "Syncing…",
       displayNameLabelWeb: "Username",
       displayNameLabelMobile: "Display name",
       displayNamePlaceholder: "Your name",
@@ -286,8 +288,8 @@ export const en = {
     },
     signOutAlert: {
       title: "Sign out",
-      messagePending: "You have {{count}} unsynced change(s). They will be lost when you sign out — are you sure you want to continue?",
-      message: "Are you sure you want to sign out?",
+      messagePending: "You have {{count}} unsynced change(s). They'll stay saved on this device and upload the next time you sign in with this account. Do you want to sign out?",
+      message: "Your data will stay saved on this device and stop syncing until you sign in again. Do you want to sign out?",
     },
   },
   exercises: {

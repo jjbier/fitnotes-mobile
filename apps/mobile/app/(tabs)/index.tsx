@@ -98,7 +98,7 @@ export default function HomeScreen() {
   const [recentSummaries, setRecentSummaries] = useState<Record<string, { exerciseCount: number; volume: number }>>({});
   const [selectMode, setSelectMode] = useState(false);
   const [selectedWEIds, setSelectedWEIds] = useState<Set<string>>(new Set());
-  const { status: syncStatus, pendingCount, refetchSignal } = useSyncStatus();
+  const { status: syncStatus, pendingCount, refetchSignal, requestSync } = useSyncStatus();
 
   const { workoutRepo: repo, exerciseRepo: exRepo, routineRepo, userId, preferencesRepo } = useRepositories();
   const showSetCountHome = usePreferencesStore((s) => s.preferences.show_set_count_home);
@@ -461,6 +461,7 @@ export default function HomeScreen() {
         setShowSummary(true);
 
         finishWorkout();
+        requestSync();
       }},
     ]);
   }
@@ -648,9 +649,8 @@ export default function HomeScreen() {
         <TouchableOpacity onPress={() => handleNavigateDate(1)} disabled={currentDate >= today} style={{ padding: 6, opacity: currentDate >= today ? 0.4 : 1 }} accessibilityLabel={t("workout:nextDayLabel")}>
           <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
-        {syncStatus === "syncing" ? (
-          <ActivityIndicator size="small" color={colors.primary} style={{ marginLeft: 4 }} />
-        ) : syncStatus === "error" ? (
+        {/* El estado "syncing" ya lo muestra el banner global de `_layout.tsx`; aquí solo error/pendientes. */}
+        {syncStatus === "error" ? (
           <Ionicons name="cloud-offline-outline" size={18} color={colors.danger} />
         ) : pendingCount > 0 ? (
           <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: colors.warning, alignItems: "center", justifyContent: "center" }}>

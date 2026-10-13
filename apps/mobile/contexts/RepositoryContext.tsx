@@ -44,6 +44,7 @@ import {
   setActiveIdentity,
 } from "@fitnotes/database";
 import { getLocalDb, resetLocalDb } from "../lib/db/client";
+import { resetSyncEngine } from "../lib/sync";
 
 // `userId`/`isGuest` resuelven la identidad local del dispositivo (invitado o
 // cuenta real vinculada) — reemplaza el patrón anterior de cada pantalla
@@ -62,6 +63,16 @@ interface RepositoryContextValue {
   backupRepo: LocalBackupRepository;
   userId: string;
   isGuest: boolean;
+  /**
+   * `true` si `userId` perteneció (o pertenece) a una cuenta real vinculada
+   * en algún momento — distingue una cuenta real "dormida" (sign-out suave,
+   * mismo `userId`, datos intactos, `isGuest=true`) de un invitado genuino
+   * que nunca se vinculó a ninguna cuenta. Determina si, al iniciar sesión
+   * con una cuenta DISTINTA, es seguro fusionar los datos locales (invitado
+   * genuino) o hay que vaciarlos antes (cuenta real dormida — nunca mezclar
+   * el historial de dos cuentas reales).
+   */
+  wasRealAccount: boolean;
   /** Vuelve a leer `local_identity` — llamar tras un claim. */
   refreshIdentity: () => Promise<void>;
   /**
@@ -117,6 +128,11 @@ export function RepositoryProvider({ children }: { children: ReactNode }) {
   // para que los repos/identidad memoizados se reconstruyan contra ella.
   const wipeAndSetIdentity = useCallback(async (identity?: { userId: string; isGuest: boolean }) => {
     const fresh = await resetLocalDb();
+    // El `SyncEngine` memoizado en `lib/sync.ts` sigue apuntando al executor
+    // SQLite ya cerrado/borrado por `resetLocalDb()` — sin esto, el próximo
+    // `runSync()` reutiliza ese engine viejo y falla contra una DB que ya no
+    // existe (banner de "Error de sincronización" espurio tras sign-out).
+    resetSyncEngine();
     await getOrCreateLocalIdentity(fresh);
     if (identity) {
       await setActiveIdentity(fresh, { activeUserId: identity.userId, isGuest: identity.isGuest });
@@ -186,12 +202,12 @@ function RepositoryProviderReady({
   const preferencesRepo = useMemo(() => createLocalPreferencesRepository(db), [db]);
   const calendarRepo = useMemo(() => createLocalCalendarRepository(db), [db]);
   const backupRepo = useMemo(() => createLocalBackupRepository(db), [db]);
-  const [identity, setIdentity] = useState<{ userId: string; isGuest: boolean } | null>(null);
+  const [identity, setIdentity] = useState<{ userId: string; isGuest: boolean; wasRealAccount: boolean } | null>(null);
 
   const refreshIdentity = useMemo(
     () => async () => {
       const result = await getOrCreateLocalIdentity(db);
-      setIdentity({ userId: result.activeUserId, isGuest: result.isGuest });
+      setIdentity({ userId: result.activeUserId, isGuest: result.isGuest, wasRealAccount: result.wasRealAccount });
     },
     [db]
   );
@@ -254,6 +270,7 @@ function RepositoryProviderReady({
         backupRepo,
         userId: identity.userId,
         isGuest: identity.isGuest,
+        wasRealAccount: identity.wasRealAccount,
         refreshIdentity,
         wipeAndSetIdentity,
       }}
