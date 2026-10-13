@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   calculate1RM,
+  isAnomalousWeight,
   estimateRepMax,
   calculateVolume,
   calculatePace,
@@ -235,5 +236,21 @@ describe("calculatePlates", () => {
     const plates = calculatePlates(60, 20, STANDARD);
     const totalPerSide = plates.reduce((s, p) => s + p, 0);
     expect(totalPerSide).toBeCloseTo(20, 5);
+  });
+});
+
+describe("isAnomalousWeight", () => {
+  it("avisa de un peso que multiplica por 7 la mejor marca (231.5 vs 31.5)", () => {
+    expect(isAnomalousWeight(231.5, 31.5)).toBe(true);
+  });
+  it("no avisa de progresos normales", () => {
+    expect(isAnomalousWeight(35, 31.5)).toBe(false);
+    expect(isAnomalousWeight(60, 31.5)).toBe(false);
+  });
+  it("no avisa con pesos pequeños aunque el ratio sea alto", () => {
+    expect(isAnomalousWeight(12, 5)).toBe(false);
+  });
+  it("sin marca de referencia nunca avisa", () => {
+    expect(isAnomalousWeight(500, 0)).toBe(false);
   });
 });

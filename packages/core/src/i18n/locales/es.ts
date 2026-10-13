@@ -985,6 +985,10 @@ export const es = {
       nextExerciseFallbackName: "siguiente ejercicio",
       stayButton: "Quedarse",
       nextButton: "Siguiente",
+      anomalousWeightTitle: "¿Peso correcto?",
+      anomalousWeightMessage: "{{weight}} {{unit}} es mucho más que tu mejor marca en este ejercicio ({{pr}} {{unit}}). ¿Es correcto?",
+      anomalousWeightFixButton: "Corregir",
+      anomalousWeightKeepButton: "Es correcto",
     },
     startModal: {
       chooseRoutineTitle: "Elige una rutina",

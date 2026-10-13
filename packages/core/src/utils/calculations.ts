@@ -84,6 +84,17 @@ export function formatChartDuration(seconds: number): string {
 export const DEFAULT_PLATES = [25, 20, 15, 10, 5, 2.5, 1.25];
 
 /**
+ * Detecta un peso probablemente mal tecleado (p.ej. 231.5 en vez de 31.5):
+ * supera el doble de la mejor marca conocida del ejercicio Y la excede en al
+ * menos 20 unidades (el suelo evita avisar con pesos pequeños, donde pasar de
+ * 5 a 12 es normal). Sin marca de referencia (`referenceMax` ≤ 0) nunca avisa.
+ */
+export function isAnomalousWeight(weight: number, referenceMax: number): boolean {
+  if (!(referenceMax > 0)) return false;
+  return weight > referenceMax * 2 && weight - referenceMax >= 20;
+}
+
+/**
  * Brzycki one-rep max formula.
  * Accurate for reps 1–10; breaks down above 10 (denominator goes negative at reps>=37).
  */

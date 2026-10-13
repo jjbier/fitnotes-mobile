@@ -12,7 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
 import DraggableFlatList, { ScaleDecorator, NestableScrollContainer, NestableDraggableFlatList, type RenderItemParams } from "react-native-draggable-flatlist";
-import { useWorkoutStore, useExerciseStore, usePreferencesStore, ExerciseType, calculate1RM, formatMinutesSeconds } from "@fitnotes/core";
+import { useWorkoutStore, useExerciseStore, usePreferencesStore, ExerciseType, calculate1RM, formatMinutesSeconds, isAnomalousWeight } from "@fitnotes/core";
 import type { WorkoutExercise } from "@fitnotes/core";
 import { useRepositories } from "../../contexts/RepositoryContext";
 import type { Set as FitSet } from "@fitnotes/core";
@@ -367,9 +367,34 @@ export default function TrainingScreen() {
    * series del ejercicio (fuera de un superset), ofrece pasar al ejercicio siguiente
    * del entrenamiento.
    */
+  /**
+   * Antes de completar una serie, avisa si su peso es anómalo respecto a la mejor marca
+   * del ejercicio (p.ej. 231.5 en vez de 31.5). Se valida al completar, no al teclear:
+   * el peso se guarda en cada pulsación, así que "231.5" pasaría por 2, 23, 231… Solo
+   * una serie completa genera PR, que es lo que un typo ensuciaría. Resuelve `true` si
+   * se puede seguir (peso normal o el usuario confirma) y `false` si elige corregirlo.
+   */
+  function confirmWeightIfAnomalous(s: FitSet | undefined): Promise<boolean> {
+    if (!s || s.weight == null || !exercisePR || !isAnomalousWeight(s.weight, exercisePR.weight)) {
+      return Promise.resolve(true);
+    }
+    return new Promise((resolve) => {
+      Alert.alert(
+        t("workout:alerts.anomalousWeightTitle"),
+        t("workout:alerts.anomalousWeightMessage", { weight: s.weight, pr: exercisePR.weight, unit: weightUnit }),
+        [
+          { text: t("workout:alerts.anomalousWeightFixButton"), style: "cancel", onPress: () => { setSelectedSetId(s.id); resolve(false); } },
+          { text: t("workout:alerts.anomalousWeightKeepButton"), onPress: () => resolve(true) },
+        ],
+        { cancelable: true, onDismiss: () => resolve(false) }
+      );
+    });
+  }
+
   async function handleToggleComplete(setId: string, current: boolean) {
     if (!workoutExercise) return;
     const nowComplete = !current;
+    if (nowComplete && !(await confirmWeightIfAnomalous(exerciseSets.find((x) => x.id === setId)))) return;
     await repo.updateSet(setId, { is_complete: nowComplete });
     markSetComplete(workoutExercise.id, setId, nowComplete);
 
@@ -726,6 +751,7 @@ export default function TrainingScreen() {
                 onPress={async () => {
                   if (!workoutExercise) return;
                   for (const s of exerciseSets.filter((s) => !s.is_complete)) {
+                    if (!(await confirmWeightIfAnomalous(s))) continue;
                     markSetComplete(workoutExercise.id, s.id, true);
                     await repo.updateSet(s.id, { is_complete: true });
                   }

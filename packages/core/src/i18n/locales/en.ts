@@ -983,6 +983,10 @@ export const en = {
       nextExerciseFallbackName: "next exercise",
       stayButton: "Stay",
       nextButton: "Next",
+      anomalousWeightTitle: "Is the weight correct?",
+      anomalousWeightMessage: "{{weight}} {{unit}} is far above your best on this exercise ({{pr}} {{unit}}). Is it correct?",
+      anomalousWeightFixButton: "Fix it",
+      anomalousWeightKeepButton: "It's correct",
     },
     startModal: {
       chooseRoutineTitle: "Choose a routine",
