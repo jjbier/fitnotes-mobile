@@ -45,4 +45,4 @@ sesion
 expo.dev
 
 # Supabase CLI local state
-supabase/.temp/
+**/supabase/.temp/
