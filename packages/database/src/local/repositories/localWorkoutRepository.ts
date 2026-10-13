@@ -658,9 +658,20 @@ export function createLocalWorkoutRepository(db: SqlExecutor) {
         }
         cols.push("updated_at = ?", "_dirty = 1");
         params.push(ts, id);
+        // Si el set ya podía estar sosteniendo un PR (completo, con peso y reps) y
+        // se cambia algo que afecta a ese cálculo, `maybeRecordPersonalRecord` por
+        // sí solo no basta: solo AÑADE PRs cuando el set supera el vigente, nunca
+        // rebaja ni retira el que generó el valor anterior (p.ej. corregir un peso
+        // mal tecleado de 231.5 a 31.5 dejaba el PR de 231.5 para siempre).
+        const affectsPR = "weight" in data || "reps" in data || "is_complete" in data;
+        const prExercises = affectsPR ? await distinctPRExercises(db, [id]) : [];
+
         await db.runAsync(`UPDATE sets SET ${cols.join(", ")} WHERE id = ?`, params);
         await enqueuePendingOp(db, "sets", id, "update", { ...data, updated_at: ts });
 
+        if (prExercises.length > 0) {
+          for (const a of prExercises) await resyncPersonalRecordsForExercise(db, a.exercise_id, a.user_id);
+        }
         row = await db.getFirstAsync<RawRow>(`SELECT * FROM sets WHERE id = ?`, [id]);
         if (row) await maybeRecordPersonalRecord(db, row);
       });

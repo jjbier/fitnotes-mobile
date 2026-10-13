@@ -513,4 +513,38 @@ describe("localWorkoutRepository", () => {
       expect((await pendingOpsFor(db, "workout_exercises")).some((op) => op.row_id === we!.id && op.op_type === "delete")).toBe(true);
     });
   });
+
+  describe("updateSet — PRs al corregir un set", () => {
+    async function livePRs() {
+      return db.getAllAsync<{ weight: number; reps: number }>(
+        "SELECT weight, reps FROM personal_records WHERE _deleted = 0 ORDER BY reps"
+      );
+    }
+
+    async function completeSet(weight: number, reps: number) {
+      const { data: workout } = await repo.createWorkout({ date: "2026-09-28" }, USER_ID);
+      const { data: we } = await repo.addExercise({ workout_id: workout!.id, exercise_id: "ex-1", order_index: 0 }, USER_ID);
+      const { data: set } = await repo.createSet({ workout_exercise_id: we!.id, order_index: 0 }, USER_ID);
+      await repo.updateSet(set!.id, { weight, reps, is_complete: true });
+      return set!.id;
+    }
+
+    it("corregir un peso mal tecleado rebaja el PR (231.5 → 31.5) en vez de dejar el antiguo", async () => {
+      const setId = await completeSet(231.5, 10);
+      expect(await livePRs()).toEqual([{ weight: 231.5, reps: 10 }]);
+
+      await repo.updateSet(setId, { weight: 31.5 });
+
+      expect(await livePRs()).toEqual([{ weight: 31.5, reps: 10 }]);
+    });
+
+    it("desmarcar el set como completo retira el PR que sostenía", async () => {
+      const setId = await completeSet(50, 8);
+      expect(await livePRs()).toHaveLength(1);
+
+      await repo.updateSet(setId, { is_complete: false });
+
+      expect(await livePRs()).toEqual([]);
+    });
+  });
 });
