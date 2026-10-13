@@ -10,6 +10,7 @@ import { intlLocale } from "../../lib/i18n";
 import { useSyncStatus } from "../../contexts/SyncContext";
 import { useRepositories } from "../../contexts/RepositoryContext";
 import LineChart from "../../components/LineChart";
+import InfoTip from "../../components/InfoTip";
 
 type Period = "week" | "month" | "year" | "all";
 
@@ -244,11 +245,15 @@ export default function ProgressScreen() {
           <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
             <Text style={{ flex: 1, fontSize: 22, fontWeight: "700", color: theme.text }}>{t("progress:title")}</Text>
             {streak > 0 && (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: theme.streakBg, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4, marginRight: 8 }}>
-                <Ionicons name="flame" size={13} color={theme.streakText} />
-                <Text style={{ fontSize: 12, fontWeight: "700", color: theme.streakText }}>
-                  {t("progress:streakDaysCount", { count: streak })}
-                </Text>
+              <View style={{ marginRight: 8 }}>
+                <InfoTip title={t("progress:info.streakTitle")} text={t("progress:info.streakText")}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: theme.streakBg, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 }}>
+                    <Ionicons name="flame" size={13} color={theme.streakText} />
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: theme.streakText }}>
+                      {t("progress:streakDaysCount", { count: streak })}
+                    </Text>
+                  </View>
+                </InfoTip>
               </View>
             )}
             <TouchableOpacity
@@ -277,11 +282,17 @@ export default function ProgressScreen() {
           <View style={{ flexDirection: "row", gap: 8 }}>
             <View style={{ flex: 1, borderWidth: 1, borderColor: theme.borderLight, borderRadius: 14, padding: 10, alignItems: "center", gap: 2 }}>
               <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>{periodTotals.workouts}</Text>
-              <Text numberOfLines={1} style={{ fontSize: 9, color: theme.textMuted, fontWeight: "600", textTransform: "uppercase" }}>{t("progress:workoutsLabel")}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                <Text numberOfLines={1} style={{ fontSize: 9, color: theme.textMuted, fontWeight: "600", textTransform: "uppercase" }}>{t("progress:workoutsLabel")}</Text>
+                <InfoTip size={12} title={t("progress:info.workoutsTitle")} text={t("progress:info.workoutsText")} />
+              </View>
             </View>
             <View style={{ flex: 1, borderWidth: 1, borderColor: theme.borderLight, borderRadius: 14, padding: 10, alignItems: "center", gap: 2 }}>
               <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>{periodTotals.sets}</Text>
-              <Text numberOfLines={1} style={{ fontSize: 9, color: theme.textMuted, fontWeight: "600", textTransform: "uppercase" }}>{t("workout:summaryModal.setsLabel")}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                <Text numberOfLines={1} style={{ fontSize: 9, color: theme.textMuted, fontWeight: "600", textTransform: "uppercase" }}>{t("workout:summaryModal.setsLabel")}</Text>
+                <InfoTip size={12} title={t("progress:info.setsTitle")} text={t("progress:info.setsText")} />
+              </View>
               {setsChangePercent !== null && (
                 <Text style={{ fontSize: 10, fontWeight: "600", color: setsChangePercent >= 0 ? theme.success : theme.danger }}>
                   {t("progress:vsPreviousPeriodMobile", { percent: `${setsChangePercent >= 0 ? "+" : ""}${setsChangePercent}%` })}
@@ -290,14 +301,20 @@ export default function ProgressScreen() {
             </View>
             <View style={{ flex: 1, borderWidth: 1, borderColor: theme.borderLight, borderRadius: 14, padding: 10, alignItems: "center", gap: 2 }}>
               <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>{formatVolume(periodTotals.volume)}</Text>
-              <Text numberOfLines={1} style={{ fontSize: 9, color: theme.textMuted, fontWeight: "600", textTransform: "uppercase" }}>{t("workout:summaryModal.volumeLabel")}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                <Text numberOfLines={1} style={{ fontSize: 9, color: theme.textMuted, fontWeight: "600", textTransform: "uppercase" }}>{t("workout:summaryModal.volumeLabel")}</Text>
+                <InfoTip size={12} title={t("progress:info.volumeTitle")} text={t("progress:info.volumeText")} />
+              </View>
             </View>
           </View>
 
           {/* Weekly volume trend chart */}
           {hasTrendData && (
             <View style={{ borderWidth: 1, borderColor: theme.borderLight, borderRadius: 16, padding: 14, gap: 4 }}>
-              <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>{t("progress:trendChartTitleMobile")}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>{t("progress:trendChartTitleMobile")}</Text>
+                <InfoTip title={t("progress:info.trendTitle")} text={t("progress:info.trendText")} />
+              </View>
               <LineChart
                 data={trendData}
                 width={width - 16 * 2 - 14 * 2 - 2}
@@ -312,7 +329,10 @@ export default function ProgressScreen() {
           {/* By-category summary for the selected period */}
           {weeklyByCategory.length > 0 && (
             <View style={{ borderWidth: 1, borderColor: theme.borderLight, borderRadius: 16, padding: 14, gap: 10 }}>
-              <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text, marginBottom: 2 }}>{t("progress:byCategorySectionTitleMobile")}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>{t("progress:byCategorySectionTitleMobile")}</Text>
+                <InfoTip title={t("progress:info.byCategoryTitle")} text={t("progress:info.byCategoryText")} />
+              </View>
               {weeklyByCategory.map((cat) => {
                 const maxSets = weeklyByCategory[0]?.sets ?? 1;
                 const barWidth = Math.max(cat.sets / maxSets, 0.05);
@@ -359,9 +379,11 @@ export default function ProgressScreen() {
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                       <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>{ex?.name}</Text>
                       {isRecent && (
-                        <View style={{ backgroundColor: theme.prBadge, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
-                          <Text style={{ fontSize: 9, fontWeight: "700", color: theme.prText }}>{t("progress:newPRBadgeLabel")}</Text>
-                        </View>
+                        <InfoTip title={t("progress:info.prBadgeTitle")} text={t("progress:info.prBadgeText")}>
+                          <View style={{ backgroundColor: theme.prBadge, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
+                            <Text style={{ fontSize: 9, fontWeight: "700", color: theme.prText }}>{t("progress:newPRBadgeLabel")}</Text>
+                          </View>
+                        </InfoTip>
                       )}
                     </View>
                     <Text style={{ fontSize: 12, color: theme.textMuted, marginTop: 2 }}>
@@ -379,9 +401,15 @@ export default function ProgressScreen() {
                 {expanded === exId && (
                   <View style={{ borderTopWidth: 1, borderColor: theme.borderLight, padding: 10, gap: 6 }}>
                     <View style={{ flexDirection: "row", paddingHorizontal: 4, marginBottom: 2 }}>
-                      <Text style={{ flex: 1, fontSize: 10, color: theme.textMuted, fontWeight: "600" }}>{t("progress:rmColumnHeaderMobile")}</Text>
+                      <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 4 }}>
+                        <Text style={{ fontSize: 10, color: theme.textMuted, fontWeight: "600" }}>{t("progress:rmColumnHeaderMobile")}</Text>
+                        <InfoTip size={12} title={t("progress:info.recordsTitle")} text={t("progress:info.recordsText")} />
+                      </View>
                       <Text style={{ width: 80, fontSize: 10, color: theme.textMuted, fontWeight: "600", textAlign: "right" }}>{t("progress:weightFieldLabel")}</Text>
-                      <Text style={{ width: 80, fontSize: 10, color: theme.textMuted, fontWeight: "600", textAlign: "right" }}>{t("progress:est1RMColumnHeaderMobile")}</Text>
+                      <View style={{ width: 80, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 3 }}>
+                        <Text style={{ fontSize: 10, color: theme.textMuted, fontWeight: "600" }}>{t("progress:est1RMColumnHeaderMobile")}</Text>
+                        <InfoTip size={12} title={t("progress:info.est1RMTitle")} text={t("progress:info.est1RMText")} />
+                      </View>
                     </View>
                     {prs.map((pr) => {
                       const dateStr = pr.achieved_at ? new Date(pr.achieved_at).toLocaleDateString(intlLocale(i18n.language), { day: "numeric", month: "short", year: "2-digit" }) : null;
