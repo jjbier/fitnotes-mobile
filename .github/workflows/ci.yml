@@ -144,7 +144,7 @@ jobs:
           pnpm --filter @fitnotes/database exec vitest run --coverage --reporter=json --outputFile=../../.coverage-database.json
 
       - name: Sube cobertura a Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           files: packages/core/coverage/lcov.info,packages/database/coverage/lcov.info
           fail_ci_if_error: false
